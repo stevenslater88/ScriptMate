@@ -17,6 +17,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="scripts" />
         <Stack.Screen name="upload" />
+        <Stack.Screen name="premium" />
         <Stack.Screen name="script/[id]" />
         <Stack.Screen name="rehearsal/[id]" />
       </Stack>
