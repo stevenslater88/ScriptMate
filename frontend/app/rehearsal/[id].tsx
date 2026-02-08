@@ -202,16 +202,13 @@ export default function RehearsalScreen() {
   const togglePause = async () => {
     if (isPaused) {
       setIsPaused(false);
-      // Resume where we left off
-      if (state === 'ai_speaking' && !speaking) {
-        speakLine(currentLine?.text || '');
+      // Resume where we left off - replay current line if AI was speaking
+      if (state === 'ai_speaking' && !speaking && currentLine && !currentLine.is_stage_direction && currentLine.character !== userCharacter) {
+        speakLine(currentLine.text);
       }
     } else {
       setIsPaused(true);
-      // Stop any playing audio
-      if (soundRef.current) {
-        await soundRef.current.pauseAsync();
-      }
+      // Stop any playing speech
       Speech.stop();
       setSpeaking(false);
     }
