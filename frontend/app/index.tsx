@@ -48,7 +48,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View style={styles.logoContainer}>
             <Ionicons name="mic" size={32} color="#6366f1" />
-            <Text style={styles.logoText}>LineCoach</Text>
+            <Text style={styles.logoText}>ScriptMate</Text>
           </View>
           <Text style={styles.tagline}>AI Script Learning Partner</Text>
         </View>
