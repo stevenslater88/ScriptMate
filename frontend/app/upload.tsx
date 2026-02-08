@@ -31,29 +31,47 @@ export default function UploadScreen() {
   const handleFilePick = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'text/plain'],
+        type: [
+          'application/pdf',
+          'text/plain',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          '*/*'  // Allow all types as fallback
+        ],
         copyToCacheDirectory: true,
       });
 
       if (result.canceled) return;
 
       const file = result.assets[0];
+      const filename = file.name.toLowerCase();
       setLoading(true);
 
-      if (file.name.toLowerCase().endsWith('.txt')) {
-        // Read text file directly
+      // Text files can be read directly
+      if (filename.endsWith('.txt') || filename.endsWith('.text')) {
         const content = await FileSystem.readAsStringAsync(file.uri);
         setScriptText(content);
         if (!title) {
           setTitle(file.name.replace(/\.[^/.]+$/, ''));
         }
         setLoading(false);
-      } else if (file.name.toLowerCase().endsWith('.pdf')) {
-        // Upload PDF to backend for parsing
+      } else {
+        // PDF, Word docs, and other files - upload to backend for parsing
         const formData = new FormData();
+        
+        // Determine MIME type
+        let mimeType = 'application/octet-stream';
+        if (filename.endsWith('.pdf')) {
+          mimeType = 'application/pdf';
+        } else if (filename.endsWith('.docx')) {
+          mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        } else if (filename.endsWith('.doc')) {
+          mimeType = 'application/msword';
+        }
+        
         formData.append('file', {
           uri: file.uri,
-          type: 'application/pdf',
+          type: mimeType,
           name: file.name,
         } as any);
         formData.append('title', title || file.name.replace(/\.[^/.]+$/, ''));
