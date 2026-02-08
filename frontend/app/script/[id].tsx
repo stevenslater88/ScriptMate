@@ -31,7 +31,7 @@ const MODE_OPTIONS = [
 
 export default function ScriptDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentScript, fetchScript, updateScript, createRehearsal, loading } = useScriptStore();
+  const { currentScript, fetchScript, updateScript, createRehearsal, loading, isPremium } = useScriptStore();
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
   const [selectedVoice, setSelectedVoice] = useState('alloy');
   const [selectedMode, setSelectedMode] = useState('full_read');
