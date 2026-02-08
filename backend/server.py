@@ -301,16 +301,33 @@ async def upload_script(
     file: UploadFile = File(...),
     title: str = Form(...)
 ):
-    """Upload a PDF or text file as a script"""
+    """Upload a PDF, Word document, or text file as a script"""
     try:
         content = await file.read()
+        filename_lower = file.filename.lower()
         
-        if file.filename.lower().endswith('.pdf'):
+        if filename_lower.endswith('.pdf'):
             raw_text = extract_text_from_pdf(content)
-        elif file.filename.lower().endswith(('.txt', '.text')):
-            raw_text = content.decode('utf-8')
+        elif filename_lower.endswith(('.docx',)):
+            raw_text = extract_text_from_docx(content)
+        elif filename_lower.endswith(('.txt', '.text', '.rtf')):
+            # Try to decode as UTF-8, fallback to latin-1
+            try:
+                raw_text = content.decode('utf-8')
+            except UnicodeDecodeError:
+                raw_text = content.decode('latin-1')
         else:
-            raise HTTPException(status_code=400, detail="Unsupported file type. Use PDF or TXT.")
+            # Try to parse as text for any other format
+            try:
+                raw_text = content.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    raw_text = content.decode('latin-1')
+                except:
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="Unsupported file type. Use PDF, Word (.docx), or text files (.txt)"
+                    )
         
         # Create script using the parsed text
         script_data = ScriptCreate(title=title, raw_text=raw_text)
