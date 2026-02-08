@@ -12,9 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
-import axios from 'axios';
 import { useScriptStore, DialogueLine } from '../../store/scriptStore';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
