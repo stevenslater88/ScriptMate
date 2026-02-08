@@ -53,9 +53,6 @@ export default function RehearsalScreen() {
 
     // Cleanup
     return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
       Speech.stop();
     };
   }, [id]);
