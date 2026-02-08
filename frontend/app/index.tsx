@@ -16,10 +16,11 @@ import { useScriptStore } from '../store/scriptStore';
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 export default function HomeScreen() {
-  const { scripts, fetchScripts, loading } = useScriptStore();
+  const { scripts, fetchScripts, loading, initializeUser, user, isPremium, limits } = useScriptStore();
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    initializeUser();
     fetchScripts();
   }, []);
 
@@ -53,6 +54,37 @@ export default function HomeScreen() {
           <Text style={styles.tagline}>AI Script Learning Partner</Text>
         </View>
 
+        {/* Premium Banner */}
+        {!isPremium && (
+          <TouchableOpacity 
+            style={styles.premiumBanner}
+            onPress={() => router.push('/premium')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.premiumBannerContent}>
+              <Ionicons name="star" size={24} color="#f59e0b" />
+              <View style={styles.premiumBannerText}>
+                <Text style={styles.premiumBannerTitle}>Unlock Premium</Text>
+                <Text style={styles.premiumBannerSubtitle}>
+                  Unlimited scripts, 6 AI voices, all modes
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#f59e0b" />
+          </TouchableOpacity>
+        )}
+
+        {/* Premium Status Badge */}
+        {isPremium && (
+          <TouchableOpacity 
+            style={styles.premiumStatusBadge}
+            onPress={() => router.push('/premium')}
+          >
+            <Ionicons name="star" size={16} color="#f59e0b" />
+            <Text style={styles.premiumStatusText}>Premium Active</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Quick Actions */}
         <View style={styles.quickActions}>
           <TouchableOpacity
@@ -76,7 +108,9 @@ export default function HomeScreen() {
               <Ionicons name="library" size={40} color="#6366f1" />
             </View>
             <Text style={styles.actionTitle}>My Scripts</Text>
-            <Text style={styles.actionSubtitle}>{scripts.length} scripts saved</Text>
+            <Text style={styles.actionSubtitle}>
+              {scripts.length}{!isPremium && limits ? `/${limits.max_scripts}` : ''} scripts
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -122,16 +156,28 @@ export default function HomeScreen() {
               <Text style={styles.modeTitle}>Cue Only</Text>
               <Text style={styles.modeDesc}>Recall your lines</Text>
             </View>
-            <View style={styles.modeCard}>
-              <Ionicons name="trophy" size={28} color="#ef4444" />
-              <Text style={styles.modeTitle}>Performance</Text>
-              <Text style={styles.modeDesc}>No prompts mode</Text>
-            </View>
-            <View style={styles.modeCard}>
-              <Ionicons name="repeat" size={28} color="#8b5cf6" />
-              <Text style={styles.modeTitle}>Loop</Text>
-              <Text style={styles.modeDesc}>Repeat weak lines</Text>
-            </View>
+            <TouchableOpacity 
+              style={[styles.modeCard, !isPremium && styles.modeCardLocked]}
+              onPress={() => !isPremium && router.push('/premium')}
+            >
+              <View style={styles.modeIconRow}>
+                <Ionicons name="trophy" size={28} color={isPremium ? "#ef4444" : "#4a4a5e"} />
+                {!isPremium && <Ionicons name="lock-closed" size={14} color="#f59e0b" style={styles.lockIcon} />}
+              </View>
+              <Text style={[styles.modeTitle, !isPremium && styles.modeTextLocked]}>Performance</Text>
+              <Text style={styles.modeDesc}>{isPremium ? 'No prompts mode' : 'Premium'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.modeCard, !isPremium && styles.modeCardLocked]}
+              onPress={() => !isPremium && router.push('/premium')}
+            >
+              <View style={styles.modeIconRow}>
+                <Ionicons name="repeat" size={28} color={isPremium ? "#8b5cf6" : "#4a4a5e"} />
+                {!isPremium && <Ionicons name="lock-closed" size={14} color="#f59e0b" style={styles.lockIcon} />}
+              </View>
+              <Text style={[styles.modeTitle, !isPremium && styles.modeTextLocked]}>Loop</Text>
+              <Text style={styles.modeDesc}>{isPremium ? 'Repeat weak lines' : 'Premium'}</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
