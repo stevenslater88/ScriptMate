@@ -644,7 +644,7 @@ async def upload_script(
             except UnicodeDecodeError:
                 try:
                     raw_text = content.decode('latin-1')
-                except:
+                except Exception:
                     raise HTTPException(
                         status_code=400, 
                         detail="Unsupported file type. Use PDF, Word (.docx), or text files (.txt)"
