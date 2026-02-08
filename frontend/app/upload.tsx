@@ -299,7 +299,7 @@ Then I guess this is goodbye.`;
                     </View>
                     <Text style={styles.uploadTitle}>Tap to Upload</Text>
                     <Text style={styles.uploadSubtitle}>
-                      Supports PDF and TXT files
+                      Supports PDF, Word (.docx), and text files
                     </Text>
                   </>
                 )}
