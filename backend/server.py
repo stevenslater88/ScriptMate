@@ -15,6 +15,7 @@ import base64
 import httpx
 import PyPDF2
 import io
+from docx import Document
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
