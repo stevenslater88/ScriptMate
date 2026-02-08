@@ -82,70 +82,56 @@ export default function RehearsalScreen() {
   const currentLine = lines[currentLineIndex];
   const isUserLine = currentLine?.character === userCharacter;
 
-  // Speak a line using TTS
+  // Map voice type to pitch/rate settings for variety
+  const getVoiceSettings = useCallback((voice: string) => {
+    switch (voice) {
+      case 'echo': return { pitch: 0.85, rate: 0.9 }; // Male, warm - lower pitch
+      case 'onyx': return { pitch: 0.75, rate: 0.85 }; // Deep, authoritative
+      case 'nova': return { pitch: 1.15, rate: 1.0 }; // Female, energetic
+      case 'shimmer': return { pitch: 1.2, rate: 0.95 }; // Female, soft
+      case 'fable': return { pitch: 1.0, rate: 0.95 }; // British accent - normal
+      default: return { pitch: 1.0, rate: 0.95 }; // alloy - neutral
+    }
+  }, []);
+
+  // Speak a line using device TTS
   const speakLine = useCallback(
-    async (text: string, useOpenAI: boolean = true) => {
+    async (text: string) => {
       if (!text || isPaused) return;
 
       setSpeaking(true);
       setState('ai_speaking');
 
+      const voiceSettings = getVoiceSettings(voiceType);
+
       try {
-        if (useOpenAI) {
-          // Use OpenAI TTS
-          const response = await axios.post(`${BACKEND_URL}/api/tts`, {
-            text,
-            voice: voiceType,
-          });
-
-          if (response.data?.audio) {
-            // Unload previous sound
-            if (soundRef.current) {
-              await soundRef.current.unloadAsync();
-            }
-
-            // Create and play sound from base64
-            const { sound } = await Audio.Sound.createAsync(
-              { uri: `data:audio/mp3;base64,${response.data.audio}` },
-              { shouldPlay: true }
-            );
-            soundRef.current = sound;
-
-            // Wait for playback to finish
-            sound.setOnPlaybackStatusUpdate((status) => {
-              if (status.isLoaded && status.didJustFinish) {
-                setSpeaking(false);
-                advanceToNextLine();
-              }
-            });
-          }
-        } else {
-          // Fallback to expo-speech
-          Speech.speak(text, {
-            language: 'en-US',
-            onDone: () => {
-              setSpeaking(false);
-              advanceToNextLine();
-            },
-            onError: () => {
-              setSpeaking(false);
-              advanceToNextLine();
-            },
-          });
-        }
-      } catch (error) {
-        console.error('TTS error:', error);
-        // Fallback to native TTS
+        // Stop any ongoing speech
+        await Speech.stop();
+        
         Speech.speak(text, {
           language: 'en-US',
+          pitch: voiceSettings.pitch,
+          rate: voiceSettings.rate,
           onDone: () => {
             setSpeaking(false);
             advanceToNextLine();
           },
+          onError: (error) => {
+            console.error('Speech error:', error);
+            setSpeaking(false);
+            advanceToNextLine();
+          },
+          onStopped: () => {
+            setSpeaking(false);
+          },
         });
+      } catch (error) {
+        console.error('TTS error:', error);
+        setSpeaking(false);
+        advanceToNextLine();
       }
     },
-    [voiceType, isPaused]
+    [voiceType, isPaused, getVoiceSettings]
   );
 
   // Advance to next line
