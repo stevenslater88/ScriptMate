@@ -228,6 +228,19 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
         logger.error(f"Error extracting PDF text: {e}")
         raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
 
+def extract_text_from_docx(docx_bytes: bytes) -> str:
+    """Extract text from Word document (.docx)"""
+    try:
+        docx_file = io.BytesIO(docx_bytes)
+        doc = Document(docx_file)
+        text = ""
+        for paragraph in doc.paragraphs:
+            text += paragraph.text + "\n"
+        return text
+    except Exception as e:
+        logger.error(f"Error extracting DOCX text: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse Word document: {str(e)}")
+
 # ==================== API ROUTES ====================
 
 @api_router.get("/")
