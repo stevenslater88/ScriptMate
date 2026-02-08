@@ -7,21 +7,27 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Platform,
+  Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
-import { useScriptStore, DialogueLine } from '../../store/scriptStore';
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import { Audio } from 'expo-av';
+import { useScriptStore } from '../../store/scriptStore';
 
 type RehearsalState = 'idle' | 'ai_speaking' | 'user_turn' | 'waiting' | 'finished';
 
+interface LinePerformance {
+  lineIndex: number;
+  hesitationTime: number;
+  attempts: number;
+  hintUsed: boolean;
+}
+
 export default function RehearsalScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentRehearsal, currentScript, fetchRehearsal, fetchScript, updateRehearsal } =
+  const { currentRehearsal, currentScript, fetchRehearsal, fetchScript, updateRehearsal, isPremium } =
     useScriptStore();
 
   const [state, setState] = useState<RehearsalState>('idle');
@@ -30,10 +36,21 @@ export default function RehearsalScreen() {
   const [speaking, setSpeaking] = useState(false);
   const [userLineVisible, setUserLineVisible] = useState(true);
   const [completedLines, setCompletedLines] = useState<number[]>([]);
+  const [missedLines, setMissedLines] = useState<number[]>([]);
+  const [weakLines, setWeakLines] = useState<number[]>([]);
   const [isPaused, setIsPaused] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [recordedUri, setRecordedUri] = useState<string | null>(null);
+  const [showRecordingModal, setShowRecordingModal] = useState(false);
+  
+  // Performance tracking
+  const [lineStartTime, setLineStartTime] = useState<number>(0);
+  const [linePerformances, setLinePerformances] = useState<LinePerformance[]>([]);
+  const [showStatsModal, setShowStatsModal] = useState(false);
 
-  const soundRef = useRef<any>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Load rehearsal and script data
@@ -45,22 +62,35 @@ export default function RehearsalScreen() {
           await fetchScript(rehearsal.script_id);
           setCurrentLineIndex(rehearsal.current_line_index || 0);
           setCompletedLines(rehearsal.completed_lines || []);
+          setMissedLines(rehearsal.missed_lines || []);
+          setWeakLines(rehearsal.weak_lines || []);
         }
         setLoading(false);
       }
     };
     loadData();
 
-    // Cleanup
     return () => {
       Speech.stop();
+      if (recording) {
+        recording.stopAndUnloadAsync();
+      }
     };
   }, [id]);
 
-  // Configure audio - removed, using expo-speech only now
+  // Configure audio for recording
   useEffect(() => {
-    // No audio setup needed for expo-speech
-  }, []);
+    const configureAudio = async () => {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+    };
+    if (isPremium) {
+      configureAudio();
+    }
+  }, [isPremium]);
 
   const lines = currentScript?.lines || [];
   const userCharacter = currentRehearsal?.user_character || '';
@@ -70,15 +100,15 @@ export default function RehearsalScreen() {
   const currentLine = lines[currentLineIndex];
   const isUserLine = currentLine?.character === userCharacter;
 
-  // Map voice type to pitch/rate settings for variety
+  // Voice settings based on voice type
   const getVoiceSettings = useCallback((voice: string) => {
     switch (voice) {
-      case 'echo': return { pitch: 0.85, rate: 0.9 }; // Male, warm - lower pitch
-      case 'onyx': return { pitch: 0.75, rate: 0.85 }; // Deep, authoritative
-      case 'nova': return { pitch: 1.15, rate: 1.0 }; // Female, energetic
-      case 'shimmer': return { pitch: 1.2, rate: 0.95 }; // Female, soft
-      case 'fable': return { pitch: 1.0, rate: 0.95 }; // British accent - normal
-      default: return { pitch: 1.0, rate: 0.95 }; // alloy - neutral
+      case 'echo': return { pitch: 0.85, rate: 0.9 };
+      case 'onyx': return { pitch: 0.75, rate: 0.85 };
+      case 'nova': return { pitch: 1.15, rate: 1.0 };
+      case 'shimmer': return { pitch: 1.2, rate: 0.95 };
+      case 'fable': return { pitch: 1.0, rate: 0.95 };
+      default: return { pitch: 1.0, rate: 0.95 };
     }
   }, []);
 
@@ -93,7 +123,6 @@ export default function RehearsalScreen() {
       const voiceSettings = getVoiceSettings(voiceType);
 
       try {
-        // Stop any ongoing speech
         await Speech.stop();
         
         Speech.speak(text, {
@@ -129,41 +158,44 @@ export default function RehearsalScreen() {
     const nextIndex = currentLineIndex + 1;
     if (nextIndex >= lines.length) {
       setState('finished');
-      // Save progress
-      if (id) {
-        updateRehearsal(id, {
-          current_line_index: nextIndex,
-          completed_lines: [...completedLines, currentLineIndex],
-        });
-      }
+      saveProgress(nextIndex);
       return;
     }
 
     setCompletedLines((prev) => [...prev, currentLineIndex]);
     setCurrentLineIndex(nextIndex);
 
-    // Check if next line is user's line
     const nextLine = lines[nextIndex];
     if (nextLine?.character === userCharacter) {
       setState('user_turn');
-      // In cue_only mode, hide the line initially
+      setLineStartTime(Date.now());
       if (mode === 'cue_only' || mode === 'performance') {
         setUserLineVisible(false);
       } else {
         setUserLineVisible(true);
       }
     } else if (!nextLine?.is_stage_direction) {
-      // AI speaks next
       setTimeout(() => {
         if (!isPaused) {
           speakLine(nextLine.text);
         }
       }, 500);
     } else {
-      // Skip stage directions
       setTimeout(() => advanceToNextLine(), 300);
     }
-  }, [currentLineIndex, lines, userCharacter, completedLines, isPaused, id, mode, speakLine]);
+  }, [currentLineIndex, lines, userCharacter, isPaused, mode, speakLine]);
+
+  // Save progress to backend
+  const saveProgress = async (lineIndex: number) => {
+    if (id) {
+      await updateRehearsal(id, {
+        current_line_index: lineIndex,
+        completed_lines: completedLines,
+        missed_lines: missedLines,
+        weak_lines: weakLines,
+      });
+    }
+  };
 
   // Start rehearsal
   const startRehearsal = () => {
@@ -174,11 +206,14 @@ export default function RehearsalScreen() {
 
     setCurrentLineIndex(0);
     setCompletedLines([]);
+    setMissedLines([]);
+    setLinePerformances([]);
     setState('idle');
 
     const firstLine = lines[0];
     if (firstLine.character === userCharacter) {
       setState('user_turn');
+      setLineStartTime(Date.now());
       setUserLineVisible(mode !== 'cue_only' && mode !== 'performance');
     } else if (!firstLine.is_stage_direction) {
       speakLine(firstLine.text);
@@ -188,9 +223,32 @@ export default function RehearsalScreen() {
   };
 
   // User confirms they've said their line
-  const onUserLineDone = () => {
+  const onUserLineDone = (usedHint: boolean = false) => {
+    const hesitationTime = (Date.now() - lineStartTime) / 1000;
+    
+    // Track performance
+    const performance: LinePerformance = {
+      lineIndex: currentLineIndex,
+      hesitationTime,
+      attempts: 1,
+      hintUsed: usedHint || userLineVisible,
+    };
+    setLinePerformances((prev) => [...prev, performance]);
+    
+    // Mark as weak if hesitation > 5 seconds or hint was used
+    if (hesitationTime > 5 || usedHint) {
+      setWeakLines((prev) => [...new Set([...prev, currentLineIndex])]);
+    }
+    
     setState('waiting');
     advanceToNextLine();
+  };
+
+  // Mark line as missed
+  const onLineMissed = () => {
+    setMissedLines((prev) => [...new Set([...prev, currentLineIndex])]);
+    setWeakLines((prev) => [...new Set([...prev, currentLineIndex])]);
+    onUserLineDone(true);
   };
 
   // Show line hint
@@ -202,15 +260,69 @@ export default function RehearsalScreen() {
   const togglePause = async () => {
     if (isPaused) {
       setIsPaused(false);
-      // Resume where we left off - replay current line if AI was speaking
       if (state === 'ai_speaking' && !speaking && currentLine && !currentLine.is_stage_direction && currentLine.character !== userCharacter) {
         speakLine(currentLine.text);
       }
     } else {
       setIsPaused(true);
-      // Stop any playing speech
       Speech.stop();
       setSpeaking(false);
+    }
+  };
+
+  // Recording functions (Premium only)
+  const startRecording = async () => {
+    if (!isPremium) {
+      Alert.alert('Premium Feature', 'Recording requires Premium subscription');
+      return;
+    }
+
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant microphone permission to record');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(recording);
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      Alert.alert('Error', 'Failed to start recording');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecordedUri(uri);
+      setRecording(null);
+      setIsRecording(false);
+      setShowRecordingModal(true);
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+    }
+  };
+
+  const playRecording = async () => {
+    if (!recordedUri) return;
+
+    try {
+      const { sound } = await Audio.Sound.createAsync({ uri: recordedUri });
+      await sound.playAsync();
+    } catch (error) {
+      console.error('Failed to play recording:', error);
     }
   };
 
@@ -230,7 +342,13 @@ export default function RehearsalScreen() {
 
   // Skip to next line
   const skipLine = () => {
-    advanceToNextLine();
+    if (isUserLine) {
+      onLineMissed();
+    } else {
+      Speech.stop();
+      setSpeaking(false);
+      advanceToNextLine();
+    }
   };
 
   // Exit rehearsal
@@ -240,22 +358,31 @@ export default function RehearsalScreen() {
       {
         text: 'Exit',
         onPress: async () => {
-          if (id) {
-            await updateRehearsal(id, {
-              current_line_index: currentLineIndex,
-              completed_lines: completedLines,
-            });
-          }
+          await saveProgress(currentLineIndex);
           router.back();
         },
       },
     ]);
   };
 
+  // Calculate stats
+  const getStats = () => {
+    const totalUserLines = lines.filter(l => l.character === userCharacter).length;
+    const completedUserLines = linePerformances.length;
+    const avgHesitation = linePerformances.length > 0 
+      ? linePerformances.reduce((sum, p) => sum + p.hesitationTime, 0) / linePerformances.length 
+      : 0;
+    const hintsUsed = linePerformances.filter(p => p.hintUsed).length;
+    const accuracy = totalUserLines > 0 
+      ? Math.round(((completedUserLines - missedLines.length) / totalUserLines) * 100) 
+      : 0;
+
+    return { totalUserLines, completedUserLines, avgHesitation, hintsUsed, accuracy };
+  };
+
   // Auto-scroll to current line
   useEffect(() => {
     if (scrollViewRef.current && currentLineIndex > 0) {
-      // Scroll after a brief delay
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({ y: currentLineIndex * 80, animated: true });
       }, 100);
@@ -288,6 +415,7 @@ export default function RehearsalScreen() {
   }
 
   const progress = lines.length > 0 ? (currentLineIndex / lines.length) * 100 : 0;
+  const stats = getStats();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -302,9 +430,19 @@ export default function RehearsalScreen() {
           </Text>
           <Text style={styles.headerSubtitle}>Playing as {userCharacter}</Text>
         </View>
-        <TouchableOpacity onPress={restartRehearsal} style={styles.headerButton}>
-          <Ionicons name="refresh" size={24} color="#6366f1" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {isPremium && (
+            <TouchableOpacity
+              onPress={isRecording ? stopRecording : startRecording}
+              style={[styles.recordButton, isRecording && styles.recordButtonActive]}
+            >
+              <Ionicons name={isRecording ? 'stop' : 'radio-button-on'} size={20} color={isRecording ? '#fff' : '#ef4444'} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => setShowStatsModal(true)} style={styles.headerButton}>
+            <Ionicons name="stats-chart" size={22} color="#6366f1" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Progress Bar */}
@@ -317,6 +455,14 @@ export default function RehearsalScreen() {
         </Text>
       </View>
 
+      {/* Recording Indicator */}
+      {isRecording && (
+        <View style={styles.recordingBanner}>
+          <View style={styles.recordingDot} />
+          <Text style={styles.recordingText}>Recording...</Text>
+        </View>
+      )}
+
       {/* Current Line Display */}
       <View style={styles.currentLineContainer}>
         {state === 'finished' ? (
@@ -324,12 +470,26 @@ export default function RehearsalScreen() {
             <Ionicons name="checkmark-circle" size={64} color="#10b981" />
             <Text style={styles.finishedTitle}>Scene Complete!</Text>
             <Text style={styles.finishedSubtitle}>
-              You completed {lines.length} lines
+              Accuracy: {stats.accuracy}% • Avg. Response: {stats.avgHesitation.toFixed(1)}s
             </Text>
-            <TouchableOpacity style={styles.finishedButton} onPress={restartRehearsal}>
-              <Ionicons name="refresh" size={20} color="#fff" />
-              <Text style={styles.finishedButtonText}>Run Again</Text>
-            </TouchableOpacity>
+            {weakLines.length > 0 && (
+              <Text style={styles.weakLinesText}>
+                {weakLines.length} lines need more practice
+              </Text>
+            )}
+            <View style={styles.finishedButtons}>
+              <TouchableOpacity style={styles.finishedButton} onPress={restartRehearsal}>
+                <Ionicons name="refresh" size={20} color="#fff" />
+                <Text style={styles.finishedButtonText}>Run Again</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.finishedButton, styles.finishedButtonSecondary]} 
+                onPress={() => setShowStatsModal(true)}
+              >
+                <Ionicons name="analytics" size={20} color="#6366f1" />
+                <Text style={[styles.finishedButtonText, { color: '#6366f1' }]}>View Stats</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : state === 'idle' ? (
           <View style={styles.idleContainer}>
@@ -370,6 +530,12 @@ export default function RehearsalScreen() {
                   <Text style={styles.speakingText}>Speaking...</Text>
                 </View>
               )}
+              {weakLines.includes(currentLineIndex) && (
+                <View style={styles.weakBadge}>
+                  <Ionicons name="warning" size={14} color="#f59e0b" />
+                  <Text style={styles.weakBadgeText}>Weak</Text>
+                </View>
+              )}
             </View>
 
             {/* Line Text */}
@@ -390,13 +556,21 @@ export default function RehearsalScreen() {
                 )}
                 <View style={styles.userActionContainer}>
                   <Text style={styles.userActionLabel}>Say your line, then tap:</Text>
-                  <TouchableOpacity
-                    style={styles.doneButton}
-                    onPress={onUserLineDone}
-                  >
-                    <Ionicons name="checkmark" size={24} color="#fff" />
-                    <Text style={styles.doneButtonText}>Done</Text>
-                  </TouchableOpacity>
+                  <View style={styles.userActionButtons}>
+                    <TouchableOpacity
+                      style={styles.doneButton}
+                      onPress={() => onUserLineDone(!userLineVisible)}
+                    >
+                      <Ionicons name="checkmark" size={24} color="#fff" />
+                      <Text style={styles.doneButtonText}>Done</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.missedButton}
+                      onPress={onLineMissed}
+                    >
+                      <Ionicons name="close" size={20} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             ) : (
@@ -422,20 +596,26 @@ export default function RehearsalScreen() {
                 index === currentLineIndex && styles.scriptLineCurrent,
                 completedLines.includes(index) && styles.scriptLineCompleted,
                 line.character === userCharacter && styles.scriptLineUser,
+                weakLines.includes(index) && styles.scriptLineWeak,
               ]}
             >
               {line.is_stage_direction ? (
                 <Text style={styles.scriptDirection}>{line.text}</Text>
               ) : (
                 <>
-                  <Text
-                    style={[
-                      styles.scriptCharacter,
-                      line.character === userCharacter && styles.scriptCharacterUser,
-                    ]}
-                  >
-                    {line.character}
-                  </Text>
+                  <View style={styles.scriptLineHeader}>
+                    <Text
+                      style={[
+                        styles.scriptCharacter,
+                        line.character === userCharacter && styles.scriptCharacterUser,
+                      ]}
+                    >
+                      {line.character}
+                    </Text>
+                    {weakLines.includes(index) && (
+                      <Ionicons name="warning" size={12} color="#f59e0b" />
+                    )}
+                  </View>
                   <Text style={styles.scriptText}>{line.text}</Text>
                 </>
               )}
@@ -461,6 +641,87 @@ export default function RehearsalScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Stats Modal */}
+      <Modal visible={showStatsModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Performance Stats</Text>
+              <TouchableOpacity onPress={() => setShowStatsModal(false)}>
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalScroll}>
+              <View style={styles.statCard}>
+                <Ionicons name="checkmark-circle" size={32} color="#10b981" />
+                <Text style={styles.statValue}>{stats.accuracy}%</Text>
+                <Text style={styles.statLabel}>Accuracy</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Ionicons name="time" size={32} color="#6366f1" />
+                <Text style={styles.statValue}>{stats.avgHesitation.toFixed(1)}s</Text>
+                <Text style={styles.statLabel}>Avg. Response Time</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Ionicons name="eye" size={32} color="#f59e0b" />
+                <Text style={styles.statValue}>{stats.hintsUsed}</Text>
+                <Text style={styles.statLabel}>Hints Used</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Ionicons name="warning" size={32} color="#ef4444" />
+                <Text style={styles.statValue}>{weakLines.length}</Text>
+                <Text style={styles.statLabel}>Weak Lines</Text>
+              </View>
+              {!isPremium && (
+                <View style={styles.premiumPrompt}>
+                  <Ionicons name="star" size={24} color="#f59e0b" />
+                  <Text style={styles.premiumPromptText}>
+                    Upgrade to Premium for detailed analytics and weak line drills
+                  </Text>
+                  <TouchableOpacity 
+                    style={styles.premiumPromptButton}
+                    onPress={() => {
+                      setShowStatsModal(false);
+                      router.push('/premium');
+                    }}
+                  >
+                    <Text style={styles.premiumPromptButtonText}>Go Premium</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Recording Modal */}
+      <Modal visible={showRecordingModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Recording Saved</Text>
+              <TouchableOpacity onPress={() => setShowRecordingModal(false)}>
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.recordingModalContent}>
+              <Ionicons name="checkmark-circle" size={64} color="#10b981" />
+              <Text style={styles.recordingModalText}>Your performance has been recorded!</Text>
+              <TouchableOpacity style={styles.playbackButton} onPress={playRecording}>
+                <Ionicons name="play" size={24} color="#fff" />
+                <Text style={styles.playbackButtonText}>Play Recording</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.dismissButton} 
+                onPress={() => setShowRecordingModal(false)}
+              >
+                <Text style={styles.dismissButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -518,6 +779,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   headerTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -527,6 +793,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6366f1',
     marginTop: 2,
+  },
+  recordButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1a1a2e',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordButtonActive: {
+    backgroundColor: '#ef4444',
   },
   progressContainer: {
     flexDirection: 'row',
@@ -553,6 +830,25 @@ const styles = StyleSheet.create({
     minWidth: 50,
     textAlign: 'right',
   },
+  recordingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    paddingVertical: 8,
+    gap: 8,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ef4444',
+  },
+  recordingText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   currentLineContainer: {
     padding: 16,
     minHeight: 200,
@@ -572,19 +868,33 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginTop: 8,
   },
+  weakLinesText: {
+    fontSize: 14,
+    color: '#f59e0b',
+    marginTop: 8,
+  },
+  finishedButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
   finishedButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#6366f1',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 24,
-    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  finishedButtonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#6366f1',
   },
   finishedButtonText: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '600',
   },
   idleContainer: {
@@ -627,8 +937,8 @@ const styles = StyleSheet.create({
   speakerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 12,
+    gap: 8,
   },
   speakerBadge: {
     flexDirection: 'row',
@@ -657,6 +967,20 @@ const styles = StyleSheet.create({
   speakingText: {
     fontSize: 13,
     color: '#10b981',
+  },
+  weakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    gap: 4,
+  },
+  weakBadgeText: {
+    fontSize: 11,
+    color: '#f59e0b',
+    fontWeight: '600',
   },
   stageDirection: {
     fontSize: 15,
@@ -703,6 +1027,11 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginBottom: 12,
   },
+  userActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   doneButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -716,6 +1045,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 17,
     fontWeight: '600',
+  },
+  missedButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   aiLineText: {
     fontSize: 18,
@@ -759,6 +1096,15 @@ const styles = StyleSheet.create({
   scriptLineUser: {
     backgroundColor: 'rgba(99, 102, 241, 0.1)',
   },
+  scriptLineWeak: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
+  },
+  scriptLineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   scriptDirection: {
     fontSize: 13,
     color: '#6b7280',
@@ -801,5 +1147,111 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     backgroundColor: '#6366f1',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#1a1a2e',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  modalScroll: {
+    maxHeight: 400,
+  },
+  statCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0f',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    gap: 16,
+  },
+  statValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    flex: 1,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  premiumPrompt: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: 12,
+    padding: 20,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.2)',
+  },
+  premiumPromptText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  premiumPromptButton: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  premiumPromptButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  recordingModalContent: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  recordingModalText: {
+    fontSize: 16,
+    color: '#9ca3af',
+    marginTop: 16,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  playbackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 10,
+    marginBottom: 12,
+  },
+  playbackButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dismissButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  dismissButtonText: {
+    color: '#6b7280',
+    fontSize: 15,
   },
 });
