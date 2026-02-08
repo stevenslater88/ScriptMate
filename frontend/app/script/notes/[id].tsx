@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useScriptStore } from '../../store/scriptStore';
+import { useScriptStore } from '../../../store/scriptStore';
 
 interface DirectorNote {
   id: string;
