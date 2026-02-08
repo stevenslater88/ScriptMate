@@ -1,247 +1,252 @@
 diff --git a/model.patch b/model.patch
-index 08e3f1e..e69de29 100644
+index 464e06d..e69de29 100644
 --- a/model.patch
 +++ b/model.patch
-@@ -1,242 +0,0 @@
+@@ -1,247 +0,0 @@
 -diff --git a/model.patch b/model.patch
--index 8ea52be..e69de29 100644
+-index 08e3f1e..e69de29 100644
 ---- a/model.patch
 -+++ b/model.patch
--@@ -1,237 +0,0 @@
---diff --git a/test_result.md b/test_result.md
---index e58867a..437ece4 100644
------ a/test_result.md
---+++ b/test_result.md
---@@ -118,11 +118,14 @@ backend:
---     file: "/app/backend/server.py"
---     stuck_count: 0
---     priority: "high"
----    needs_retesting: true
---+    needs_retesting: false
---     status_history:
---       - working: true
---         agent: "main"
---         comment: "POST /api/scripts - Creates script and uses OpenAI to parse and detect characters. Tested with sample script - correctly identified SARAH and MIKE characters."
---+      - working: true
---+        agent: "testing"
---+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/scripts successfully creates scripts with AI parsing using OpenAI GPT-4o. Tested with Romeo & Juliet script - correctly detected ROMEO and JULIET characters with proper line counts. AI parsing working perfectly via emergentintegrations LLM API."
---         
---   - task: "Script listing and retrieval"
---     implemented: true
---@@ -130,11 +133,14 @@ backend:
---     file: "/app/backend/server.py"
---     stuck_count: 0
---     priority: "high"
----    needs_retesting: true
---+    needs_retesting: false
---     status_history:
---       - working: true
---         agent: "main"
---         comment: "GET /api/scripts and GET /api/scripts/{id} working correctly"
---+      - working: true
---+        agent: "testing"
---+        comment: "✅ COMPREHENSIVE TESTING PASSED - GET /api/scripts returns proper list of scripts, GET /api/scripts/{id} retrieves individual scripts correctly with all required fields (id, title, characters, lines, etc.)"
--- 
---   - task: "Script upload (PDF/TXT)"
---     implemented: true
---@@ -142,11 +148,14 @@ backend:
---     file: "/app/backend/server.py"
---     stuck_count: 0
---     priority: "medium"
----    needs_retesting: true
---+    needs_retesting: false
---     status_history:
---       - working: "NA"
---         agent: "main"
---         comment: "POST /api/scripts/upload - Implemented for PDF and TXT files"
---+      - working: true
---+        agent: "testing"
---+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/scripts/upload successfully handles both PDF and TXT file uploads. Tested with Macbeth TXT file (detected MACBETH, LADY MACBETH) and Hamlet PDF file (detected HAMLET, OPHELIA). File parsing and AI character detection working correctly."
--- 
---   - task: "Rehearsal session management"
---     implemented: true
---@@ -154,11 +163,14 @@ backend:
---     file: "/app/backend/server.py"
---     stuck_count: 0
---     priority: "high"
----    needs_retesting: true
---+    needs_retesting: false
---     status_history:
---       - working: true
---         agent: "main"
---         comment: "POST /api/rehearsals - Creates rehearsal session with character assignment. Tested successfully."
---+      - working: true
---+        agent: "testing"
---+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/rehearsals creates rehearsal sessions correctly with proper script linking, character assignment, and line counting. GET /api/rehearsals and GET /api/rehearsals/{id} working perfectly. All CRUD operations functional."
--- 
---   - task: "Script update (character assignment)"
---     implemented: true
---@@ -166,11 +178,14 @@ backend:
---     file: "/app/backend/server.py"
---     stuck_count: 0
---     priority: "medium"
----    needs_retesting: true
---+    needs_retesting: false
---     status_history:
---       - working: "NA"
---         agent: "main"
---         comment: "PUT /api/scripts/{id} - Updates character assignment"
---+      - working: true
---+        agent: "testing"
---+        comment: "✅ COMPREHENSIVE TESTING PASSED - PUT /api/scripts/{id} successfully updates user character assignment. Tested character assignment for ROMEO - properly sets is_user_character flag and maintains data integrity."
--- 
--- frontend:
---   - task: "Home screen with navigation"
---diff --git a/upload_test.py b/upload_test.py
---new file mode 100644
---index 0000000..f4b222c
------ /dev/null
---+++ b/upload_test.py
---@@ -0,0 +1,146 @@
---+#!/usr/bin/env python3
---+"""
---+Additional test for script upload functionality (PDF/TXT files)
---+"""
---+
---+import requests
---+import io
---+from reportlab.pdfgen import canvas
---+from reportlab.lib.pagesizes import letter
---+
---+BACKEND_URL = "https://linecoach.preview.emergentagent.com/api"
---+
---+def create_test_pdf():
---+    """Create a test PDF with script content"""
---+    buffer = io.BytesIO()
---+    p = canvas.Canvas(buffer, pagesize=letter)
---+    
---+    # Add script content to PDF
---+    script_text = """
---+    HAMLET
---+    To be or not to be, that is the question.
---+    
---+    OPHELIA
---+    My lord, how fares your disposition?
---+    
---+    (Hamlet turns away)
---+    
---+    HAMLET
---+    I humbly thank you, well, well, well.
---+    """
---+    
---+    y_position = 750
---+    for line in script_text.strip().split('\n'):
---+        if line.strip():
---+            p.drawString(100, y_position, line.strip())
---+            y_position -= 20
---+    
---+    p.showPage()
---+    p.save()
---+    buffer.seek(0)
---+    return buffer.getvalue()
---+
---+def test_txt_upload():
---+    """Test TXT file upload"""
---+    print("Testing TXT file upload...")
---+    
---+    txt_content = """MACBETH
---+Is this a dagger which I see before me,
---+The handle toward my hand?
---+
---+LADY MACBETH
---+Come, come, give me your hand.
---+What's done cannot be undone.
---+
---+(Thunder and lightning)
---+
---+MACBETH
---+I have done the deed. Didst thou not hear a noise?"""
---+    
---+    files = {
---+        'file': ('test_script.txt', txt_content.encode('utf-8'), 'text/plain')
---+    }
---+    data = {
---+        'title': 'Macbeth Test Scene'
---+    }
---+    
---+    try:
---+        response = requests.post(
---+            f"{BACKEND_URL}/scripts/upload",
---+            files=files,
---+            data=data,
---+            timeout=30
---+        )
---+        
---+        if response.status_code == 200:
---+            result = response.json()
---+            print(f"✅ TXT upload successful - Script ID: {result.get('id')}")
---+            print(f"   Characters detected: {[char['name'] for char in result.get('characters', [])]}")
---+            return True
---+        else:
---+            print(f"❌ TXT upload failed - Status: {response.status_code}")
---+            print(f"   Response: {response.text}")
---+            return False
---+            
---+    except Exception as e:
---+        print(f"❌ TXT upload failed - Exception: {str(e)}")
---+        return False
---+
---+def test_pdf_upload():
---+    """Test PDF file upload"""
---+    print("Testing PDF file upload...")
---+    
---+    try:
---+        pdf_content = create_test_pdf()
---+        
---+        files = {
---+            'file': ('test_script.pdf', pdf_content, 'application/pdf')
---+        }
---+        data = {
---+            'title': 'Hamlet Test Scene'
---+        }
---+        
---+        response = requests.post(
---+            f"{BACKEND_URL}/scripts/upload",
---+            files=files,
---+            data=data,
---+            timeout=30
---+        )
---+        
---+        if response.status_code == 200:
---+            result = response.json()
---+            print(f"✅ PDF upload successful - Script ID: {result.get('id')}")
---+            print(f"   Characters detected: {[char['name'] for char in result.get('characters', [])]}")
---+            return True
---+        else:
---+            print(f"❌ PDF upload failed - Status: {response.status_code}")
---+            print(f"   Response: {response.text}")
---+            return False
---+            
---+    except Exception as e:
---+        print(f"❌ PDF upload failed - Exception: {str(e)}")
---+        return False
---+
---+def main():
---+    """Run upload tests"""
---+    print("=" * 50)
---+    print("TESTING SCRIPT UPLOAD FUNCTIONALITY")
---+    print("=" * 50)
---+    
---+    txt_result = test_txt_upload()
---+    pdf_result = test_pdf_upload()
---+    
---+    print("=" * 50)
---+    print("UPLOAD TEST RESULTS:")
---+    print(f"TXT Upload: {'✅ PASS' if txt_result else '❌ FAIL'}")
---+    print(f"PDF Upload: {'✅ PASS' if pdf_result else '❌ FAIL'}")
---+    
---+    if txt_result and pdf_result:
---+        print("🎉 ALL UPLOAD TESTS PASSED!")
---+        return 0
---+    else:
---+        print("⚠️ Some upload tests failed")
---+        return 1
---+
---+if __name__ == "__main__":
---+    exit(main())
---\ No newline at end of file
+-@@ -1,242 +0,0 @@
+--diff --git a/model.patch b/model.patch
+--index 8ea52be..e69de29 100644
+----- a/model.patch
+--+++ b/model.patch
+--@@ -1,237 +0,0 @@
+---diff --git a/test_result.md b/test_result.md
+---index e58867a..437ece4 100644
+------ a/test_result.md
+---+++ b/test_result.md
+---@@ -118,11 +118,14 @@ backend:
+---     file: "/app/backend/server.py"
+---     stuck_count: 0
+---     priority: "high"
+----    needs_retesting: true
+---+    needs_retesting: false
+---     status_history:
+---       - working: true
+---         agent: "main"
+---         comment: "POST /api/scripts - Creates script and uses OpenAI to parse and detect characters. Tested with sample script - correctly identified SARAH and MIKE characters."
+---+      - working: true
+---+        agent: "testing"
+---+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/scripts successfully creates scripts with AI parsing using OpenAI GPT-4o. Tested with Romeo & Juliet script - correctly detected ROMEO and JULIET characters with proper line counts. AI parsing working perfectly via emergentintegrations LLM API."
+---         
+---   - task: "Script listing and retrieval"
+---     implemented: true
+---@@ -130,11 +133,14 @@ backend:
+---     file: "/app/backend/server.py"
+---     stuck_count: 0
+---     priority: "high"
+----    needs_retesting: true
+---+    needs_retesting: false
+---     status_history:
+---       - working: true
+---         agent: "main"
+---         comment: "GET /api/scripts and GET /api/scripts/{id} working correctly"
+---+      - working: true
+---+        agent: "testing"
+---+        comment: "✅ COMPREHENSIVE TESTING PASSED - GET /api/scripts returns proper list of scripts, GET /api/scripts/{id} retrieves individual scripts correctly with all required fields (id, title, characters, lines, etc.)"
+--- 
+---   - task: "Script upload (PDF/TXT)"
+---     implemented: true
+---@@ -142,11 +148,14 @@ backend:
+---     file: "/app/backend/server.py"
+---     stuck_count: 0
+---     priority: "medium"
+----    needs_retesting: true
+---+    needs_retesting: false
+---     status_history:
+---       - working: "NA"
+---         agent: "main"
+---         comment: "POST /api/scripts/upload - Implemented for PDF and TXT files"
+---+      - working: true
+---+        agent: "testing"
+---+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/scripts/upload successfully handles both PDF and TXT file uploads. Tested with Macbeth TXT file (detected MACBETH, LADY MACBETH) and Hamlet PDF file (detected HAMLET, OPHELIA). File parsing and AI character detection working correctly."
+--- 
+---   - task: "Rehearsal session management"
+---     implemented: true
+---@@ -154,11 +163,14 @@ backend:
+---     file: "/app/backend/server.py"
+---     stuck_count: 0
+---     priority: "high"
+----    needs_retesting: true
+---+    needs_retesting: false
+---     status_history:
+---       - working: true
+---         agent: "main"
+---         comment: "POST /api/rehearsals - Creates rehearsal session with character assignment. Tested successfully."
+---+      - working: true
+---+        agent: "testing"
+---+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/rehearsals creates rehearsal sessions correctly with proper script linking, character assignment, and line counting. GET /api/rehearsals and GET /api/rehearsals/{id} working perfectly. All CRUD operations functional."
+--- 
+---   - task: "Script update (character assignment)"
+---     implemented: true
+---@@ -166,11 +178,14 @@ backend:
+---     file: "/app/backend/server.py"
+---     stuck_count: 0
+---     priority: "medium"
+----    needs_retesting: true
+---+    needs_retesting: false
+---     status_history:
+---       - working: "NA"
+---         agent: "main"
+---         comment: "PUT /api/scripts/{id} - Updates character assignment"
+---+      - working: true
+---+        agent: "testing"
+---+        comment: "✅ COMPREHENSIVE TESTING PASSED - PUT /api/scripts/{id} successfully updates user character assignment. Tested character assignment for ROMEO - properly sets is_user_character flag and maintains data integrity."
+--- 
+--- frontend:
+---   - task: "Home screen with navigation"
+---diff --git a/upload_test.py b/upload_test.py
+---new file mode 100644
+---index 0000000..f4b222c
+------ /dev/null
+---+++ b/upload_test.py
+---@@ -0,0 +1,146 @@
+---+#!/usr/bin/env python3
+---+"""
+---+Additional test for script upload functionality (PDF/TXT files)
+---+"""
+---+
+---+import requests
+---+import io
+---+from reportlab.pdfgen import canvas
+---+from reportlab.lib.pagesizes import letter
+---+
+---+BACKEND_URL = "https://linecoach.preview.emergentagent.com/api"
+---+
+---+def create_test_pdf():
+---+    """Create a test PDF with script content"""
+---+    buffer = io.BytesIO()
+---+    p = canvas.Canvas(buffer, pagesize=letter)
+---+    
+---+    # Add script content to PDF
+---+    script_text = """
+---+    HAMLET
+---+    To be or not to be, that is the question.
+---+    
+---+    OPHELIA
+---+    My lord, how fares your disposition?
+---+    
+---+    (Hamlet turns away)
+---+    
+---+    HAMLET
+---+    I humbly thank you, well, well, well.
+---+    """
+---+    
+---+    y_position = 750
+---+    for line in script_text.strip().split('\n'):
+---+        if line.strip():
+---+            p.drawString(100, y_position, line.strip())
+---+            y_position -= 20
+---+    
+---+    p.showPage()
+---+    p.save()
+---+    buffer.seek(0)
+---+    return buffer.getvalue()
+---+
+---+def test_txt_upload():
+---+    """Test TXT file upload"""
+---+    print("Testing TXT file upload...")
+---+    
+---+    txt_content = """MACBETH
+---+Is this a dagger which I see before me,
+---+The handle toward my hand?
+---+
+---+LADY MACBETH
+---+Come, come, give me your hand.
+---+What's done cannot be undone.
+---+
+---+(Thunder and lightning)
+---+
+---+MACBETH
+---+I have done the deed. Didst thou not hear a noise?"""
+---+    
+---+    files = {
+---+        'file': ('test_script.txt', txt_content.encode('utf-8'), 'text/plain')
+---+    }
+---+    data = {
+---+        'title': 'Macbeth Test Scene'
+---+    }
+---+    
+---+    try:
+---+        response = requests.post(
+---+            f"{BACKEND_URL}/scripts/upload",
+---+            files=files,
+---+            data=data,
+---+            timeout=30
+---+        )
+---+        
+---+        if response.status_code == 200:
+---+            result = response.json()
+---+            print(f"✅ TXT upload successful - Script ID: {result.get('id')}")
+---+            print(f"   Characters detected: {[char['name'] for char in result.get('characters', [])]}")
+---+            return True
+---+        else:
+---+            print(f"❌ TXT upload failed - Status: {response.status_code}")
+---+            print(f"   Response: {response.text}")
+---+            return False
+---+            
+---+    except Exception as e:
+---+        print(f"❌ TXT upload failed - Exception: {str(e)}")
+---+        return False
+---+
+---+def test_pdf_upload():
+---+    """Test PDF file upload"""
+---+    print("Testing PDF file upload...")
+---+    
+---+    try:
+---+        pdf_content = create_test_pdf()
+---+        
+---+        files = {
+---+            'file': ('test_script.pdf', pdf_content, 'application/pdf')
+---+        }
+---+        data = {
+---+            'title': 'Hamlet Test Scene'
+---+        }
+---+        
+---+        response = requests.post(
+---+            f"{BACKEND_URL}/scripts/upload",
+---+            files=files,
+---+            data=data,
+---+            timeout=30
+---+        )
+---+        
+---+        if response.status_code == 200:
+---+            result = response.json()
+---+            print(f"✅ PDF upload successful - Script ID: {result.get('id')}")
+---+            print(f"   Characters detected: {[char['name'] for char in result.get('characters', [])]}")
+---+            return True
+---+        else:
+---+            print(f"❌ PDF upload failed - Status: {response.status_code}")
+---+            print(f"   Response: {response.text}")
+---+            return False
+---+            
+---+    except Exception as e:
+---+        print(f"❌ PDF upload failed - Exception: {str(e)}")
+---+        return False
+---+
+---+def main():
+---+    """Run upload tests"""
+---+    print("=" * 50)
+---+    print("TESTING SCRIPT UPLOAD FUNCTIONALITY")
+---+    print("=" * 50)
+---+    
+---+    txt_result = test_txt_upload()
+---+    pdf_result = test_pdf_upload()
+---+    
+---+    print("=" * 50)
+---+    print("UPLOAD TEST RESULTS:")
+---+    print(f"TXT Upload: {'✅ PASS' if txt_result else '❌ FAIL'}")
+---+    print(f"PDF Upload: {'✅ PASS' if pdf_result else '❌ FAIL'}")
+---+    
+---+    if txt_result and pdf_result:
+---+        print("🎉 ALL UPLOAD TESTS PASSED!")
+---+        return 0
+---+    else:
+---+        print("⚠️ Some upload tests failed")
+---+        return 1
+---+
+---+if __name__ == "__main__":
+---+    exit(main())
+---\ No newline at end of file
