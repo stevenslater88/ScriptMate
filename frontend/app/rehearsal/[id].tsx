@@ -57,16 +57,9 @@ export default function RehearsalScreen() {
     };
   }, [id]);
 
-  // Configure audio
+  // Configure audio - removed, using expo-speech only now
   useEffect(() => {
-    const configureAudio = async () => {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-      });
-    };
-    configureAudio();
+    // No audio setup needed for expo-speech
   }, []);
 
   const lines = currentScript?.lines || [];
