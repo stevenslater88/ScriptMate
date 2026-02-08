@@ -232,7 +232,7 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
 @api_router.get("/")
 async def root():
-    return {"message": "LineCoach API - AI Script Learning Partner"}
+    return {"message": "ScriptMate API - AI Script Learning Partner for Actors"}
 
 @api_router.get("/health")
 async def health_check():
