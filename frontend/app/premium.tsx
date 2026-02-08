@@ -1,0 +1,562 @@
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useScriptStore } from '../store/scriptStore';
+
+const FREE_FEATURES = [
+  { icon: 'document-text', text: '3 scripts max', included: true },
+  { icon: 'mic', text: '1 AI voice', included: true },
+  { icon: 'chatbubbles', text: 'Full Read & Cue modes', included: true },
+  { icon: 'time', text: '5 rehearsals/day', included: true },
+  { icon: 'trophy', text: 'Performance mode', included: false },
+  { icon: 'videocam', text: 'Recording & playback', included: false },
+  { icon: 'analytics', text: 'Smart line tracking', included: false },
+  { icon: 'cloud', text: 'Cloud storage', included: false },
+];
+
+const PREMIUM_FEATURES = [
+  { icon: 'infinite', text: 'Unlimited scripts', highlight: true },
+  { icon: 'mic', text: '6 AI voices & accents', highlight: true },
+  { icon: 'flash', text: 'All training modes', highlight: true },
+  { icon: 'trophy', text: 'Performance mode', highlight: true },
+  { icon: 'videocam', text: 'Recording & playback', highlight: true },
+  { icon: 'analytics', text: 'Smart weak line tracking', highlight: true },
+  { icon: 'cloud', text: 'Cloud storage', highlight: true },
+  { icon: 'remove-circle', text: 'No ads', highlight: true },
+  { icon: 'star', text: 'Priority support', highlight: false },
+  { icon: 'rocket', text: 'Early access to features', highlight: false },
+];
+
+export default function PremiumScreen() {
+  const { subscriptionPlans, user, isPremium, startTrial, subscribe, fetchSubscriptionPlans, error } = useScriptStore();
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchSubscriptionPlans();
+  }, []);
+
+  const handleStartTrial = async () => {
+    if (user?.trial_used) {
+      Alert.alert('Trial Used', 'You have already used your free trial. Subscribe to continue with Premium.');
+      return;
+    }
+    
+    setLoading(true);
+    const success = await startTrial();
+    setLoading(false);
+    
+    if (success) {
+      Alert.alert(
+        'Welcome to Premium!',
+        'Your 7-day free trial has started. Enjoy all premium features!',
+        [{ text: 'Start Rehearsing', onPress: () => router.back() }]
+      );
+    } else {
+      Alert.alert('Error', error || 'Failed to start trial');
+    }
+  };
+
+  const handleSubscribe = async () => {
+    setLoading(true);
+    const success = await subscribe(selectedPlan);
+    setLoading(false);
+    
+    if (success) {
+      Alert.alert(
+        'Welcome to Premium!',
+        'Thank you for subscribing. Enjoy all premium features!',
+        [{ text: 'Start Rehearsing', onPress: () => router.back() }]
+      );
+    } else {
+      Alert.alert('Error', error || 'Failed to subscribe');
+    }
+  };
+
+  const monthlyPlan = subscriptionPlans?.monthly;
+  const yearlyPlan = subscriptionPlans?.yearly;
+
+  if (isPremium) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={28} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Premium</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        <View style={styles.premiumActiveContainer}>
+          <View style={styles.premiumBadge}>
+            <Ionicons name="star" size={48} color="#f59e0b" />
+          </View>
+          <Text style={styles.premiumActiveTitle}>You're Premium!</Text>
+          <Text style={styles.premiumActiveSubtitle}>
+            Enjoy unlimited access to all features
+          </Text>
+          {user?.subscription_end && (
+            <Text style={styles.renewalText}>
+              Renews: {new Date(user.subscription_end).toLocaleDateString()}
+            </Text>
+          )}
+          <TouchableOpacity style={styles.manageButton} onPress={() => router.back()}>
+            <Text style={styles.manageButtonText}>Back to App</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={28} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Go Premium</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <View style={styles.heroIcon}>
+            <Ionicons name="star" size={40} color="#f59e0b" />
+          </View>
+          <Text style={styles.heroTitle}>Unlock Your Full Potential</Text>
+          <Text style={styles.heroSubtitle}>
+            Professional actors choose Premium for unlimited rehearsals, AI voices, and performance tracking
+          </Text>
+        </View>
+
+        {/* Plan Selection */}
+        <View style={styles.planSection}>
+          <TouchableOpacity
+            style={[styles.planCard, selectedPlan === 'yearly' && styles.planCardSelected]}
+            onPress={() => setSelectedPlan('yearly')}
+          >
+            {yearlyPlan?.savings && (
+              <View style={styles.savingsBadge}>
+                <Text style={styles.savingsText}>{yearlyPlan.savings}</Text>
+              </View>
+            )}
+            <View style={styles.planHeader}>
+              <Text style={styles.planName}>Yearly</Text>
+              {selectedPlan === 'yearly' && (
+                <Ionicons name="checkmark-circle" size={24} color="#6366f1" />
+              )}
+            </View>
+            <View style={styles.planPriceRow}>
+              <Text style={styles.planPrice}>${yearlyPlan?.price || 79.99}</Text>
+              <Text style={styles.planPeriod}>/year</Text>
+            </View>
+            <Text style={styles.planMonthly}>
+              Just ${((yearlyPlan?.price || 79.99) / 12).toFixed(2)}/month
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.planCard, selectedPlan === 'monthly' && styles.planCardSelected]}
+            onPress={() => setSelectedPlan('monthly')}
+          >
+            <View style={styles.planHeader}>
+              <Text style={styles.planName}>Monthly</Text>
+              {selectedPlan === 'monthly' && (
+                <Ionicons name="checkmark-circle" size={24} color="#6366f1" />
+              )}
+            </View>
+            <View style={styles.planPriceRow}>
+              <Text style={styles.planPrice}>${monthlyPlan?.price || 9.99}</Text>
+              <Text style={styles.planPeriod}>/month</Text>
+            </View>
+            <Text style={styles.planMonthly}>Flexibility to cancel anytime</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Trial Button */}
+        {!user?.trial_used && (
+          <TouchableOpacity
+            style={styles.trialButton}
+            onPress={handleStartTrial}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#6366f1" />
+            ) : (
+              <>
+                <Ionicons name="gift" size={20} color="#6366f1" />
+                <Text style={styles.trialButtonText}>Start 7-Day Free Trial</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Premium Features */}
+        <View style={styles.featuresSection}>
+          <Text style={styles.featuresSectionTitle}>Premium Features</Text>
+          {PREMIUM_FEATURES.map((feature, index) => (
+            <View key={index} style={styles.featureRow}>
+              <View style={[styles.featureIcon, feature.highlight && styles.featureIconHighlight]}>
+                <Ionicons
+                  name={feature.icon as any}
+                  size={20}
+                  color={feature.highlight ? '#6366f1' : '#6b7280'}
+                />
+              </View>
+              <Text style={[styles.featureText, feature.highlight && styles.featureTextHighlight]}>
+                {feature.text}
+              </Text>
+              <Ionicons name="checkmark" size={20} color="#10b981" />
+            </View>
+          ))}
+        </View>
+
+        {/* Free vs Premium Comparison */}
+        <View style={styles.comparisonSection}>
+          <Text style={styles.comparisonTitle}>Free Version Limits</Text>
+          {FREE_FEATURES.map((feature, index) => (
+            <View key={index} style={styles.comparisonRow}>
+              <Ionicons name={feature.icon as any} size={18} color="#6b7280" />
+              <Text style={styles.comparisonText}>{feature.text}</Text>
+              <Ionicons
+                name={feature.included ? 'checkmark' : 'close'}
+                size={18}
+                color={feature.included ? '#10b981' : '#ef4444'}
+              />
+            </View>
+          ))}
+        </View>
+
+        {/* Testimonial */}
+        <View style={styles.testimonialCard}>
+          <Ionicons name="chatbubble-ellipses" size={24} color="#6366f1" />
+          <Text style={styles.testimonialText}>
+            "ScriptMate Premium helped me nail my audition. The AI partner is like having a real scene partner in my pocket!"
+          </Text>
+          <Text style={styles.testimonialAuthor}>— Sarah M., Film Actor</Text>
+        </View>
+      </ScrollView>
+
+      {/* Subscribe Button */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={styles.subscribeButton}
+          onPress={handleSubscribe}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.subscribeButtonText}>
+              Subscribe for ${selectedPlan === 'yearly' ? yearlyPlan?.price || 79.99 : monthlyPlan?.price || 9.99}
+              /{selectedPlan === 'yearly' ? 'year' : 'month'}
+            </Text>
+          )}
+        </TouchableOpacity>
+        <Text style={styles.termsText}>
+          Cancel anytime. Subscription auto-renews.
+        </Text>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0a0a0f',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a2e',
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  placeholder: {
+    width: 36,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 140,
+  },
+  heroSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  heroIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  heroSubtitle: {
+    fontSize: 15,
+    color: '#9ca3af',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  planSection: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  planCard: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#2a2a3e',
+  },
+  planCardSelected: {
+    borderColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+  },
+  savingsBadge: {
+    position: 'absolute',
+    top: -10,
+    right: 10,
+    backgroundColor: '#10b981',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  savingsText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  planHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  planName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  planPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  planPrice: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  planPeriod: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginLeft: 4,
+  },
+  planMonthly: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  trialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 28,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#6366f1',
+  },
+  trialButtonText: {
+    color: '#6366f1',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  featuresSection: {
+    marginBottom: 28,
+  },
+  featuresSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 16,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a2e',
+  },
+  featureIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#1a1a2e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  featureIconHighlight: {
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+  },
+  featureText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#9ca3af',
+  },
+  featureTextHighlight: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  comparisonSection: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 28,
+  },
+  comparisonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginBottom: 12,
+  },
+  comparisonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 12,
+  },
+  comparisonText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#9ca3af',
+  },
+  testimonialCard: {
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  testimonialText: {
+    fontSize: 15,
+    color: '#e5e7eb',
+    fontStyle: 'italic',
+    lineHeight: 22,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  testimonialAuthor: {
+    fontSize: 13,
+    color: '#6366f1',
+    fontWeight: '500',
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    backgroundColor: '#0a0a0f',
+    borderTopWidth: 1,
+    borderTopColor: '#1a1a2e',
+  },
+  subscribeButton: {
+    backgroundColor: '#6366f1',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  subscribeButtonText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  termsText: {
+    textAlign: 'center',
+    color: '#6b7280',
+    fontSize: 12,
+    marginTop: 8,
+  },
+  premiumActiveContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  premiumBadge: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  premiumActiveTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  premiumActiveSubtitle: {
+    fontSize: 16,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  renewalText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 24,
+  },
+  manageButton: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 10,
+  },
+  manageButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
