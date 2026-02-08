@@ -334,4 +334,63 @@ const styles = StyleSheet.create({
     padding: 40,
     alignItems: 'center',
   },
+  premiumBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+  },
+  premiumBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  premiumBannerText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  premiumBannerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#f59e0b',
+  },
+  premiumBannerSubtitle: {
+    fontSize: 13,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+  premiumStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 16,
+    gap: 6,
+  },
+  premiumStatusText: {
+    color: '#f59e0b',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modeCardLocked: {
+    opacity: 0.7,
+  },
+  modeTextLocked: {
+    color: '#6b7280',
+  },
+  modeIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  lockIcon: {
+    marginLeft: 4,
+  },
 });
