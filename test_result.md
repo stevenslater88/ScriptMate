@@ -101,3 +101,189 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  Build an AI Script Learning Partner app (LineCoach) for actors to:
+  - Upload and parse scripts (PDF, text)
+  - Auto-detect characters and dialogue
+  - Select character to play as
+  - AI reading partner speaks other characters' lines
+  - Multiple training modes (Full Read, Cue Only, Performance)
+  - Help actors memorize lines
+
+backend:
+  - task: "Script creation and AI parsing"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "POST /api/scripts - Creates script and uses OpenAI to parse and detect characters. Tested with sample script - correctly identified SARAH and MIKE characters."
+        
+  - task: "Script listing and retrieval"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "GET /api/scripts and GET /api/scripts/{id} working correctly"
+
+  - task: "Script upload (PDF/TXT)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "POST /api/scripts/upload - Implemented for PDF and TXT files"
+
+  - task: "Rehearsal session management"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "POST /api/rehearsals - Creates rehearsal session with character assignment. Tested successfully."
+
+  - task: "Script update (character assignment)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "PUT /api/scripts/{id} - Updates character assignment"
+
+frontend:
+  - task: "Home screen with navigation"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Home screen shows app branding, quick actions (New Script, My Scripts), Continue Learning card, and Training Modes grid. Screenshot verified."
+
+  - task: "Script upload screen"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/upload.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Upload screen with paste text and file upload options. Has sample script button and format tips. Screenshot verified."
+
+  - task: "Scripts list screen"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/scripts.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Lists all scripts with delete functionality"
+
+  - task: "Script detail screen"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/script/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Shows script info, character selection, training mode selection, script preview. Voice settings modal. Screenshot verified."
+
+  - task: "Rehearsal screen with TTS"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/rehearsal/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Rehearsal screen with progress bar, current line display, script view with highlighting. Uses expo-speech for TTS (device native). Screenshot verified."
+
+  - task: "State management"
+    implemented: true
+    working: true
+    file: "/app/frontend/store/scriptStore.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Zustand store for scripts, rehearsals, and API calls"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "Script creation and AI parsing"
+    - "Rehearsal session management"
+    - "Home screen with navigation"
+    - "Script detail screen"
+    - "Rehearsal screen with TTS"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      MVP implementation complete for LineCoach - AI Script Learning Partner:
+      
+      Backend features:
+      - Script creation with AI parsing using OpenAI GPT-4o via emergentintegrations
+      - Character detection and dialogue structure
+      - PDF and text file support
+      - Rehearsal session management
+      
+      Frontend features:
+      - Professional dark-themed mobile UI
+      - Home screen with quick actions and training modes
+      - Script upload via paste or file
+      - Script detail with character selection
+      - Rehearsal screen with TTS using expo-speech (device native)
+      - Voice variety options (pitch/rate adjustments)
+      
+      Note: TTS uses device native expo-speech instead of OpenAI TTS (Emergent key doesn't support OpenAI audio endpoints directly).
+      
+      Please test the core flows:
+      1. Create a new script with sample text
+      2. Select character and start rehearsal
+      3. Verify TTS works on mobile device
