@@ -33,7 +33,7 @@ export default function RehearsalScreen() {
   const [isPaused, setIsPaused] = useState(false);
   const [isListening, setIsListening] = useState(false);
 
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const soundRef = useRef<any>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Load rehearsal and script data
