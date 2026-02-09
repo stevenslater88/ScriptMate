@@ -531,6 +531,42 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  legalSection: {
+    marginTop: 8,
+    marginBottom: 32,
+  },
+  legalTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  legalLinks: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  legalLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a3e',
+    gap: 12,
+  },
+  legalLinkText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#e5e7eb',
+  },
+  versionText: {
+    fontSize: 12,
+    color: '#4b5563',
+    textAlign: 'center',
+    marginTop: 16,
+  },
   inputGroup: {
     marginBottom: 20,
   },
