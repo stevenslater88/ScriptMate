@@ -83,7 +83,7 @@ SUBSCRIPTION_PLANS_BY_REGION = {
             "price": 9.99,
             "currency": "USD",
             "period": "month",
-            "trial_days": 7,
+            "trial_days": 3,
             "features": [
                 "Unlimited scripts",
                 "6 AI voice options",
@@ -100,7 +100,7 @@ SUBSCRIPTION_PLANS_BY_REGION = {
             "price": 79.99,
             "currency": "USD",
             "period": "year",
-            "trial_days": 7,
+            "trial_days": 3,
             "savings": "Save 33%",
             "features": [
                 "Everything in monthly",
@@ -119,7 +119,7 @@ SUBSCRIPTION_PLANS_BY_REGION = {
             "price": 4.99,
             "currency": "GBP",
             "period": "month",
-            "trial_days": 7,
+            "trial_days": 3,
             "features": [
                 "Unlimited scripts",
                 "6 AI voice options",
@@ -136,7 +136,7 @@ SUBSCRIPTION_PLANS_BY_REGION = {
             "price": 34.99,
             "currency": "GBP",
             "period": "year",
-            "trial_days": 7,
+            "trial_days": 3,
             "savings": "Save 42%",
             "features": [
                 "Everything in monthly",
@@ -155,7 +155,7 @@ SUBSCRIPTION_PLANS_BY_REGION = {
             "price": 6.99,
             "currency": "EUR",
             "period": "month",
-            "trial_days": 7,
+            "trial_days": 3,
             "features": [
                 "Unlimited scripts",
                 "6 AI voice options",
@@ -172,7 +172,7 @@ SUBSCRIPTION_PLANS_BY_REGION = {
             "price": 39.99,
             "currency": "EUR",
             "period": "year",
-            "trial_days": 7,
+            "trial_days": 3,
             "savings": "Save 52%",
             "features": [
                 "Everything in monthly",
@@ -635,7 +635,7 @@ async def subscribe_user(device_id: str, subscription: SubscriptionUpdate):
 
 @api_router.post("/users/{device_id}/start-trial")
 async def start_trial(device_id: str):
-    """Start a 7-day premium trial"""
+    """Start a 3-day premium trial"""
     user = await db.users.find_one({"device_id": device_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -644,7 +644,7 @@ async def start_trial(device_id: str):
         raise HTTPException(status_code=400, detail="Trial already used")
     
     now = datetime.utcnow()
-    trial_end = now + timedelta(days=7)
+    trial_end = now + timedelta(days=3)
     
     await db.users.update_one(
         {"device_id": device_id},
