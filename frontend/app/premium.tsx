@@ -250,7 +250,7 @@ export default function PremiumScreen() {
             ) : (
               <>
                 <Ionicons name="gift" size={20} color="#6366f1" />
-                <Text style={styles.trialButtonText}>Start 7-Day Free Trial</Text>
+                <Text style={styles.trialButtonText}>Start 3-Day Free Trial</Text>
               </>
             )}
           </TouchableOpacity>
