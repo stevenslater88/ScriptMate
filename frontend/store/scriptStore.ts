@@ -270,6 +270,12 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     }
   },
 
+  setRegion: (region: string) => {
+    const symbols: Record<string, string> = { US: '$', GB: '£', EU: '€' };
+    set({ region, currencySymbol: symbols[region] || '$' });
+    get().fetchSubscriptionPlans(region);
+  },
+
   fetchScripts: async () => {
     const { deviceId } = get();
     set({ loading: true, error: null });
