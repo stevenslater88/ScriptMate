@@ -692,6 +692,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
+  paywallButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: 4,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    marginHorizontal: 40,
+    borderRadius: 10,
+  },
+  paywallButtonText: {
+    color: '#6366f1',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   legalLinks: {
     flexDirection: 'row',
     justifyContent: 'center',
