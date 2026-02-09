@@ -94,7 +94,7 @@ export default function PremiumScreen() {
     if (success) {
       Alert.alert(
         'Welcome to Premium!',
-        'Your 7-day free trial has started. Enjoy all premium features!',
+        'Your 3-day free trial has started. Enjoy all premium features!',
         [{ text: 'Start Rehearsing', onPress: () => router.back() }]
       );
     } else {
