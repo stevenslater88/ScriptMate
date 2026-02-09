@@ -8,12 +8,17 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 import { useScriptStore } from '../../store/scriptStore';
 
 type RehearsalState = 'idle' | 'ai_speaking' | 'user_turn' | 'waiting' | 'finished';
@@ -24,6 +29,26 @@ interface LinePerformance {
   attempts: number;
   hintUsed: boolean;
 }
+
+// Helper to calculate text similarity (Levenshtein distance based)
+const calculateSimilarity = (str1: string, str2: string): number => {
+  const s1 = str1.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  const s2 = str2.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  
+  if (s1 === s2) return 1;
+  if (s1.length === 0 || s2.length === 0) return 0;
+  
+  // Simple word overlap comparison
+  const words1 = s1.split(/\s+/);
+  const words2 = s2.split(/\s+/);
+  
+  let matchCount = 0;
+  for (const word of words1) {
+    if (words2.includes(word)) matchCount++;
+  }
+  
+  return matchCount / Math.max(words1.length, words2.length);
+};
 
 export default function RehearsalScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -51,7 +76,95 @@ export default function RehearsalScreen() {
   const [linePerformances, setLinePerformances] = useState<LinePerformance[]>([]);
   const [showStatsModal, setShowStatsModal] = useState(false);
 
+  // Speech recognition state
+  const [isListening, setIsListening] = useState(false);
+  const [recognizedText, setRecognizedText] = useState('');
+  const [speechRecognitionAvailable, setSpeechRecognitionAvailable] = useState(false);
+  const [autoAdvanceEnabled, setAutoAdvanceEnabled] = useState(true);
+
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Check speech recognition availability
+  useEffect(() => {
+    const checkAvailability = async () => {
+      try {
+        const status = await ExpoSpeechRecognitionModule.getStateAsync();
+        setSpeechRecognitionAvailable(status !== 'inactive');
+      } catch {
+        setSpeechRecognitionAvailable(false);
+      }
+    };
+    checkAvailability();
+  }, []);
+
+  // Speech recognition event handlers
+  useSpeechRecognitionEvent('start', () => {
+    setIsListening(true);
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setIsListening(false);
+  });
+
+  useSpeechRecognitionEvent('result', (event) => {
+    const transcript = event.results[0]?.transcript || '';
+    setRecognizedText(transcript);
+    
+    // Check if user said something close to their line
+    if (autoAdvanceEnabled && state === 'user_turn' && transcript.length > 5) {
+      const lines = currentScript?.lines || [];
+      const currentLine = lines[currentLineIndex];
+      const expectedText = currentLine?.text || '';
+      
+      const similarity = calculateSimilarity(transcript, expectedText);
+      
+      // If similarity is > 60%, auto-advance
+      if (similarity > 0.6) {
+        stopListening();
+        onUserLineDone(false);
+      }
+    }
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    console.log('Speech recognition error:', event.error);
+    setIsListening(false);
+  });
+
+  // Start listening for user's line
+  const startListening = async () => {
+    if (!speechRecognitionAvailable) {
+      Alert.alert('Not Available', 'Speech recognition is not available on this device.');
+      return;
+    }
+
+    try {
+      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!result.granted) {
+        Alert.alert('Permission Required', 'Please grant microphone permission for speech recognition.');
+        return;
+      }
+
+      setRecognizedText('');
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        continuous: false,
+      });
+    } catch (error) {
+      console.error('Failed to start speech recognition:', error);
+    }
+  };
+
+  // Stop listening
+  const stopListening = () => {
+    try {
+      ExpoSpeechRecognitionModule.stop();
+    } catch (error) {
+      console.error('Failed to stop speech recognition:', error);
+    }
+    setIsListening(false);
+  };
 
   // Load rehearsal and script data
   useEffect(() => {
