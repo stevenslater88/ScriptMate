@@ -152,6 +152,30 @@ Please describe your issue:
           <Text style={styles.emailButtonText}>Email Support</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Legal Links */}
+      <View style={styles.legalSection}>
+        <Text style={styles.legalTitle}>Legal</Text>
+        <View style={styles.legalLinks}>
+          <TouchableOpacity 
+            style={styles.legalLink}
+            onPress={() => router.push('/privacy')}
+          >
+            <Ionicons name="shield-checkmark-outline" size={18} color="#6b7280" />
+            <Text style={styles.legalLinkText}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={16} color="#4b5563" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.legalLink}
+            onPress={() => router.push('/terms')}
+          >
+            <Ionicons name="document-text-outline" size={18} color="#6b7280" />
+            <Text style={styles.legalLinkText}>Terms of Service</Text>
+            <Ionicons name="chevron-forward" size={16} color="#4b5563" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.versionText}>ScriptMate v1.0.0</Text>
+      </View>
     </ScrollView>
   );
 
