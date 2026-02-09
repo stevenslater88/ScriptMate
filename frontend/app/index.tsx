@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,10 +19,14 @@ export default function HomeScreen() {
   const { scripts, fetchScripts, loading, initializeUser, user, isPremium, limits } = useScriptStore();
   const [refreshing, setRefreshing] = useState(false);
 
+  const initialize = useCallback(async () => {
+    await initializeUser();
+    await fetchScripts();
+  }, [initializeUser, fetchScripts]);
+
   useEffect(() => {
-    initializeUser();
-    fetchScripts();
-  }, []);
+    initialize();
+  }, [initialize]);
 
   const onRefresh = async () => {
     setRefreshing(true);
