@@ -176,6 +176,24 @@ export default function PremiumScreen() {
           </Text>
         </View>
 
+        {/* Region Indicator */}
+        <TouchableOpacity 
+          style={styles.regionIndicator} 
+          onPress={() => {
+            // Cycle through regions for manual override
+            const regions = ['US', 'GB', 'EU'];
+            const currentIndex = regions.indexOf(region);
+            const nextRegion = regions[(currentIndex + 1) % regions.length];
+            setRegion(nextRegion);
+          }}
+        >
+          <Ionicons name="globe-outline" size={16} color="#9ca3af" />
+          <Text style={styles.regionText}>
+            {region === 'GB' ? '🇬🇧 UK' : region === 'EU' ? '🇪🇺 Europe' : '🇺🇸 USA'} • {currencySymbol}
+          </Text>
+          <Ionicons name="chevron-down" size={14} color="#6b7280" />
+        </TouchableOpacity>
+
         {/* Plan Selection */}
         <View style={styles.planSection}>
           <TouchableOpacity
@@ -194,11 +212,11 @@ export default function PremiumScreen() {
               )}
             </View>
             <View style={styles.planPriceRow}>
-              <Text style={styles.planPrice}>${yearlyPlan?.price || 79.99}</Text>
+              <Text style={styles.planPrice}>{currencySymbol}{yearlyPlan?.price || 79.99}</Text>
               <Text style={styles.planPeriod}>/year</Text>
             </View>
             <Text style={styles.planMonthly}>
-              Just ${((yearlyPlan?.price || 79.99) / 12).toFixed(2)}/month
+              Just {currencySymbol}{((yearlyPlan?.price || 79.99) / 12).toFixed(2)}/month
             </Text>
           </TouchableOpacity>
 
@@ -213,7 +231,7 @@ export default function PremiumScreen() {
               )}
             </View>
             <View style={styles.planPriceRow}>
-              <Text style={styles.planPrice}>${monthlyPlan?.price || 9.99}</Text>
+              <Text style={styles.planPrice}>{currencySymbol}{monthlyPlan?.price || 9.99}</Text>
               <Text style={styles.planPeriod}>/month</Text>
             </View>
             <Text style={styles.planMonthly}>Flexibility to cancel anytime</Text>
