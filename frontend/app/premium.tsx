@@ -37,10 +37,17 @@ const PREMIUM_FEATURES = [
   { icon: 'rocket', text: 'Early access to features', highlight: false },
 ];
 
+const REGIONS = [
+  { id: 'US', name: 'USA', flag: '🇺🇸', symbol: '$' },
+  { id: 'GB', name: 'UK', flag: '🇬🇧', symbol: '£' },
+  { id: 'EU', name: 'Europe', flag: '🇪🇺', symbol: '€' },
+];
+
 export default function PremiumScreen() {
-  const { subscriptionPlans, user, isPremium, startTrial, subscribe, fetchSubscriptionPlans, error } = useScriptStore();
+  const { subscriptionPlans, user, isPremium, startTrial, subscribe, fetchSubscriptionPlans, error, region, currencySymbol, setRegion } = useScriptStore();
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
   const [loading, setLoading] = useState(false);
+  const [showRegionPicker, setShowRegionPicker] = useState(false);
 
   useEffect(() => {
     fetchSubscriptionPlans();
