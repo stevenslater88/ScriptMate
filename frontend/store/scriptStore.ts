@@ -171,6 +171,8 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   limits: null,
   subscriptionPlans: null,
   isPremium: false,
+  region: 'US',
+  currencySymbol: '$',
   loading: false,
   error: null,
 
@@ -190,7 +192,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         isPremium: user.subscription_tier === 'premium' 
       });
       
-      // Fetch limits
+      // Fetch limits and subscription plans
       await get().fetchUserLimits();
       await get().fetchSubscriptionPlans();
     } catch (error: any) {
@@ -214,10 +216,17 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     }
   },
 
-  fetchSubscriptionPlans: async () => {
+  fetchSubscriptionPlans: async (region?: string) => {
+    const currentRegion = region || get().region;
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/subscription/plans`);
-      set({ subscriptionPlans: response.data.plans });
+      const response = await axios.get(`${BACKEND_URL}/api/subscription/plans`, {
+        params: { region: currentRegion }
+      });
+      set({ 
+        subscriptionPlans: response.data.plans,
+        region: response.data.region,
+        currencySymbol: response.data.currency_symbol,
+      });
     } catch (error: any) {
       console.error('Error fetching plans:', error);
     }
