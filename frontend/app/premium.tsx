@@ -448,16 +448,20 @@ export default function PremiumScreen() {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.subscribeButtonText}>
-              {hasFreeTrial() && selectedPlan === 'yearly'
-                ? 'Start Free Trial'
-                : `Subscribe for ${selectedPlan === 'yearly' ? getYearlyPrice() : getMonthlyPrice()}`}
+              {selectedPlan === 'lifetime'
+                ? `Buy Lifetime for ${getLifetimePrice()}`
+                : hasFreeTrial() && selectedPlan === 'yearly'
+                  ? 'Start Free Trial'
+                  : `Subscribe for ${selectedPlan === 'yearly' ? getYearlyPrice() : getMonthlyPrice()}`}
             </Text>
           )}
         </TouchableOpacity>
         <Text style={styles.termsText}>
-          {hasFreeTrial() && selectedPlan === 'yearly'
-            ? '3-day free trial, then auto-renews. Cancel anytime.'
-            : 'Subscription auto-renews. Cancel anytime.'}
+          {selectedPlan === 'lifetime'
+            ? 'One-time purchase. No subscription required.'
+            : hasFreeTrial() && selectedPlan === 'yearly'
+              ? '3-day free trial, then auto-renews. Cancel anytime.'
+              : 'Subscription auto-renews. Cancel anytime.'}
         </Text>
       </View>
     </SafeAreaView>
