@@ -89,6 +89,16 @@ export interface SubscriptionPlan {
   savings?: string;
 }
 
+export interface RegionPricing {
+  region: string;
+  currency: string;
+  currency_symbol: string;
+  plans: {
+    monthly: SubscriptionPlan;
+    yearly: SubscriptionPlan;
+  };
+}
+
 interface ScriptStore {
   // Scripts
   scripts: Script[];
@@ -103,6 +113,8 @@ interface ScriptStore {
   limits: TierLimits | null;
   subscriptionPlans: { monthly: SubscriptionPlan; yearly: SubscriptionPlan } | null;
   isPremium: boolean;
+  region: string;
+  currencySymbol: string;
   
   // UI State
   loading: boolean;
@@ -111,9 +123,10 @@ interface ScriptStore {
   // User Actions
   initializeUser: () => Promise<void>;
   fetchUserLimits: () => Promise<void>;
-  fetchSubscriptionPlans: () => Promise<void>;
+  fetchSubscriptionPlans: (region?: string) => Promise<void>;
   startTrial: () => Promise<boolean>;
   subscribe: (plan: string) => Promise<boolean>;
+  setRegion: (region: string) => void;
   
   // Script Actions
   fetchScripts: () => Promise<void>;
