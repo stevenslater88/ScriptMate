@@ -10,7 +10,7 @@ import time
 from typing import Dict, Any, Optional
 
 # Backend URL from frontend .env
-BACKEND_URL = "https://linecoach.preview.emergentagent.com/api"
+BACKEND_URL = "https://scriptmate-8.preview.emergentagent.com/api"
 
 class LineCoachAPITester:
     def __init__(self):

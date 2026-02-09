@@ -123,7 +123,7 @@ index a27907c..e69de29 100644
 -----+from reportlab.pdfgen import canvas
 -----+from reportlab.lib.pagesizes import letter
 -----+
------+BACKEND_URL = "https://linecoach.preview.emergentagent.com/api"
+-----+BACKEND_URL = "https://scriptmate-8.preview.emergentagent.com/api"
 -----+
 -----+def create_test_pdf():
 -----+    """Create a test PDF with script content"""
