@@ -236,6 +236,14 @@ export default function PremiumScreen() {
     return `${currencySymbol}${((yearlyPlan?.price || 79.99) / 12).toFixed(2)}`;
   };
 
+  const getLifetimePrice = (): string => {
+    if (isNative && lifetimePackage) {
+      return lifetimePackage.product.priceString;
+    }
+    // Fallback lifetime price (typically 2-3x yearly)
+    return `${currencySymbol}199.99`;
+  };
+
   // Check if free trial is available
   const hasFreeTrial = (): boolean => {
     if (isNative && yearlyPackage) {
