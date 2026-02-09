@@ -187,6 +187,21 @@ backend:
         agent: "testing"
         comment: "✅ COMPREHENSIVE TESTING PASSED - PUT /api/scripts/{id} successfully updates user character assignment. Tested character assignment for ROMEO - properly sets is_user_character flag and maintains data integrity."
 
+  - task: "Multi-region subscription pricing"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented multi-region pricing (US, GB, EU) with 3-day trial. GET /api/subscription/plans supports region parameter, GET /api/subscription/regions lists all regions, POST /api/users/{device_id}/start-trial creates 3-day premium trial."
+      - working: true
+        agent: "testing"
+        comment: "✅ COMPREHENSIVE TESTING PASSED - Multi-region subscription pricing fully functional. All 33 tests passed: US region ($9.99/month, $79.99/year), GB region (£4.99/month, £34.99/year), EU region (€6.99/month, €39.99/year). All regions show correct currency symbols and 3-day trial period. Trial functionality working correctly - users get premium access for 3 days, trial_used flag prevents duplicate trials."
+
 frontend:
   - task: "Home screen with navigation"
     implemented: true
