@@ -668,22 +668,71 @@ export default function RehearsalScreen() {
                   </View>
                 )}
                 <View style={styles.userActionContainer}>
-                  <Text style={styles.userActionLabel}>Say your line, then tap:</Text>
+                  {/* Speech Recognition Indicator */}
+                  {isListening && (
+                    <View style={styles.listeningContainer}>
+                      <View style={styles.listeningPulse}>
+                        <Ionicons name="mic" size={24} color="#10b981" />
+                      </View>
+                      <Text style={styles.listeningText}>Listening...</Text>
+                      {recognizedText.length > 0 && (
+                        <Text style={styles.recognizedText} numberOfLines={2}>
+                          "{recognizedText}"
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                  
+                  <Text style={styles.userActionLabel}>
+                    {isListening ? 'Speak your line now' : 'Say your line, then tap:'}
+                  </Text>
                   <View style={styles.userActionButtons}>
+                    {/* Speech Recognition Button */}
+                    {speechRecognitionAvailable && isPremium && !isListening && (
+                      <TouchableOpacity
+                        style={styles.listenButton}
+                        onPress={startListening}
+                      >
+                        <Ionicons name="mic" size={20} color="#10b981" />
+                        <Text style={styles.listenButtonText}>Auto</Text>
+                      </TouchableOpacity>
+                    )}
+                    
                     <TouchableOpacity
                       style={styles.doneButton}
-                      onPress={() => onUserLineDone(!userLineVisible)}
+                      onPress={() => {
+                        if (isListening) stopListening();
+                        onUserLineDone(!userLineVisible);
+                      }}
                     >
                       <Ionicons name="checkmark" size={24} color="#fff" />
                       <Text style={styles.doneButtonText}>Done</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.missedButton}
-                      onPress={onLineMissed}
+                      onPress={() => {
+                        if (isListening) stopListening();
+                        onLineMissed();
+                      }}
                     >
                       <Ionicons name="close" size={20} color="#ef4444" />
                     </TouchableOpacity>
                   </View>
+                  
+                  {/* Auto-advance toggle for Premium */}
+                  {isPremium && speechRecognitionAvailable && (
+                    <TouchableOpacity 
+                      style={styles.autoAdvanceToggle}
+                      onPress={() => setAutoAdvanceEnabled(!autoAdvanceEnabled)}
+                    >
+                      <Ionicons 
+                        name={autoAdvanceEnabled ? 'checkbox' : 'square-outline'} 
+                        size={18} 
+                        color={autoAdvanceEnabled ? '#10b981' : '#6b7280'} 
+                      />
+                      <Text style={styles.autoAdvanceText}>Auto-advance when line detected</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             ) : (
