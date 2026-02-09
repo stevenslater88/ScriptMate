@@ -67,7 +67,7 @@ export default function PremiumScreen() {
     setRegion,
   } = useScriptStore();
 
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly' | 'lifetime'>('yearly');
   const [loading, setLoading] = useState(false);
 
   // Use RevenueCat on native, fallback to store on web
@@ -77,7 +77,14 @@ export default function PremiumScreen() {
 
   // Get packages from RevenueCat offerings
   const monthlyPackage = offerings?.current?.availablePackages?.find(
-    (pkg) => pkg.packageType === 'MONTHLY'
+    (pkg) => pkg.packageType === 'MONTHLY' || pkg.identifier === 'monthly'
+  );
+  const yearlyPackage = offerings?.current?.availablePackages?.find(
+    (pkg) => pkg.packageType === 'ANNUAL' || pkg.identifier === 'yearly'
+  );
+  const lifetimePackage = offerings?.current?.availablePackages?.find(
+    (pkg) => pkg.packageType === 'LIFETIME' || pkg.identifier === 'lifetime'
+  );
   );
   const yearlyPackage = offerings?.current?.availablePackages?.find(
     (pkg) => pkg.packageType === 'ANNUAL'
