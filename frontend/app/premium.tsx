@@ -418,6 +418,26 @@ export default function PremiumScreen() {
           <Text style={styles.restoreButtonText}>Restore Purchases</Text>
         </TouchableOpacity>
 
+        {/* RevenueCat Paywall Option (Native only) */}
+        {isNative && rcConfigured && (
+          <TouchableOpacity 
+            style={styles.paywallButton} 
+            onPress={async () => {
+              const purchased = await presentPaywall();
+              if (purchased) {
+                Alert.alert(
+                  'Welcome to Premium!',
+                  'Thank you for subscribing. Enjoy all premium features!',
+                  [{ text: 'OK', onPress: () => router.back() }]
+                );
+              }
+            }}
+          >
+            <Ionicons name="pricetag" size={16} color="#6366f1" />
+            <Text style={styles.paywallButtonText}>View All Offers</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Legal Links */}
         <View style={styles.legalLinks}>
           <TouchableOpacity onPress={() => router.push('/terms')}>
