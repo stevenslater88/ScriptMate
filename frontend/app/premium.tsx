@@ -365,6 +365,30 @@ export default function PremiumScreen() {
             </View>
             <Text style={styles.planMonthly}>Flexibility to cancel anytime</Text>
           </TouchableOpacity>
+
+          {/* Lifetime Option */}
+          {(lifetimePackage || !isNative) && (
+            <TouchableOpacity
+              style={[styles.planCard, styles.lifetimeCard, selectedPlan === 'lifetime' && styles.planCardSelected]}
+              onPress={() => setSelectedPlan('lifetime')}
+            >
+              <View style={styles.lifetimeBadge}>
+                <Ionicons name="diamond" size={12} color="#fff" />
+                <Text style={styles.lifetimeBadgeText}>ONE-TIME</Text>
+              </View>
+              <View style={styles.planHeader}>
+                <Text style={styles.planName}>Lifetime</Text>
+                {selectedPlan === 'lifetime' && (
+                  <Ionicons name="checkmark-circle" size={24} color="#6366f1" />
+                )}
+              </View>
+              <View style={styles.planPriceRow}>
+                <Text style={styles.planPrice}>{getLifetimePrice()}</Text>
+                <Text style={styles.planPeriod}> once</Text>
+              </View>
+              <Text style={styles.planMonthly}>Pay once, own forever</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Features List */}
