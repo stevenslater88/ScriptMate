@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useScriptStore } from '../store/scriptStore';
+import * as Localization from 'expo-localization';
 
 const FREE_FEATURES = [
   { icon: 'document-text', text: '3 scripts max', included: true },
