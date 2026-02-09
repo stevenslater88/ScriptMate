@@ -537,12 +537,55 @@ async def get_user_limits(device_id: str):
     }
 
 @api_router.get("/subscription/plans")
-async def get_subscription_plans():
-    """Get available subscription plans"""
+async def get_subscription_plans(region: str = "US"):
+    """Get available subscription plans for a specific region"""
+    # Determine region plans
+    if region == "GB":
+        plans = SUBSCRIPTION_PLANS_BY_REGION["GB"]
+    elif region in EU_COUNTRIES or region == "EU":
+        plans = SUBSCRIPTION_PLANS_BY_REGION["EU"]
+    else:
+        plans = SUBSCRIPTION_PLANS_BY_REGION["US"]
+    
     return {
-        "plans": SUBSCRIPTION_PLANS,
+        "region": region,
+        "currency": plans["currency"],
+        "currency_symbol": plans["currency_symbol"],
+        "plans": {
+            "monthly": plans["monthly"],
+            "yearly": plans["yearly"]
+        },
         "free_features": FREE_TIER_LIMITS,
         "premium_features": PREMIUM_TIER_LIMITS,
+    }
+
+@api_router.get("/subscription/regions")
+async def get_all_regions():
+    """Get pricing for all available regions"""
+    return {
+        "regions": {
+            "US": {
+                "name": "United States",
+                "currency": "USD",
+                "symbol": "$",
+                "monthly_price": SUBSCRIPTION_PLANS_BY_REGION["US"]["monthly"]["price"],
+                "yearly_price": SUBSCRIPTION_PLANS_BY_REGION["US"]["yearly"]["price"],
+            },
+            "GB": {
+                "name": "United Kingdom",
+                "currency": "GBP",
+                "symbol": "£",
+                "monthly_price": SUBSCRIPTION_PLANS_BY_REGION["GB"]["monthly"]["price"],
+                "yearly_price": SUBSCRIPTION_PLANS_BY_REGION["GB"]["yearly"]["price"],
+            },
+            "EU": {
+                "name": "Europe",
+                "currency": "EUR",
+                "symbol": "€",
+                "monthly_price": SUBSCRIPTION_PLANS_BY_REGION["EU"]["monthly"]["price"],
+                "yearly_price": SUBSCRIPTION_PLANS_BY_REGION["EU"]["yearly"]["price"],
+            }
+        }
     }
 
 @api_router.post("/users/{device_id}/subscribe")
