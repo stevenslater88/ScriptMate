@@ -13,6 +13,7 @@ import {
   restorePurchases,
   addCustomerInfoListener,
   PREMIUM_ENTITLEMENT_ID,
+  PRODUCT_IDS,
   PurchaseResult,
 } from '../services/revenuecat';
 
