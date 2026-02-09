@@ -72,40 +72,127 @@ PREMIUM_TIER_LIMITS = {
     "show_ads": False,
 }
 
-SUBSCRIPTION_PLANS = {
-    "monthly": {
-        "id": "premium_monthly",
-        "name": "Premium Monthly",
-        "price": 9.99,
+# Multi-region subscription pricing
+SUBSCRIPTION_PLANS_BY_REGION = {
+    "US": {
         "currency": "USD",
-        "period": "month",
-        "trial_days": 7,
-        "features": [
-            "Unlimited scripts",
-            "6 AI voice options",
-            "All training modes",
-            "Performance mode with recording",
-            "Smart line tracking",
-            "Cloud storage",
-            "No ads",
-        ]
+        "currency_symbol": "$",
+        "monthly": {
+            "id": "premium_monthly_usd",
+            "name": "Premium Monthly",
+            "price": 9.99,
+            "currency": "USD",
+            "period": "month",
+            "trial_days": 7,
+            "features": [
+                "Unlimited scripts",
+                "6 AI voice options",
+                "All training modes",
+                "Performance mode with recording",
+                "Smart line tracking",
+                "Cloud storage",
+                "No ads",
+            ]
+        },
+        "yearly": {
+            "id": "premium_yearly_usd",
+            "name": "Premium Yearly",
+            "price": 79.99,
+            "currency": "USD",
+            "period": "year",
+            "trial_days": 7,
+            "savings": "Save 33%",
+            "features": [
+                "Everything in monthly",
+                "Best value",
+                "Priority support",
+                "Early access to new features",
+            ]
+        }
     },
-    "yearly": {
-        "id": "premium_yearly",
-        "name": "Premium Yearly",
-        "price": 79.99,
-        "currency": "USD",
-        "period": "year",
-        "trial_days": 7,
-        "savings": "Save 33%",
-        "features": [
-            "Everything in monthly",
-            "Best value",
-            "Priority support",
-            "Early access to new features",
-        ]
+    "GB": {
+        "currency": "GBP",
+        "currency_symbol": "£",
+        "monthly": {
+            "id": "premium_monthly_gbp",
+            "name": "Premium Monthly",
+            "price": 4.99,
+            "currency": "GBP",
+            "period": "month",
+            "trial_days": 7,
+            "features": [
+                "Unlimited scripts",
+                "6 AI voice options",
+                "All training modes",
+                "Performance mode with recording",
+                "Smart line tracking",
+                "Cloud storage",
+                "No ads",
+            ]
+        },
+        "yearly": {
+            "id": "premium_yearly_gbp",
+            "name": "Premium Yearly",
+            "price": 34.99,
+            "currency": "GBP",
+            "period": "year",
+            "trial_days": 7,
+            "savings": "Save 42%",
+            "features": [
+                "Everything in monthly",
+                "Best value",
+                "Priority support",
+                "Early access to new features",
+            ]
+        }
+    },
+    "EU": {
+        "currency": "EUR",
+        "currency_symbol": "€",
+        "monthly": {
+            "id": "premium_monthly_eur",
+            "name": "Premium Monthly",
+            "price": 6.99,
+            "currency": "EUR",
+            "period": "month",
+            "trial_days": 7,
+            "features": [
+                "Unlimited scripts",
+                "6 AI voice options",
+                "All training modes",
+                "Performance mode with recording",
+                "Smart line tracking",
+                "Cloud storage",
+                "No ads",
+            ]
+        },
+        "yearly": {
+            "id": "premium_yearly_eur",
+            "name": "Premium Yearly",
+            "price": 39.99,
+            "currency": "EUR",
+            "period": "year",
+            "trial_days": 7,
+            "savings": "Save 52%",
+            "features": [
+                "Everything in monthly",
+                "Best value",
+                "Priority support",
+                "Early access to new features",
+            ]
+        }
     }
 }
+
+# EU country codes for region detection
+EU_COUNTRIES = [
+    "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", 
+    "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", 
+    "PL", "PT", "RO", "SK", "SI", "ES", "SE"
+]
+
+# Default to US pricing for backwards compatibility
+SUBSCRIPTION_PLANS = SUBSCRIPTION_PLANS_BY_REGION["US"]
 
 # ==================== MODELS ====================
 
