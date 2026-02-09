@@ -555,6 +555,27 @@ const styles = StyleSheet.create({
     borderColor: '#6366f1',
     backgroundColor: 'rgba(99, 102, 241, 0.1)',
   },
+  lifetimeCard: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderColor: '#8b5cf6',
+  },
+  lifetimeBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: '#8b5cf6',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  lifetimeBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
   savingsBadge: {
     position: 'absolute',
     top: 12,
