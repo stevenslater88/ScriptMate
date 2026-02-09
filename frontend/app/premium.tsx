@@ -44,10 +44,18 @@ const PREMIUM_FEATURES = [
 export default function PremiumScreen() {
   // RevenueCat hook for native platforms
   const {
-    isInitialized: rcInitialized,
+    isConfigured: rcConfigured,
     isLoading: rcLoading,
-    offerings,
+    currentOffering,
     isPremium: rcIsPremium,
+    monthlyPackage,
+    yearlyPackage,
+    lifetimePackage,
+    purchase,
+    restore,
+    presentPaywall,
+    error: rcError,
+  } = useRevenueCat();
     purchase,
     restore,
     error: rcError,
