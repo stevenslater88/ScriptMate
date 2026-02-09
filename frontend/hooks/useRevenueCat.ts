@@ -4,14 +4,18 @@ import {
   PurchasesOfferings,
   PurchasesPackage,
   CustomerInfo,
+  PurchasesOffering,
 } from 'react-native-purchases';
+import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import {
-  initializeRevenueCat,
+  configureRevenueCat,
+  isRevenueCatConfigured,
   getOfferings,
   getCustomerInfo,
   purchasePackage,
   restorePurchases,
-  addCustomerInfoListener,
+  addCustomerInfoUpdateListener,
+  checkPremiumAccess,
   PREMIUM_ENTITLEMENT_ID,
   PRODUCT_IDS,
   PurchaseResult,
@@ -19,39 +23,59 @@ import {
 
 interface UseRevenueCatReturn {
   // State
-  isInitialized: boolean;
+  isConfigured: boolean;
   isLoading: boolean;
   offerings: PurchasesOfferings | null;
+  currentOffering: PurchasesOffering | null;
   customerInfo: CustomerInfo | null;
   isPremium: boolean;
   error: string | null;
   
+  // Packages
+  monthlyPackage: PurchasesPackage | undefined;
+  yearlyPackage: PurchasesPackage | undefined;
+  lifetimePackage: PurchasesPackage | undefined;
+  
   // Actions
-  purchase: (package_: PurchasesPackage) => Promise<PurchaseResult>;
+  purchase: (pkg: PurchasesPackage) => Promise<PurchaseResult>;
   restore: () => Promise<PurchaseResult>;
   refresh: () => Promise<void>;
+  presentPaywall: () => Promise<boolean>;
+  presentPaywallIfNeeded: () => Promise<boolean>;
 }
 
 /**
  * Custom hook for RevenueCat subscription management
  */
 export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isConfigured, setIsConfigured] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if user has premium entitlement
+  // Derived state
+  const currentOffering = offerings?.current || null;
   const isPremium = customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
+  
+  // Get packages from current offering
+  const monthlyPackage = currentOffering?.availablePackages?.find(
+    (pkg) => pkg.packageType === 'MONTHLY' || pkg.identifier === PRODUCT_IDS.MONTHLY || pkg.identifier === '$rc_monthly'
+  );
+  const yearlyPackage = currentOffering?.availablePackages?.find(
+    (pkg) => pkg.packageType === 'ANNUAL' || pkg.identifier === PRODUCT_IDS.YEARLY || pkg.identifier === '$rc_annual'
+  );
+  const lifetimePackage = currentOffering?.availablePackages?.find(
+    (pkg) => pkg.packageType === 'LIFETIME' || pkg.identifier === PRODUCT_IDS.LIFETIME || pkg.identifier === '$rc_lifetime'
+  );
 
-  // Initialize RevenueCat and fetch initial data
+  // Initialize RevenueCat
   useEffect(() => {
     const init = async () => {
-      // Skip on web platform for now
+      // Skip on web
       if (Platform.OS === 'web') {
+        console.log('[useRevenueCat] Web platform - using fallback');
         setIsLoading(false);
-        setIsInitialized(true);
         return;
       }
 
@@ -59,21 +83,22 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
         setIsLoading(true);
         setError(null);
 
-        // Initialize SDK
-        await initializeRevenueCat(userId);
-        setIsInitialized(true);
+        // Configure SDK
+        await configureRevenueCat(userId);
+        setIsConfigured(isRevenueCatConfigured());
 
-        // Fetch offerings and customer info in parallel
+        // Fetch initial data
         const [fetchedOfferings, fetchedCustomerInfo] = await Promise.all([
-          getOfferings(),
-          getCustomerInfo(),
+          getOfferings().catch(() => null),
+          getCustomerInfo().catch(() => null),
         ]);
 
-        setOfferings(fetchedOfferings);
-        setCustomerInfo(fetchedCustomerInfo);
+        if (fetchedOfferings) setOfferings(fetchedOfferings);
+        if (fetchedCustomerInfo) setCustomerInfo(fetchedCustomerInfo);
+        
       } catch (err) {
-        console.error('Failed to initialize RevenueCat:', err);
-        setError('Failed to load subscription options');
+        console.error('[useRevenueCat] Init error:', err);
+        setError('Failed to initialize subscriptions');
       } finally {
         setIsLoading(false);
       }
@@ -84,18 +109,18 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
 
   // Listen for customer info updates
   useEffect(() => {
-    if (Platform.OS === 'web' || !isInitialized) return;
+    if (Platform.OS === 'web' || !isConfigured) return;
 
-    const cleanup = addCustomerInfoListener((newCustomerInfo) => {
-      console.log('Customer info updated');
-      setCustomerInfo(newCustomerInfo);
+    const unsubscribe = addCustomerInfoUpdateListener((info) => {
+      console.log('[useRevenueCat] Customer info updated');
+      setCustomerInfo(info);
     });
 
-    return cleanup;
-  }, [isInitialized]);
+    return unsubscribe;
+  }, [isConfigured]);
 
   // Purchase a package
-  const purchase = useCallback(async (package_: PurchasesPackage): Promise<PurchaseResult> => {
+  const purchase = useCallback(async (pkg: PurchasesPackage): Promise<PurchaseResult> => {
     if (Platform.OS === 'web') {
       return { success: false, error: 'Purchases not available on web' };
     }
@@ -104,12 +129,12 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
     setError(null);
 
     try {
-      const result = await purchasePackage(package_);
+      const result = await purchasePackage(pkg);
       
       if (result.success && result.customerInfo) {
         setCustomerInfo(result.customerInfo);
-      } else if (!result.cancelled) {
-        setError(result.error || 'Purchase failed');
+      } else if (!result.cancelled && result.error) {
+        setError(result.error);
       }
       
       return result;
@@ -132,8 +157,8 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       
       if (result.success && result.customerInfo) {
         setCustomerInfo(result.customerInfo);
-      } else {
-        setError(result.error || 'No purchases to restore');
+      } else if (result.error) {
+        setError(result.error);
       }
       
       return result;
@@ -142,7 +167,7 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
     }
   }, []);
 
-  // Refresh offerings and customer info
+  // Refresh data
   const refresh = useCallback(async (): Promise<void> => {
     if (Platform.OS === 'web') return;
 
@@ -158,24 +183,84 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       setOfferings(fetchedOfferings);
       setCustomerInfo(fetchedCustomerInfo);
     } catch (err) {
-      console.error('Failed to refresh:', err);
+      console.error('[useRevenueCat] Refresh error:', err);
       setError('Failed to refresh subscription data');
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  /**
+   * Present RevenueCat Paywall UI
+   * Returns true if purchase was made
+   */
+  const presentPaywall = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === 'web') {
+      console.log('[useRevenueCat] Paywall not available on web');
+      return false;
+    }
+
+    try {
+      const result = await RevenueCatUI.presentPaywall();
+      
+      console.log('[useRevenueCat] Paywall result:', result);
+      
+      // Refresh customer info after paywall closes
+      const info = await getCustomerInfo();
+      setCustomerInfo(info);
+      
+      return result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+    } catch (err) {
+      console.error('[useRevenueCat] Paywall error:', err);
+      return false;
+    }
+  }, []);
+
+  /**
+   * Present Paywall only if user doesn't have premium
+   * Returns true if user now has premium
+   */
+  const presentPaywallIfNeeded = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === 'web') return false;
+
+    try {
+      const result = await RevenueCatUI.presentPaywallIfNeeded({
+        requiredEntitlementIdentifier: PREMIUM_ENTITLEMENT_ID,
+      });
+      
+      console.log('[useRevenueCat] PaywallIfNeeded result:', result);
+      
+      // Refresh customer info
+      const info = await getCustomerInfo();
+      setCustomerInfo(info);
+      
+      return result === PAYWALL_RESULT.PURCHASED || 
+             result === PAYWALL_RESULT.RESTORED ||
+             result === PAYWALL_RESULT.NOT_PRESENTED; // Already has entitlement
+    } catch (err) {
+      console.error('[useRevenueCat] PaywallIfNeeded error:', err);
+      return false;
+    }
+  }, []);
+
   return {
-    isInitialized,
+    isConfigured,
     isLoading,
     offerings,
+    currentOffering,
     customerInfo,
     isPremium,
     error,
+    monthlyPackage,
+    yearlyPackage,
+    lifetimePackage,
     purchase,
     restore,
     refresh,
+    presentPaywall,
+    presentPaywallIfNeeded,
   };
 };
 
 export default useRevenueCat;
+export { PREMIUM_ENTITLEMENT_ID, PRODUCT_IDS };
