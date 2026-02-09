@@ -11,6 +11,7 @@
 - [x] App icons created
 - [x] Speech recognition integration
 - [x] EAS build configuration
+- [x] **RevenueCat Integration** (react-native-purchases installed)
 
 ---
 
