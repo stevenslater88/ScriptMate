@@ -313,7 +313,7 @@ export default function PremiumScreen() {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.subscribeButtonText}>
-              Subscribe for ${selectedPlan === 'yearly' ? yearlyPlan?.price || 79.99 : monthlyPlan?.price || 9.99}
+              Subscribe for {currencySymbol}{selectedPlan === 'yearly' ? yearlyPlan?.price || 79.99 : monthlyPlan?.price || 9.99}
               /{selectedPlan === 'yearly' ? 'year' : 'month'}
             </Text>
           )}
