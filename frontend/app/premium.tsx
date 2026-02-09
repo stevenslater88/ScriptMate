@@ -56,10 +56,6 @@ export default function PremiumScreen() {
     presentPaywall,
     error: rcError,
   } = useRevenueCat();
-    purchase,
-    restore,
-    error: rcError,
-  } = useRevenueCat();
 
   // Fallback store for web/development
   const {
@@ -83,16 +79,7 @@ export default function PremiumScreen() {
   const isPremium = isNative ? rcIsPremium : storeIsPremium;
   const error = isNative ? rcError : storeError;
 
-  // Get packages from RevenueCat offerings
-  const monthlyPackage = offerings?.current?.availablePackages?.find(
-    (pkg) => pkg.packageType === 'MONTHLY' || pkg.identifier === 'monthly'
-  );
-  const yearlyPackage = offerings?.current?.availablePackages?.find(
-    (pkg) => pkg.packageType === 'ANNUAL' || pkg.identifier === 'yearly'
-  );
-  const lifetimePackage = offerings?.current?.availablePackages?.find(
-    (pkg) => pkg.packageType === 'LIFETIME' || pkg.identifier === 'lifetime'
-  );
+  // Fallback pricing from store
 
   // Fallback pricing from store
   const monthlyPlan = subscriptionPlans?.monthly;
