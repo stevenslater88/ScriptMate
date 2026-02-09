@@ -50,8 +50,35 @@ export default function PremiumScreen() {
   const [loading, setLoading] = useState(false);
   const [showRegionPicker, setShowRegionPicker] = useState(false);
 
+  // Auto-detect region based on device locale
   useEffect(() => {
-    fetchSubscriptionPlans();
+    const detectRegion = () => {
+      try {
+        const locales = Localization.getLocales();
+        const deviceRegion = locales?.[0]?.regionCode || 'US';
+        
+        // Map device region to pricing region
+        const EU_COUNTRIES = [
+          'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR',
+          'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL',
+          'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
+        ];
+        
+        let pricingRegion = 'US';
+        if (deviceRegion === 'GB') {
+          pricingRegion = 'GB';
+        } else if (EU_COUNTRIES.includes(deviceRegion)) {
+          pricingRegion = 'EU';
+        }
+        
+        setRegion(pricingRegion);
+      } catch (e) {
+        // Default to US if locale detection fails
+        fetchSubscriptionPlans('US');
+      }
+    };
+    
+    detectRegion();
   }, []);
 
   const handleStartTrial = async () => {
