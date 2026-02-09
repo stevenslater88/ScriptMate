@@ -384,6 +384,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
+  regionIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 20,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  regionText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    fontWeight: '500',
+  },
   planSection: {
     flexDirection: 'row',
     gap: 12,
