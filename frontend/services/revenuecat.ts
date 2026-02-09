@@ -13,7 +13,14 @@ const REVENUECAT_APPLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KE
 const REVENUECAT_GOOGLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || '';
 
 // Entitlement identifier that unlocks premium features
-export const PREMIUM_ENTITLEMENT_ID = 'premium';
+export const PREMIUM_ENTITLEMENT_ID = 'ScriptMate Pro';
+
+// Product identifiers
+export const PRODUCT_IDS = {
+  MONTHLY: 'monthly',
+  YEARLY: 'yearly',
+  LIFETIME: 'lifetime',
+};
 
 // Track initialization state
 let isInitialized = false;
