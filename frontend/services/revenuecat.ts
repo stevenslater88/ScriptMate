@@ -26,58 +26,27 @@ export const PRODUCT_IDS = {
 let isConfigured = false;
 
 /**
- * Configure RevenueCat SDK
- * Call this once when app starts (typically in _layout.tsx)
+ * Check if RevenueCat is already configured
+ * (Configuration happens in _layout.tsx on app start)
+ */
+export const isRevenueCatConfigured = (): boolean => {
+  return Platform.OS !== 'web';
+};
+
+/**
+ * Configure RevenueCat SDK (called from _layout.tsx)
+ * This is a fallback - primary init is in _layout.tsx
  */
 export const configureRevenueCat = async (appUserID?: string): Promise<void> => {
-  if (isConfigured) {
-    console.log('[RevenueCat] Already configured');
-    return;
-  }
-
-  // Skip configuration on web
+  // Skip on web
   if (Platform.OS === 'web') {
     console.log('[RevenueCat] Web platform - skipping configuration');
     return;
   }
 
-  try {
-    // Enable debug logs in development
-    if (__DEV__) {
-      Purchases.setLogLevel(LOG_LEVEL.DEBUG);
-    }
-
-    // Get platform-specific API key
-    const apiKey = Platform.select({
-      ios: REVENUECAT_APPLE_API_KEY,
-      android: REVENUECAT_GOOGLE_API_KEY,
-      default: '',
-    });
-
-    if (!apiKey) {
-      console.warn('[RevenueCat] No API key configured for platform:', Platform.OS);
-      return;
-    }
-
-    // Configure the SDK
-    Purchases.configure({
-      apiKey,
-      appUserID: appUserID || undefined,
-    });
-
-    isConfigured = true;
-    console.log('[RevenueCat] Configured successfully');
-  } catch (error) {
-    console.error('[RevenueCat] Configuration failed:', error);
-    throw error;
-  }
-};
-
-/**
- * Check if RevenueCat is configured
- */
-export const isRevenueCatConfigured = (): boolean => {
-  return isConfigured && Platform.OS !== 'web';
+  // SDK is already configured in _layout.tsx
+  // This function is kept for compatibility
+  console.log('[RevenueCat] SDK should already be configured in _layout.tsx');
 };
 
 /**
