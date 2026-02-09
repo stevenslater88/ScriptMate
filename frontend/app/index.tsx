@@ -51,9 +51,17 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Ionicons name="mic" size={32} color="#6366f1" />
-            <Text style={styles.logoText}>ScriptMate</Text>
+          <View style={styles.headerTop}>
+            <View style={styles.logoContainer}>
+              <Ionicons name="mic" size={32} color="#6366f1" />
+              <Text style={styles.logoText}>ScriptMate</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.supportButton}
+              onPress={() => router.push('/support')}
+            >
+              <Ionicons name="help-circle-outline" size={26} color="#6b7280" />
+            </TouchableOpacity>
           </View>
           <Text style={styles.tagline}>AI Script Learning Partner</Text>
         </View>
