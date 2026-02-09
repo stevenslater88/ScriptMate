@@ -221,6 +221,16 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     alignItems: 'center',
   },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 8,
+  },
+  supportButton: {
+    padding: 8,
+  },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
