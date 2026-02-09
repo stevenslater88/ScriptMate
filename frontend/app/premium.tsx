@@ -85,10 +85,6 @@ export default function PremiumScreen() {
   const lifetimePackage = offerings?.current?.availablePackages?.find(
     (pkg) => pkg.packageType === 'LIFETIME' || pkg.identifier === 'lifetime'
   );
-  );
-  const yearlyPackage = offerings?.current?.availablePackages?.find(
-    (pkg) => pkg.packageType === 'ANNUAL'
-  );
 
   // Fallback pricing from store
   const monthlyPlan = subscriptionPlans?.monthly;
@@ -124,12 +120,19 @@ export default function PremiumScreen() {
   }, []);
 
   // Handle purchase with RevenueCat or fallback
-  const handlePurchase = async (packageType: 'monthly' | 'yearly') => {
+  const handlePurchase = async (packageType: 'monthly' | 'yearly' | 'lifetime') => {
     setLoading(true);
 
     if (isNative && offerings) {
       // Use RevenueCat for native platforms
-      const selectedPackage = packageType === 'monthly' ? monthlyPackage : yearlyPackage;
+      let selectedPackage: PurchasesPackage | undefined;
+      if (packageType === 'monthly') {
+        selectedPackage = monthlyPackage;
+      } else if (packageType === 'yearly') {
+        selectedPackage = yearlyPackage;
+      } else if (packageType === 'lifetime') {
+        selectedPackage = lifetimePackage;
+      }
       
       if (!selectedPackage) {
         Alert.alert('Error', 'Selected plan not available. Please try again.');
