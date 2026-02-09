@@ -54,6 +54,7 @@ export default function RootLayout() {
         <Stack.Screen name="scripts" />
         <Stack.Screen name="upload" />
         <Stack.Screen name="premium" />
+        <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
         <Stack.Screen name="support" />
         <Stack.Screen name="privacy" />
         <Stack.Screen name="terms" />
