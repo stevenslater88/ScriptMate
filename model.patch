@@ -1,365 +1,419 @@
 diff --git a/model.patch b/model.patch
-index a27907c..e69de29 100644
+index c66b8ff..e69de29 100644
 --- a/model.patch
 +++ b/model.patch
-@@ -1,360 +0,0 @@
+@@ -1,365 +0,0 @@
 -diff --git a/model.patch b/model.patch
--index 655e117..e69de29 100644
+-index a27907c..e69de29 100644
 ---- a/model.patch
 -+++ b/model.patch
--@@ -1,252 +0,0 @@
+-@@ -1,360 +0,0 @@
 --diff --git a/model.patch b/model.patch
---index 464e06d..e69de29 100644
+--index 655e117..e69de29 100644
 ----- a/model.patch
 --+++ b/model.patch
---@@ -1,247 +0,0 @@
+--@@ -1,252 +0,0 @@
 ---diff --git a/model.patch b/model.patch
----index 08e3f1e..e69de29 100644
+---index 464e06d..e69de29 100644
 ------ a/model.patch
 ---+++ b/model.patch
----@@ -1,242 +0,0 @@
+---@@ -1,247 +0,0 @@
 ----diff --git a/model.patch b/model.patch
-----index 8ea52be..e69de29 100644
+----index 08e3f1e..e69de29 100644
 ------- a/model.patch
 ----+++ b/model.patch
-----@@ -1,237 +0,0 @@
------diff --git a/test_result.md b/test_result.md
------index e58867a..437ece4 100644
--------- a/test_result.md
------+++ b/test_result.md
------@@ -118,11 +118,14 @@ backend:
------     file: "/app/backend/server.py"
------     stuck_count: 0
------     priority: "high"
-------    needs_retesting: true
------+    needs_retesting: false
------     status_history:
------       - working: true
------         agent: "main"
------         comment: "POST /api/scripts - Creates script and uses OpenAI to parse and detect characters. Tested with sample script - correctly identified SARAH and MIKE characters."
------+      - working: true
------+        agent: "testing"
------+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/scripts successfully creates scripts with AI parsing using OpenAI GPT-4o. Tested with Romeo & Juliet script - correctly detected ROMEO and JULIET characters with proper line counts. AI parsing working perfectly via emergentintegrations LLM API."
------         
------   - task: "Script listing and retrieval"
------     implemented: true
------@@ -130,11 +133,14 @@ backend:
------     file: "/app/backend/server.py"
------     stuck_count: 0
------     priority: "high"
-------    needs_retesting: true
------+    needs_retesting: false
------     status_history:
------       - working: true
------         agent: "main"
------         comment: "GET /api/scripts and GET /api/scripts/{id} working correctly"
------+      - working: true
------+        agent: "testing"
------+        comment: "✅ COMPREHENSIVE TESTING PASSED - GET /api/scripts returns proper list of scripts, GET /api/scripts/{id} retrieves individual scripts correctly with all required fields (id, title, characters, lines, etc.)"
------ 
------   - task: "Script upload (PDF/TXT)"
------     implemented: true
------@@ -142,11 +148,14 @@ backend:
------     file: "/app/backend/server.py"
------     stuck_count: 0
------     priority: "medium"
-------    needs_retesting: true
------+    needs_retesting: false
------     status_history:
------       - working: "NA"
------         agent: "main"
------         comment: "POST /api/scripts/upload - Implemented for PDF and TXT files"
------+      - working: true
------+        agent: "testing"
------+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/scripts/upload successfully handles both PDF and TXT file uploads. Tested with Macbeth TXT file (detected MACBETH, LADY MACBETH) and Hamlet PDF file (detected HAMLET, OPHELIA). File parsing and AI character detection working correctly."
------ 
------   - task: "Rehearsal session management"
------     implemented: true
------@@ -154,11 +163,14 @@ backend:
------     file: "/app/backend/server.py"
------     stuck_count: 0
------     priority: "high"
-------    needs_retesting: true
------+    needs_retesting: false
------     status_history:
------       - working: true
------         agent: "main"
------         comment: "POST /api/rehearsals - Creates rehearsal session with character assignment. Tested successfully."
------+      - working: true
------+        agent: "testing"
------+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/rehearsals creates rehearsal sessions correctly with proper script linking, character assignment, and line counting. GET /api/rehearsals and GET /api/rehearsals/{id} working perfectly. All CRUD operations functional."
------ 
------   - task: "Script update (character assignment)"
------     implemented: true
------@@ -166,11 +178,14 @@ backend:
------     file: "/app/backend/server.py"
------     stuck_count: 0
------     priority: "medium"
-------    needs_retesting: true
------+    needs_retesting: false
------     status_history:
------       - working: "NA"
------         agent: "main"
------         comment: "PUT /api/scripts/{id} - Updates character assignment"
------+      - working: true
------+        agent: "testing"
------+        comment: "✅ COMPREHENSIVE TESTING PASSED - PUT /api/scripts/{id} successfully updates user character assignment. Tested character assignment for ROMEO - properly sets is_user_character flag and maintains data integrity."
------ 
------ frontend:
------   - task: "Home screen with navigation"
------diff --git a/upload_test.py b/upload_test.py
------new file mode 100644
------index 0000000..f4b222c
--------- /dev/null
------+++ b/upload_test.py
------@@ -0,0 +1,146 @@
------+#!/usr/bin/env python3
------+"""
------+Additional test for script upload functionality (PDF/TXT files)
------+"""
------+
------+import requests
------+import io
------+from reportlab.pdfgen import canvas
------+from reportlab.lib.pagesizes import letter
------+
------+BACKEND_URL = "https://scriptmate-8.preview.emergentagent.com/api"
------+
------+def create_test_pdf():
------+    """Create a test PDF with script content"""
------+    buffer = io.BytesIO()
------+    p = canvas.Canvas(buffer, pagesize=letter)
------+    
------+    # Add script content to PDF
------+    script_text = """
------+    HAMLET
------+    To be or not to be, that is the question.
------+    
------+    OPHELIA
------+    My lord, how fares your disposition?
------+    
------+    (Hamlet turns away)
------+    
------+    HAMLET
------+    I humbly thank you, well, well, well.
------+    """
------+    
------+    y_position = 750
------+    for line in script_text.strip().split('\n'):
------+        if line.strip():
------+            p.drawString(100, y_position, line.strip())
------+            y_position -= 20
------+    
------+    p.showPage()
------+    p.save()
------+    buffer.seek(0)
------+    return buffer.getvalue()
------+
------+def test_txt_upload():
------+    """Test TXT file upload"""
------+    print("Testing TXT file upload...")
------+    
------+    txt_content = """MACBETH
------+Is this a dagger which I see before me,
------+The handle toward my hand?
------+
------+LADY MACBETH
------+Come, come, give me your hand.
------+What's done cannot be undone.
------+
------+(Thunder and lightning)
------+
------+MACBETH
------+I have done the deed. Didst thou not hear a noise?"""
------+    
------+    files = {
------+        'file': ('test_script.txt', txt_content.encode('utf-8'), 'text/plain')
------+    }
------+    data = {
------+        'title': 'Macbeth Test Scene'
------+    }
------+    
------+    try:
------+        response = requests.post(
------+            f"{BACKEND_URL}/scripts/upload",
------+            files=files,
------+            data=data,
------+            timeout=30
------+        )
------+        
------+        if response.status_code == 200:
------+            result = response.json()
------+            print(f"✅ TXT upload successful - Script ID: {result.get('id')}")
------+            print(f"   Characters detected: {[char['name'] for char in result.get('characters', [])]}")
------+            return True
------+        else:
------+            print(f"❌ TXT upload failed - Status: {response.status_code}")
------+            print(f"   Response: {response.text}")
------+            return False
------+            
------+    except Exception as e:
------+        print(f"❌ TXT upload failed - Exception: {str(e)}")
------+        return False
------+
------+def test_pdf_upload():
------+    """Test PDF file upload"""
------+    print("Testing PDF file upload...")
------+    
------+    try:
------+        pdf_content = create_test_pdf()
------+        
------+        files = {
------+            'file': ('test_script.pdf', pdf_content, 'application/pdf')
------+        }
------+        data = {
------+            'title': 'Hamlet Test Scene'
------+        }
------+        
------+        response = requests.post(
------+            f"{BACKEND_URL}/scripts/upload",
------+            files=files,
------+            data=data,
------+            timeout=30
------+        )
------+        
------+        if response.status_code == 200:
------+            result = response.json()
------+            print(f"✅ PDF upload successful - Script ID: {result.get('id')}")
------+            print(f"   Characters detected: {[char['name'] for char in result.get('characters', [])]}")
------+            return True
------+        else:
------+            print(f"❌ PDF upload failed - Status: {response.status_code}")
------+            print(f"   Response: {response.text}")
------+            return False
------+            
------+    except Exception as e:
------+        print(f"❌ PDF upload failed - Exception: {str(e)}")
------+        return False
------+
------+def main():
------+    """Run upload tests"""
------+    print("=" * 50)
------+    print("TESTING SCRIPT UPLOAD FUNCTIONALITY")
------+    print("=" * 50)
------+    
------+    txt_result = test_txt_upload()
------+    pdf_result = test_pdf_upload()
------+    
------+    print("=" * 50)
------+    print("UPLOAD TEST RESULTS:")
------+    print(f"TXT Upload: {'✅ PASS' if txt_result else '❌ FAIL'}")
------+    print(f"PDF Upload: {'✅ PASS' if pdf_result else '❌ FAIL'}")
------+    
------+    if txt_result and pdf_result:
------+        print("🎉 ALL UPLOAD TESTS PASSED!")
------+        return 0
------+    else:
------+        print("⚠️ Some upload tests failed")
------+        return 1
------+
------+if __name__ == "__main__":
------+    exit(main())
------\ No newline at end of file
--diff --git a/test_result.md b/test_result.md
--index 437ece4..ecc84ce 100644
----- a/test_result.md
--+++ b/test_result.md
--@@ -194,11 +194,14 @@ frontend:
--     file: "/app/frontend/app/index.tsx"
--     stuck_count: 0
--     priority: "high"
---    needs_retesting: true
--+    needs_retesting: false
--     status_history:
--       - working: true
--         agent: "main"
--         comment: "Home screen shows app branding, quick actions (New Script, My Scripts), Continue Learning card, and Training Modes grid. Screenshot verified."
--+      - working: true
--+        agent: "testing"
--+        comment: "✅ COMPREHENSIVE MOBILE TESTING PASSED - Home screen loads perfectly on mobile (390x844). ScriptMate branding visible, AI Script Learning Partner tagline present, premium banner visible for free users, New Script and My Scripts buttons functional. Training modes displayed with Performance and Loop showing Premium labels. Mobile-first design working correctly."
-- 
--   - task: "Script upload screen"
--     implemented: true
--@@ -206,11 +209,14 @@ frontend:
--     file: "/app/frontend/app/upload.tsx"
--     stuck_count: 0
--     priority: "high"
---    needs_retesting: true
--+    needs_retesting: false
--     status_history:
--       - working: true
--         agent: "main"
--         comment: "Upload screen with paste text and file upload options. Has sample script button and format tips. Screenshot verified."
--+      - working: true
--+        agent: "testing"
--+        comment: "✅ COMPREHENSIVE MOBILE TESTING PASSED - Script upload flow works perfectly on mobile. Paste Text tab active by default, Use Sample button populates sample script (SARAH/MIKE dialogue), title input functional, Parse Script with AI button submits successfully. Mobile UI responsive and user-friendly."
-- 
--   - task: "Scripts list screen"
--     implemented: true
--@@ -218,11 +224,14 @@ frontend:
--     file: "/app/frontend/app/scripts.tsx"
--     stuck_count: 0
--     priority: "medium"
---    needs_retesting: true
--+    needs_retesting: false
--     status_history:
--       - working: "NA"
--         agent: "main"
--         comment: "Lists all scripts with delete functionality"
--+      - working: true
--+        agent: "testing"
--+        comment: "✅ MOBILE TESTING PASSED - My Scripts screen accessible via navigation button. Mobile layout displays script cards properly with script metadata (characters, lines, creation date). Navigation and UI elements work correctly on mobile viewport."
-- 
--   - task: "Script detail screen"
--     implemented: true
--@@ -230,11 +239,14 @@ frontend:
--     file: "/app/frontend/app/script/[id].tsx"
--     stuck_count: 0
--     priority: "high"
---    needs_retesting: true
--+    needs_retesting: false
--     status_history:
--       - working: true
--         agent: "main"
--         comment: "Shows script info, character selection, training mode selection, script preview. Voice settings modal. Screenshot verified."
--+      - working: true
--+        agent: "testing"
--+        comment: "✅ MOBILE TESTING PASSED - Script detail screen displays correctly on mobile. Character selection section visible with detected characters (SARAH, MIKE from sample), training mode selection shows Full Read, Cue Only, and Performance modes. Start Rehearsal button functional. Mobile responsive design working well."
-- 
--   - task: "Rehearsal screen with TTS"
--     implemented: true
--@@ -242,11 +254,14 @@ frontend:
--     file: "/app/frontend/app/rehearsal/[id].tsx"
--     stuck_count: 0
--     priority: "high"
---    needs_retesting: true
--+    needs_retesting: false
--     status_history:
--       - working: true
--         agent: "main"
--         comment: "Rehearsal screen with progress bar, current line display, script view with highlighting. Uses expo-speech for TTS (device native). Screenshot verified."
--+      - working: true
--+        agent: "testing"
--+        comment: "✅ MOBILE TESTING PASSED - Rehearsal screen loads correctly showing 'Ready to Rehearse' state and 'Start Scene' button. Mobile layout optimized for rehearsal workflow. TTS functionality uses expo-speech (device native) which is appropriate for mobile deployment."
-- 
--   - task: "State management"
--     implemented: true
--@@ -302,3 +317,18 @@ agent_communication:
--       1. Create a new script with sample text
--       2. Select character and start rehearsal
--       3. Verify TTS works on mobile device
--+  - agent: "testing"
--+    message: |
--+      ✅ COMPREHENSIVE MOBILE TESTING COMPLETED - ScriptMate app tested successfully on mobile dimensions (390x844):
--+      
--+      TESTED FLOWS:
--+      1. ✅ Home Screen - ScriptMate branding, premium banner, New Script/My Scripts buttons all functional
--+      2. ✅ Script Upload - Paste Text tab, Use Sample button, AI parsing submission works
--+      3. ✅ Character Selection - AI detects SARAH/MIKE characters from sample script correctly
--+      4. ✅ Premium Screen - Pricing displayed ($9.99/month, $79.99/year), free trial button, plan selection toggle works
--+      5. ✅ Training Modes - Full Read, Cue Only, Performance modes visible with premium indicators
--+      6. ✅ Rehearsal Flow - Start Rehearsal leads to 'Ready to Rehearse' screen with 'Start Scene' button
--+      
--+      MOBILE OPTIMIZATION: App is properly mobile-first with responsive design, appropriate touch targets, and smooth navigation.
--+      
--+      Minor: Lock icons for premium features could be more prominent but functionality is clear through 'Premium' labels.
+----@@ -1,242 +0,0 @@
+-----diff --git a/model.patch b/model.patch
+-----index 8ea52be..e69de29 100644
+-------- a/model.patch
+-----+++ b/model.patch
+-----@@ -1,237 +0,0 @@
+------diff --git a/test_result.md b/test_result.md
+------index e58867a..437ece4 100644
+--------- a/test_result.md
+------+++ b/test_result.md
+------@@ -118,11 +118,14 @@ backend:
+------     file: "/app/backend/server.py"
+------     stuck_count: 0
+------     priority: "high"
+-------    needs_retesting: true
+------+    needs_retesting: false
+------     status_history:
+------       - working: true
+------         agent: "main"
+------         comment: "POST /api/scripts - Creates script and uses OpenAI to parse and detect characters. Tested with sample script - correctly identified SARAH and MIKE characters."
+------+      - working: true
+------+        agent: "testing"
+------+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/scripts successfully creates scripts with AI parsing using OpenAI GPT-4o. Tested with Romeo & Juliet script - correctly detected ROMEO and JULIET characters with proper line counts. AI parsing working perfectly via emergentintegrations LLM API."
+------         
+------   - task: "Script listing and retrieval"
+------     implemented: true
+------@@ -130,11 +133,14 @@ backend:
+------     file: "/app/backend/server.py"
+------     stuck_count: 0
+------     priority: "high"
+-------    needs_retesting: true
+------+    needs_retesting: false
+------     status_history:
+------       - working: true
+------         agent: "main"
+------         comment: "GET /api/scripts and GET /api/scripts/{id} working correctly"
+------+      - working: true
+------+        agent: "testing"
+------+        comment: "✅ COMPREHENSIVE TESTING PASSED - GET /api/scripts returns proper list of scripts, GET /api/scripts/{id} retrieves individual scripts correctly with all required fields (id, title, characters, lines, etc.)"
+------ 
+------   - task: "Script upload (PDF/TXT)"
+------     implemented: true
+------@@ -142,11 +148,14 @@ backend:
+------     file: "/app/backend/server.py"
+------     stuck_count: 0
+------     priority: "medium"
+-------    needs_retesting: true
+------+    needs_retesting: false
+------     status_history:
+------       - working: "NA"
+------         agent: "main"
+------         comment: "POST /api/scripts/upload - Implemented for PDF and TXT files"
+------+      - working: true
+------+        agent: "testing"
+------+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/scripts/upload successfully handles both PDF and TXT file uploads. Tested with Macbeth TXT file (detected MACBETH, LADY MACBETH) and Hamlet PDF file (detected HAMLET, OPHELIA). File parsing and AI character detection working correctly."
+------ 
+------   - task: "Rehearsal session management"
+------     implemented: true
+------@@ -154,11 +163,14 @@ backend:
+------     file: "/app/backend/server.py"
+------     stuck_count: 0
+------     priority: "high"
+-------    needs_retesting: true
+------+    needs_retesting: false
+------     status_history:
+------       - working: true
+------         agent: "main"
+------         comment: "POST /api/rehearsals - Creates rehearsal session with character assignment. Tested successfully."
+------+      - working: true
+------+        agent: "testing"
+------+        comment: "✅ COMPREHENSIVE TESTING PASSED - POST /api/rehearsals creates rehearsal sessions correctly with proper script linking, character assignment, and line counting. GET /api/rehearsals and GET /api/rehearsals/{id} working perfectly. All CRUD operations functional."
+------ 
+------   - task: "Script update (character assignment)"
+------     implemented: true
+------@@ -166,11 +178,14 @@ backend:
+------     file: "/app/backend/server.py"
+------     stuck_count: 0
+------     priority: "medium"
+-------    needs_retesting: true
+------+    needs_retesting: false
+------     status_history:
+------       - working: "NA"
+------         agent: "main"
+------         comment: "PUT /api/scripts/{id} - Updates character assignment"
+------+      - working: true
+------+        agent: "testing"
+------+        comment: "✅ COMPREHENSIVE TESTING PASSED - PUT /api/scripts/{id} successfully updates user character assignment. Tested character assignment for ROMEO - properly sets is_user_character flag and maintains data integrity."
+------ 
+------ frontend:
+------   - task: "Home screen with navigation"
+------diff --git a/upload_test.py b/upload_test.py
+------new file mode 100644
+------index 0000000..f4b222c
+--------- /dev/null
+------+++ b/upload_test.py
+------@@ -0,0 +1,146 @@
+------+#!/usr/bin/env python3
+------+"""
+------+Additional test for script upload functionality (PDF/TXT files)
+------+"""
+------+
+------+import requests
+------+import io
+------+from reportlab.pdfgen import canvas
+------+from reportlab.lib.pagesizes import letter
+------+
+------+BACKEND_URL = "https://scriptmate-8.preview.emergentagent.com/api"
+------+
+------+def create_test_pdf():
+------+    """Create a test PDF with script content"""
+------+    buffer = io.BytesIO()
+------+    p = canvas.Canvas(buffer, pagesize=letter)
+------+    
+------+    # Add script content to PDF
+------+    script_text = """
+------+    HAMLET
+------+    To be or not to be, that is the question.
+------+    
+------+    OPHELIA
+------+    My lord, how fares your disposition?
+------+    
+------+    (Hamlet turns away)
+------+    
+------+    HAMLET
+------+    I humbly thank you, well, well, well.
+------+    """
+------+    
+------+    y_position = 750
+------+    for line in script_text.strip().split('\n'):
+------+        if line.strip():
+------+            p.drawString(100, y_position, line.strip())
+------+            y_position -= 20
+------+    
+------+    p.showPage()
+------+    p.save()
+------+    buffer.seek(0)
+------+    return buffer.getvalue()
+------+
+------+def test_txt_upload():
+------+    """Test TXT file upload"""
+------+    print("Testing TXT file upload...")
+------+    
+------+    txt_content = """MACBETH
+------+Is this a dagger which I see before me,
+------+The handle toward my hand?
+------+
+------+LADY MACBETH
+------+Come, come, give me your hand.
+------+What's done cannot be undone.
+------+
+------+(Thunder and lightning)
+------+
+------+MACBETH
+------+I have done the deed. Didst thou not hear a noise?"""
+------+    
+------+    files = {
+------+        'file': ('test_script.txt', txt_content.encode('utf-8'), 'text/plain')
+------+    }
+------+    data = {
+------+        'title': 'Macbeth Test Scene'
+------+    }
+------+    
+------+    try:
+------+        response = requests.post(
+------+            f"{BACKEND_URL}/scripts/upload",
+------+            files=files,
+------+            data=data,
+------+            timeout=30
+------+        )
+------+        
+------+        if response.status_code == 200:
+------+            result = response.json()
+------+            print(f"✅ TXT upload successful - Script ID: {result.get('id')}")
+------+            print(f"   Characters detected: {[char['name'] for char in result.get('characters', [])]}")
+------+            return True
+------+        else:
+------+            print(f"❌ TXT upload failed - Status: {response.status_code}")
+------+            print(f"   Response: {response.text}")
+------+            return False
+------+            
+------+    except Exception as e:
+------+        print(f"❌ TXT upload failed - Exception: {str(e)}")
+------+        return False
+------+
+------+def test_pdf_upload():
+------+    """Test PDF file upload"""
+------+    print("Testing PDF file upload...")
+------+    
+------+    try:
+------+        pdf_content = create_test_pdf()
+------+        
+------+        files = {
+------+            'file': ('test_script.pdf', pdf_content, 'application/pdf')
+------+        }
+------+        data = {
+------+            'title': 'Hamlet Test Scene'
+------+        }
+------+        
+------+        response = requests.post(
+------+            f"{BACKEND_URL}/scripts/upload",
+------+            files=files,
+------+            data=data,
+------+            timeout=30
+------+        )
+------+        
+------+        if response.status_code == 200:
+------+            result = response.json()
+------+            print(f"✅ PDF upload successful - Script ID: {result.get('id')}")
+------+            print(f"   Characters detected: {[char['name'] for char in result.get('characters', [])]}")
+------+            return True
+------+        else:
+------+            print(f"❌ PDF upload failed - Status: {response.status_code}")
+------+            print(f"   Response: {response.text}")
+------+            return False
+------+            
+------+    except Exception as e:
+------+        print(f"❌ PDF upload failed - Exception: {str(e)}")
+------+        return False
+------+
+------+def main():
+------+    """Run upload tests"""
+------+    print("=" * 50)
+------+    print("TESTING SCRIPT UPLOAD FUNCTIONALITY")
+------+    print("=" * 50)
+------+    
+------+    txt_result = test_txt_upload()
+------+    pdf_result = test_pdf_upload()
+------+    
+------+    print("=" * 50)
+------+    print("UPLOAD TEST RESULTS:")
+------+    print(f"TXT Upload: {'✅ PASS' if txt_result else '❌ FAIL'}")
+------+    print(f"PDF Upload: {'✅ PASS' if pdf_result else '❌ FAIL'}")
+------+    
+------+    if txt_result and pdf_result:
+------+        print("🎉 ALL UPLOAD TESTS PASSED!")
+------+        return 0
+------+    else:
+------+        print("⚠️ Some upload tests failed")
+------+        return 1
+------+
+------+if __name__ == "__main__":
+------+    exit(main())
+------\ No newline at end of file
+--diff --git a/test_result.md b/test_result.md
+--index 437ece4..ecc84ce 100644
+----- a/test_result.md
+--+++ b/test_result.md
+--@@ -194,11 +194,14 @@ frontend:
+--     file: "/app/frontend/app/index.tsx"
+--     stuck_count: 0
+--     priority: "high"
+---    needs_retesting: true
+--+    needs_retesting: false
+--     status_history:
+--       - working: true
+--         agent: "main"
+--         comment: "Home screen shows app branding, quick actions (New Script, My Scripts), Continue Learning card, and Training Modes grid. Screenshot verified."
+--+      - working: true
+--+        agent: "testing"
+--+        comment: "✅ COMPREHENSIVE MOBILE TESTING PASSED - Home screen loads perfectly on mobile (390x844). ScriptMate branding visible, AI Script Learning Partner tagline present, premium banner visible for free users, New Script and My Scripts buttons functional. Training modes displayed with Performance and Loop showing Premium labels. Mobile-first design working correctly."
+-- 
+--   - task: "Script upload screen"
+--     implemented: true
+--@@ -206,11 +209,14 @@ frontend:
+--     file: "/app/frontend/app/upload.tsx"
+--     stuck_count: 0
+--     priority: "high"
+---    needs_retesting: true
+--+    needs_retesting: false
+--     status_history:
+--       - working: true
+--         agent: "main"
+--         comment: "Upload screen with paste text and file upload options. Has sample script button and format tips. Screenshot verified."
+--+      - working: true
+--+        agent: "testing"
+--+        comment: "✅ COMPREHENSIVE MOBILE TESTING PASSED - Script upload flow works perfectly on mobile. Paste Text tab active by default, Use Sample button populates sample script (SARAH/MIKE dialogue), title input functional, Parse Script with AI button submits successfully. Mobile UI responsive and user-friendly."
+-- 
+--   - task: "Scripts list screen"
+--     implemented: true
+--@@ -218,11 +224,14 @@ frontend:
+--     file: "/app/frontend/app/scripts.tsx"
+--     stuck_count: 0
+--     priority: "medium"
+---    needs_retesting: true
+--+    needs_retesting: false
+--     status_history:
+--       - working: "NA"
+--         agent: "main"
+--         comment: "Lists all scripts with delete functionality"
+--+      - working: true
+--+        agent: "testing"
+--+        comment: "✅ MOBILE TESTING PASSED - My Scripts screen accessible via navigation button. Mobile layout displays script cards properly with script metadata (characters, lines, creation date). Navigation and UI elements work correctly on mobile viewport."
+-- 
+--   - task: "Script detail screen"
+--     implemented: true
+--@@ -230,11 +239,14 @@ frontend:
+--     file: "/app/frontend/app/script/[id].tsx"
+--     stuck_count: 0
+--     priority: "high"
+---    needs_retesting: true
+--+    needs_retesting: false
+--     status_history:
+--       - working: true
+--         agent: "main"
+--         comment: "Shows script info, character selection, training mode selection, script preview. Voice settings modal. Screenshot verified."
+--+      - working: true
+--+        agent: "testing"
+--+        comment: "✅ MOBILE TESTING PASSED - Script detail screen displays correctly on mobile. Character selection section visible with detected characters (SARAH, MIKE from sample), training mode selection shows Full Read, Cue Only, and Performance modes. Start Rehearsal button functional. Mobile responsive design working well."
+-- 
+--   - task: "Rehearsal screen with TTS"
+--     implemented: true
+--@@ -242,11 +254,14 @@ frontend:
+--     file: "/app/frontend/app/rehearsal/[id].tsx"
+--     stuck_count: 0
+--     priority: "high"
+---    needs_retesting: true
+--+    needs_retesting: false
+--     status_history:
+--       - working: true
+--         agent: "main"
+--         comment: "Rehearsal screen with progress bar, current line display, script view with highlighting. Uses expo-speech for TTS (device native). Screenshot verified."
+--+      - working: true
+--+        agent: "testing"
+--+        comment: "✅ MOBILE TESTING PASSED - Rehearsal screen loads correctly showing 'Ready to Rehearse' state and 'Start Scene' button. Mobile layout optimized for rehearsal workflow. TTS functionality uses expo-speech (device native) which is appropriate for mobile deployment."
+-- 
+--   - task: "State management"
+--     implemented: true
+--@@ -302,3 +317,18 @@ agent_communication:
+--       1. Create a new script with sample text
+--       2. Select character and start rehearsal
+--       3. Verify TTS works on mobile device
+--+  - agent: "testing"
+--+    message: |
+--+      ✅ COMPREHENSIVE MOBILE TESTING COMPLETED - ScriptMate app tested successfully on mobile dimensions (390x844):
+--+      
+--+      TESTED FLOWS:
+--+      1. ✅ Home Screen - ScriptMate branding, premium banner, New Script/My Scripts buttons all functional
+--+      2. ✅ Script Upload - Paste Text tab, Use Sample button, AI parsing submission works
+--+      3. ✅ Character Selection - AI detects SARAH/MIKE characters from sample script correctly
+--+      4. ✅ Premium Screen - Pricing displayed ($9.99/month, $79.99/year), free trial button, plan selection toggle works
+--+      5. ✅ Training Modes - Full Read, Cue Only, Performance modes visible with premium indicators
+--+      6. ✅ Rehearsal Flow - Start Rehearsal leads to 'Ready to Rehearse' screen with 'Start Scene' button
+--+      
+--+      MOBILE OPTIMIZATION: App is properly mobile-first with responsive design, appropriate touch targets, and smooth navigation.
+--+      
+--+      Minor: Lock icons for premium features could be more prominent but functionality is clear through 'Premium' labels.
+diff --git a/test_result.md b/test_result.md
+index 3c81f9a..01e5c1e 100644
+--- a/test_result.md
++++ b/test_result.md
+@@ -187,6 +187,21 @@ backend:
+         agent: "testing"
+         comment: "✅ COMPREHENSIVE TESTING PASSED - PUT /api/scripts/{id} successfully updates user character assignment. Tested character assignment for ROMEO - properly sets is_user_character flag and maintains data integrity."
+ 
++  - task: "Multi-region subscription pricing"
++    implemented: true
++    working: true
++    file: "/app/backend/server.py"
++    stuck_count: 0
++    priority: "high"
++    needs_retesting: false
++    status_history:
++      - working: "NA"
++        agent: "main"
++        comment: "Implemented multi-region pricing (US, GB, EU) with 3-day trial. GET /api/subscription/plans supports region parameter, GET /api/subscription/regions lists all regions, POST /api/users/{device_id}/start-trial creates 3-day premium trial."
++      - working: true
++        agent: "testing"
++        comment: "✅ COMPREHENSIVE TESTING PASSED - Multi-region subscription pricing fully functional. All 33 tests passed: US region ($9.99/month, $79.99/year), GB region (£4.99/month, £34.99/year), EU region (€6.99/month, €39.99/year). All regions show correct currency symbols and 3-day trial period. Trial functionality working correctly - users get premium access for 3 days, trial_used flag prevents duplicate trials."
++
+ frontend:
+   - task: "Home screen with navigation"
+     implemented: true
+@@ -356,3 +371,22 @@ agent_communication:
+       - 🇪🇺 Europe: €6.99/month, €39.99/year (Save 52%)
+       
+       Please test the subscription/plans API with different regions and verify frontend pricing display.
++  - agent: "testing"
++    message: |
++      ✅ MULTI-REGION SUBSCRIPTION PRICING TESTING COMPLETED - All 33 tests passed successfully:
++      
++      TESTED ENDPOINTS:
++      1. ✅ GET /api/subscription/plans?region=US - Returns USD pricing ($9.99/month, $79.99/year) with "$" symbol and 3-day trial
++      2. ✅ GET /api/subscription/plans?region=GB - Returns GBP pricing (£4.99/month, £34.99/year) with "£" symbol and 3-day trial  
++      3. ✅ GET /api/subscription/plans?region=EU - Returns EUR pricing (€6.99/month, €39.99/year) with "€" symbol and 3-day trial
++      4. ✅ GET /api/subscription/regions - Lists all regions correctly with proper currency symbols and pricing
++      5. ✅ POST /api/users/{device_id}/start-trial - Creates 3-day premium trial, prevents duplicate trials
++      
++      VERIFIED FEATURES:
++      - All regions return correct currency symbols ($ £ €)
++      - Trial period is exactly 3 days (not 7 days) for all regions
++      - Users get premium access during trial period
++      - Trial cannot be used twice by same user
++      - All pricing matches specification exactly
++      
++      Multi-region subscription pricing feature is fully functional and ready for production.
