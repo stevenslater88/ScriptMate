@@ -1094,6 +1094,437 @@ async def analyze_script(request: AnalyzeScriptRequest):
         logger.error(f"Error analyzing script: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ==================== AUTHENTICATION ROUTES ====================
+
+def generate_access_token(user_id: str) -> str:
+    """Generate a simple access token for API calls"""
+    import hashlib
+    import time
+    token_data = f"{user_id}:{time.time()}:{uuid.uuid4()}"
+    return hashlib.sha256(token_data.encode()).hexdigest()
+
+async def find_or_create_user_by_auth(provider: str, provider_user_id: str, email: str = None, name: str = None, device_id: str = None) -> tuple:
+    """Find existing user or create new one based on auth provider"""
+    # First, try to find by auth provider
+    existing = await db.authenticated_users.find_one({
+        "auth_providers": {
+            "$elemMatch": {
+                "provider": provider,
+                "provider_user_id": provider_user_id
+            }
+        }
+    })
+    
+    if existing:
+        # Update device list if new device
+        if device_id and device_id not in existing.get("device_ids", []):
+            await db.authenticated_users.update_one(
+                {"id": existing["id"]},
+                {
+                    "$addToSet": {"device_ids": device_id},
+                    "$set": {"updated_at": datetime.utcnow()}
+                }
+            )
+        return existing, False
+    
+    # Try to find by email
+    if email:
+        existing_by_email = await db.authenticated_users.find_one({"email": email})
+        if existing_by_email:
+            # Link this auth provider to existing account
+            await db.authenticated_users.update_one(
+                {"id": existing_by_email["id"]},
+                {
+                    "$addToSet": {
+                        "auth_providers": {
+                            "provider": provider,
+                            "provider_user_id": provider_user_id,
+                            "email": email,
+                            "name": name
+                        },
+                        "device_ids": device_id
+                    },
+                    "$set": {"updated_at": datetime.utcnow()}
+                }
+            )
+            updated = await db.authenticated_users.find_one({"id": existing_by_email["id"]})
+            return updated, False
+    
+    # Check if device has existing data to migrate
+    old_user = None
+    if device_id:
+        old_user = await db.users.find_one({"device_id": device_id})
+    
+    # Create new authenticated user
+    new_user = AuthenticatedUser(
+        email=email,
+        name=name,
+        auth_providers=[{
+            "provider": provider,
+            "provider_user_id": provider_user_id,
+            "email": email,
+            "name": name
+        }],
+        device_ids=[device_id] if device_id else [],
+        subscription_tier=old_user.get("subscription_tier", "free") if old_user else "free",
+        total_rehearsals=old_user.get("total_rehearsals", 0) if old_user else 0,
+        total_lines_practiced=old_user.get("total_lines_practiced", 0) if old_user else 0,
+    )
+    
+    await db.authenticated_users.insert_one(new_user.dict())
+    
+    # Migrate scripts from old device ID to new user ID
+    if device_id:
+        await db.scripts.update_many(
+            {"user_id": device_id},
+            {"$set": {"user_id": new_user.id}}
+        )
+        await db.rehearsals.update_many(
+            {"user_id": device_id},
+            {"$set": {"user_id": new_user.id}}
+        )
+    
+    return new_user.dict(), True
+
+@api_router.post("/auth/apple", response_model=AuthResponse)
+async def apple_sign_in(request: AppleAuthRequest):
+    """Authenticate with Apple Sign-In"""
+    try:
+        # In production, you'd verify the identity_token with Apple's servers
+        # For now, we trust the client-side verification and use the user_identifier
+        
+        user, is_new = await find_or_create_user_by_auth(
+            provider="apple",
+            provider_user_id=request.user_identifier,
+            email=request.email,
+            name=request.full_name,
+            device_id=request.device_id
+        )
+        
+        access_token = generate_access_token(user["id"])
+        
+        # Store the token
+        await db.auth_tokens.update_one(
+            {"user_id": user["id"]},
+            {
+                "$set": {
+                    "token": access_token,
+                    "created_at": datetime.utcnow(),
+                    "expires_at": datetime.utcnow() + timedelta(days=30)
+                }
+            },
+            upsert=True
+        )
+        
+        return AuthResponse(
+            user_id=user["id"],
+            email=user.get("email"),
+            name=user.get("name"),
+            is_new_user=is_new,
+            subscription_tier=user.get("subscription_tier", "free"),
+            access_token=access_token
+        )
+    except Exception as e:
+        logger.error(f"Apple Sign-In error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/auth/google", response_model=AuthResponse)
+async def google_sign_in(request: GoogleAuthRequest):
+    """Authenticate with Google Sign-In"""
+    try:
+        # Decode the Google ID token to get user info
+        # In production, verify with Google's servers
+        import base64
+        import json
+        
+        # Decode JWT payload (middle part)
+        parts = request.id_token.split('.')
+        if len(parts) != 3:
+            raise HTTPException(status_code=400, detail="Invalid token format")
+        
+        # Add padding if needed
+        payload = parts[1]
+        padding = 4 - len(payload) % 4
+        if padding != 4:
+            payload += '=' * padding
+        
+        try:
+            decoded = json.loads(base64.urlsafe_b64decode(payload))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid token")
+        
+        google_user_id = decoded.get("sub")
+        email = decoded.get("email")
+        name = decoded.get("name")
+        
+        if not google_user_id:
+            raise HTTPException(status_code=400, detail="Invalid token: missing user ID")
+        
+        user, is_new = await find_or_create_user_by_auth(
+            provider="google",
+            provider_user_id=google_user_id,
+            email=email,
+            name=name,
+            device_id=request.device_id
+        )
+        
+        access_token = generate_access_token(user["id"])
+        
+        # Store the token
+        await db.auth_tokens.update_one(
+            {"user_id": user["id"]},
+            {
+                "$set": {
+                    "token": access_token,
+                    "created_at": datetime.utcnow(),
+                    "expires_at": datetime.utcnow() + timedelta(days=30)
+                }
+            },
+            upsert=True
+        )
+        
+        return AuthResponse(
+            user_id=user["id"],
+            email=user.get("email"),
+            name=user.get("name"),
+            is_new_user=is_new,
+            subscription_tier=user.get("subscription_tier", "free"),
+            access_token=access_token
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Google Sign-In error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/auth/user/{user_id}")
+async def get_authenticated_user(user_id: str):
+    """Get authenticated user profile"""
+    user = await db.authenticated_users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Don't return sensitive auth info
+    return {
+        "id": user["id"],
+        "email": user.get("email"),
+        "name": user.get("name"),
+        "subscription_tier": user.get("subscription_tier", "free"),
+        "total_rehearsals": user.get("total_rehearsals", 0),
+        "total_lines_practiced": user.get("total_lines_practiced", 0),
+        "devices_count": len(user.get("device_ids", [])),
+        "created_at": user.get("created_at"),
+    }
+
+@api_router.post("/auth/logout")
+async def logout(user_id: str, device_id: str = None):
+    """Logout user (optionally from specific device)"""
+    if device_id:
+        # Just remove this device
+        await db.authenticated_users.update_one(
+            {"id": user_id},
+            {"$pull": {"device_ids": device_id}}
+        )
+    else:
+        # Invalidate all tokens
+        await db.auth_tokens.delete_many({"user_id": user_id})
+    
+    return {"message": "Logged out successfully"}
+
+# ==================== SYNC ROUTES ====================
+
+@api_router.post("/sync/push")
+async def push_sync_data(request: SyncDataRequest):
+    """Push local data to server for sync"""
+    try:
+        user = await db.authenticated_users.find_one({"id": request.user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Sync director notes
+        if request.director_notes:
+            for note in request.director_notes:
+                note["user_id"] = request.user_id
+                await db.director_notes.update_one(
+                    {"id": note.get("id")},
+                    {"$set": note},
+                    upsert=True
+                )
+        
+        # Sync performance stats
+        if request.performance_stats:
+            request.performance_stats["user_id"] = request.user_id
+            request.performance_stats["updated_at"] = datetime.utcnow()
+            await db.performance_stats.update_one(
+                {"user_id": request.user_id},
+                {"$set": request.performance_stats},
+                upsert=True
+            )
+        
+        # Sync settings
+        if request.settings:
+            request.settings["user_id"] = request.user_id
+            request.settings["updated_at"] = datetime.utcnow()
+            await db.user_settings.update_one(
+                {"user_id": request.user_id},
+                {"$set": request.settings},
+                upsert=True
+            )
+        
+        return {
+            "success": True,
+            "synced_at": datetime.utcnow().isoformat()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Sync push error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/sync/pull/{user_id}")
+async def pull_sync_data(user_id: str, last_sync: str = None):
+    """Pull all user data from server"""
+    try:
+        user = await db.authenticated_users.find_one({"id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Get all user's scripts
+        scripts = await db.scripts.find({"user_id": user_id}).to_list(100)
+        
+        # Get director notes
+        director_notes = await db.director_notes.find({"user_id": user_id}).to_list(500)
+        
+        # Get performance stats
+        performance_stats = await db.performance_stats.find_one({"user_id": user_id})
+        
+        # Get settings
+        settings = await db.user_settings.find_one({"user_id": user_id})
+        
+        return {
+            "user": {
+                "id": user["id"],
+                "email": user.get("email"),
+                "name": user.get("name"),
+                "subscription_tier": user.get("subscription_tier", "free"),
+            },
+            "scripts": scripts,
+            "director_notes": director_notes,
+            "performance_stats": performance_stats,
+            "settings": settings,
+            "synced_at": datetime.utcnow().isoformat()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Sync pull error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== DIRECTOR NOTES ROUTES ====================
+
+@api_router.get("/notes/{script_id}")
+async def get_script_notes(script_id: str, user_id: str):
+    """Get all director notes for a script"""
+    notes = await db.director_notes.find({
+        "script_id": script_id,
+        "user_id": user_id
+    }).to_list(500)
+    return notes
+
+@api_router.post("/notes")
+async def create_note(note: DirectorNote, user_id: str):
+    """Create or update a director note"""
+    note_dict = note.dict()
+    note_dict["user_id"] = user_id
+    
+    await db.director_notes.update_one(
+        {"id": note.id},
+        {"$set": note_dict},
+        upsert=True
+    )
+    return note_dict
+
+@api_router.delete("/notes/{note_id}")
+async def delete_note(note_id: str):
+    """Delete a director note"""
+    result = await db.director_notes.delete_one({"id": note_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return {"message": "Note deleted"}
+
+# ==================== PERFORMANCE STATS ROUTES ====================
+
+@api_router.get("/stats/{user_id}")
+async def get_user_stats(user_id: str):
+    """Get user's performance statistics"""
+    stats = await db.performance_stats.find_one({"user_id": user_id})
+    if not stats:
+        # Return default stats
+        return {
+            "user_id": user_id,
+            "total_rehearsals": 0,
+            "total_lines_completed": 0,
+            "total_practice_time": 0,
+            "average_accuracy": 0,
+            "streak_days": 0,
+            "last_practice_date": None,
+            "script_stats": []
+        }
+    return stats
+
+@api_router.post("/stats/{user_id}/update")
+async def update_user_stats(user_id: str, stats_update: Dict[str, Any]):
+    """Update user's performance statistics after a rehearsal"""
+    current = await db.performance_stats.find_one({"user_id": user_id})
+    
+    if current:
+        # Merge updates
+        update_data = {
+            "total_rehearsals": current.get("total_rehearsals", 0) + stats_update.get("rehearsals_delta", 0),
+            "total_lines_completed": current.get("total_lines_completed", 0) + stats_update.get("lines_delta", 0),
+            "total_practice_time": current.get("total_practice_time", 0) + stats_update.get("time_delta", 0),
+            "last_practice_date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "updated_at": datetime.utcnow()
+        }
+        
+        # Update accuracy (weighted average)
+        if stats_update.get("accuracy"):
+            old_total = current.get("total_rehearsals", 0)
+            old_accuracy = current.get("average_accuracy", 0)
+            new_accuracy = stats_update["accuracy"]
+            update_data["average_accuracy"] = ((old_accuracy * old_total) + new_accuracy) / (old_total + 1)
+        
+        # Update streak
+        last_date = current.get("last_practice_date")
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        if last_date == yesterday:
+            update_data["streak_days"] = current.get("streak_days", 0) + 1
+        elif last_date != today:
+            update_data["streak_days"] = 1
+        
+        await db.performance_stats.update_one(
+            {"user_id": user_id},
+            {"$set": update_data}
+        )
+    else:
+        # Create new stats
+        new_stats = {
+            "user_id": user_id,
+            "total_rehearsals": stats_update.get("rehearsals_delta", 1),
+            "total_lines_completed": stats_update.get("lines_delta", 0),
+            "total_practice_time": stats_update.get("time_delta", 0),
+            "average_accuracy": stats_update.get("accuracy", 0),
+            "streak_days": 1,
+            "last_practice_date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "script_stats": [],
+            "updated_at": datetime.utcnow()
+        }
+        await db.performance_stats.insert_one(new_stats)
+    
+    return {"success": True}
+
 # Include the router in the main app
 app.include_router(api_router)
 
