@@ -40,6 +40,23 @@ export default function ScriptDetailScreen() {
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
   const [showSettings, setShowSettings] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // Load saved settings on mount
+  useEffect(() => {
+    const loadSavedSettings = async () => {
+      try {
+        const savedSettings = await getSettings();
+        setSelectedVoice(savedSettings.default_voice);
+        setVoiceSpeed(savedSettings.default_voice_speed);
+        setSettingsLoaded(true);
+      } catch (error) {
+        console.error('Error loading settings:', error);
+        setSettingsLoaded(true);
+      }
+    };
+    loadSavedSettings();
+  }, []);
 
   useEffect(() => {
     if (id) {
