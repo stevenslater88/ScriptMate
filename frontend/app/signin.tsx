@@ -136,28 +136,29 @@ export default function SignInScreen() {
             </TouchableOpacity>
           )} */}
 
-          {/* Google Sign-In */}
+          {/* Google Sign-In - Coming Soon */}
           <TouchableOpacity
-            style={[styles.socialButton, styles.googleButton]}
+            style={[styles.socialButton, styles.googleButton, styles.comingSoonButton]}
             onPress={handleGoogleSignIn}
-            disabled={loading !== null}
           >
-            {loading === 'google' ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="logo-google" size={22} color="#fff" />
-                <Text style={[styles.socialButtonText, styles.googleButtonText]}>
-                  Sign in with Google
-                </Text>
-              </>
-            )}
+            <Ionicons name="logo-google" size={22} color="#fff" />
+            <Text style={[styles.socialButtonText, styles.googleButtonText]}>
+              Sign in with Google
+            </Text>
+            <View style={styles.comingSoonBadge}>
+              <Text style={styles.comingSoonText}>Soon</Text>
+            </View>
           </TouchableOpacity>
 
           {/* Skip Button */}
           <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
             <Text style={styles.skipButtonText}>Continue without signing in</Text>
           </TouchableOpacity>
+
+          {/* Info Text */}
+          <Text style={styles.infoText}>
+            Cross-device sync coming soon! Your data is saved locally for now.
+          </Text>
         </View>
 
         {/* Footer */}
