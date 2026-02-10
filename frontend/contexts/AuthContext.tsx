@@ -212,22 +212,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user?.id) return;
 
     try {
-      // Pull latest data from server
-      const response = await fetch(`${BACKEND_URL}/api/sync/pull/${user.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Store synced data locally
-        if (data.settings) {
-          await AsyncStorage.setItem('@scriptmate_settings', JSON.stringify(data.settings));
-        }
-        if (data.performance_stats) {
-          await AsyncStorage.setItem('@scriptmate_performance_stats', JSON.stringify({
-            global: data.performance_stats,
-            scripts: data.performance_stats.script_stats || []
-          }));
-        }
-      }
+      // Use the sync service to pull latest data from server
+      await pullAllDataFromServer();
     } catch (error) {
       console.error('Sync error:', error);
     }
