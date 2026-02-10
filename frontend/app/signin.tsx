@@ -251,6 +251,22 @@ const styles = StyleSheet.create({
   googleButtonText: {
     color: '#fff',
   },
+  comingSoonButton: {
+    opacity: 0.7,
+  },
+  comingSoonBadge: {
+    position: 'absolute',
+    right: 12,
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  comingSoonText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   skipButton: {
     alignItems: 'center',
     paddingVertical: 16,
@@ -259,6 +275,13 @@ const styles = StyleSheet.create({
   skipButtonText: {
     fontSize: 15,
     color: '#6b7280',
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   footerText: {
     fontSize: 12,
