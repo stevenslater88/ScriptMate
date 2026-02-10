@@ -11,7 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import * as AppleAuthentication from 'expo-apple-authentication';
+// TEMPORARILY DISABLED: Apple Sign-In disabled until provisioning profile is updated
+// import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function SignInScreen() {
