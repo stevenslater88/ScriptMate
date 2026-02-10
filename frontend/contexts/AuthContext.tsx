@@ -81,67 +81,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
-  const signInWithApple = async () => {
-    try {
-      // Check if Apple Sign-In is available
-      const isAvailable = await AppleAuthentication.isAvailableAsync();
-      if (!isAvailable) {
-        throw new Error('Apple Sign-In is not available on this device');
-      }
+  // TEMPORARILY DISABLED: Apple Sign-In disabled until provisioning profile is updated
+  // const signInWithApple = async () => {
+  //   try {
+  //     // Check if Apple Sign-In is available
+  //     const isAvailable = await AppleAuthentication.isAvailableAsync();
+  //     if (!isAvailable) {
+  //       throw new Error('Apple Sign-In is not available on this device');
+  //     }
 
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
+  //     const credential = await AppleAuthentication.signInAsync({
+  //       requestedScopes: [
+  //         AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+  //         AppleAuthentication.AppleAuthenticationScope.EMAIL,
+  //       ],
+  //     });
 
-      // Send to backend
-      const response = await fetch(`${BACKEND_URL}/api/auth/apple`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identity_token: credential.identityToken,
-          authorization_code: credential.authorizationCode,
-          user_identifier: credential.user,
-          email: credential.email,
-          full_name: credential.fullName 
-            ? `${credential.fullName.givenName || ''} ${credential.fullName.familyName || ''}`.trim()
-            : null,
-          device_id: deviceId,
-        }),
-      });
+  //     // Send to backend
+  //     const response = await fetch(`${BACKEND_URL}/api/auth/apple`, {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({
+  //         identity_token: credential.identityToken,
+  //         authorization_code: credential.authorizationCode,
+  //         user_identifier: credential.user,
+  //         email: credential.email,
+  //         full_name: credential.fullName 
+  //           ? `${credential.fullName.givenName || ''} ${credential.fullName.familyName || ''}`.trim()
+  //           : null,
+  //         device_id: deviceId,
+  //       }),
+  //     });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Sign-in failed');
-      }
+  //     if (!response.ok) {
+  //       const error = await response.json();
+  //       throw new Error(error.detail || 'Sign-in failed');
+  //     }
 
-      const data = await response.json();
+  //     const data = await response.json();
       
-      const authUser: AuthUser = {
-        id: data.user_id,
-        email: data.email,
-        name: data.name,
-        subscriptionTier: data.subscription_tier,
-        isAuthenticated: true,
-      };
+  //     const authUser: AuthUser = {
+  //       id: data.user_id,
+  //       email: data.email,
+  //       name: data.name,
+  //       subscriptionTier: data.subscription_tier,
+  //       isAuthenticated: true,
+  //     };
 
-      await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(authUser));
-      await AsyncStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
-      setUser(authUser);
+  //     await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(authUser));
+  //     await AsyncStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
+  //     setUser(authUser);
 
-      // Sync data after sign-in
-      await syncData();
-    } catch (error: any) {
-      if (error.code === 'ERR_REQUEST_CANCELED') {
-        // User cancelled - not an error
-        return;
-      }
-      console.error('Apple Sign-In error:', error);
-      throw error;
-    }
-  };
+  //     // Sync data after sign-in
+  //     await syncData();
+  //   } catch (error: any) {
+  //     if (error.code === 'ERR_REQUEST_CANCELED') {
+  //       // User cancelled - not an error
+  //       return;
+  //     }
+  //     console.error('Apple Sign-In error:', error);
+  //     throw error;
+  //   }
+  // };
 
   const signInWithGoogle = async () => {
     try {
