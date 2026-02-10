@@ -36,10 +36,9 @@ interface GlobalStats {
   lastPracticeDate: string;
 }
 
-const STATS_KEY = '@scriptmate_performance_stats';
-
 export default function StatsScreen() {
   const { isPremium, user } = useScriptStore();
+  const { isAuthenticated } = useAuth();
   const [stats, setStats] = useState<GlobalStats>({
     totalRehearsals: 0,
     totalLinesCompleted: 0,
@@ -57,19 +56,38 @@ export default function StatsScreen() {
 
   const loadStats = async () => {
     try {
-      const stored = await AsyncStorage.getItem(STATS_KEY);
-      if (stored) {
-        const data = JSON.parse(stored);
-        setStats(data.global || stats);
-        setScriptStats(data.scripts || []);
-      }
+      // Use sync service to get stats (from server if authenticated, local otherwise)
+      const syncedStats = await getPerformanceStats();
       
-      // Also use user data from store
+      setStats({
+        totalRehearsals: syncedStats.total_rehearsals,
+        totalLinesCompleted: syncedStats.total_lines_completed,
+        totalPracticeTime: syncedStats.total_practice_time,
+        averageAccuracy: syncedStats.average_accuracy,
+        streakDays: syncedStats.streak_days,
+        lastPracticeDate: syncedStats.last_practice_date || '',
+      });
+      
+      // Convert script stats
+      const convertedScriptStats: PerformanceData[] = (syncedStats.script_stats || []).map(s => ({
+        scriptId: s.script_id,
+        scriptTitle: s.script_title,
+        totalRehearsals: s.total_rehearsals,
+        totalLinesCompleted: s.total_lines_completed,
+        totalLinesMissed: 0,
+        averageAccuracy: s.average_accuracy,
+        totalTime: 0,
+        weakLines: s.weak_lines || [],
+        lastPracticed: s.last_practiced,
+      }));
+      setScriptStats(convertedScriptStats);
+      
+      // Also use user data from store if available
       if (user) {
         setStats(prev => ({
           ...prev,
-          totalRehearsals: user.total_rehearsals || prev.totalRehearsals,
-          totalLinesCompleted: user.total_lines_practiced || prev.totalLinesCompleted,
+          totalRehearsals: Math.max(user.total_rehearsals || 0, prev.totalRehearsals),
+          totalLinesCompleted: Math.max(user.total_lines_practiced || 0, prev.totalLinesCompleted),
         }));
       }
     } catch (error) {
