@@ -42,7 +42,9 @@ const NOTE_TYPES = [
 export default function DirectorNotesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { currentScript, fetchScript, isPremium } = useScriptStore();
+  const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState<DirectorNote[]>([]);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [noteText, setNoteText] = useState('');
@@ -53,7 +55,21 @@ export default function DirectorNotesScreen() {
     const load = async () => {
       if (id) {
         await fetchScript(id);
-        // Load saved notes from local storage or backend
+        // Load saved notes from sync service (server or local)
+        try {
+          const savedNotes = await getNotesForScript(id);
+          // Convert from sync format to local format
+          const convertedNotes: DirectorNote[] = savedNotes.map(n => ({
+            id: n.id,
+            lineIndex: n.line_index,
+            note: n.content,
+            type: (n.note_type as any) || 'general',
+            createdAt: new Date(n.created_at || Date.now()),
+          }));
+          setNotes(convertedNotes);
+        } catch (error) {
+          console.error('Error loading notes:', error);
+        }
         setLoading(false);
       }
     };
