@@ -234,7 +234,7 @@ export default function DirectorNotesScreen() {
                         <TouchableOpacity
                           key={note.id}
                           style={[styles.noteTag, { backgroundColor: `${typeInfo.color}20`, borderColor: typeInfo.color }]}
-                          onLongPress={() => deleteNote(note.id)}
+                          onLongPress={() => deleteNoteHandler(note.id)}
                         >
                           <Ionicons name={typeInfo.icon as any} size={14} color={typeInfo.color} />
                           <Text style={[styles.noteTagText, { color: typeInfo.color }]}>{note.note}</Text>
