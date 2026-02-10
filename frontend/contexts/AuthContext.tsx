@@ -27,7 +27,8 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   deviceId: string;
-  signInWithApple: () => Promise<void>;
+  // TEMPORARILY DISABLED: Apple Sign-In disabled until provisioning profile is updated
+  // signInWithApple: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   syncData: () => Promise<void>;
