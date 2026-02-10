@@ -180,8 +180,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
       setUser(authUser);
 
-      // Sync data after sign-in
-      await syncData();
+      // Sync data after sign-in: push local data to server, then pull latest from server
+      await syncAllDataToServer();
+      await pullAllDataFromServer();
     } catch (error: any) {
       if (error.code === statusCodes.SIGN_IN_CANCELLED) {
         // User cancelled - not an error
