@@ -67,7 +67,13 @@ export default function HomeScreen() {
                 style={styles.headerButton}
                 onPress={() => router.push('/support')}
               >
-                <Ionicons name="help-circle-outline" size={26} color="#6b7280" />
+                <Ionicons name="help-circle-outline" size={24} color="#6b7280" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.headerButton}
+                onPress={() => router.push('/profile')}
+              >
+                <Ionicons name="person-circle-outline" size={26} color="#6b7280" />
               </TouchableOpacity>
             </View>
           </View>
