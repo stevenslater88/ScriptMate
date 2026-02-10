@@ -392,7 +392,18 @@ export default function ScriptDetailScreen() {
             </ScrollView>
             <TouchableOpacity
               style={styles.modalDoneButton}
-              onPress={() => setShowSettings(false)}
+              onPress={async () => {
+                // Save settings when closing the modal
+                try {
+                  await saveSettings({
+                    default_voice: selectedVoice,
+                    default_voice_speed: voiceSpeed,
+                  });
+                } catch (error) {
+                  console.error('Error saving settings:', error);
+                }
+                setShowSettings(false);
+              }}
             >
               <Text style={styles.modalDoneText}>Done</Text>
             </TouchableOpacity>
