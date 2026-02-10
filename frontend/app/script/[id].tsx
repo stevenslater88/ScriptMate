@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useScriptStore, Script, Character } from '../../store/scriptStore';
+import { getSettings, saveSettings } from '../../services/syncService';
 
 const VOICE_OPTIONS = [
   { id: 'alloy', name: 'Alloy', description: 'Neutral, balanced' },
