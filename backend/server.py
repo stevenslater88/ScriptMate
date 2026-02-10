@@ -1,0 +1,1018 @@
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
+from fastapi.responses import Response
+from dotenv import load_dotenv
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+import logging
+from pathlib import Path
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+import uuid
+from datetime import datetime, timedelta
+import json
+import base64
+import httpx
+import PyPDF2
+import io
+from docx import Document
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+# MongoDB connection
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
+
+# Get API key
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+
+# Create the main app
+app = FastAPI()
+
+# Create a router with the /api prefix
+api_router = APIRouter(prefix="/api")
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# ==================== SUBSCRIPTION CONSTANTS ====================
+
+FREE_TIER_LIMITS = {
+    "max_scripts": 3,
+    "max_file_size_mb": 1,
+    "max_rehearsals_per_day": 5,
+    "available_voices": ["alloy"],  # Only 1 voice
+    "available_modes": ["full_read", "cue_only"],  # Limited modes
+    "has_performance_mode": False,
+    "has_recording": False,
+    "has_smart_tracking": False,
+    "has_cloud_storage": False,
+    "has_director_notes": False,
+    "show_ads": True,
+}
+
+PREMIUM_TIER_LIMITS = {
+    "max_scripts": 999,
+    "max_file_size_mb": 50,
+    "max_rehearsals_per_day": 999,
+    "available_voices": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+    "available_modes": ["full_read", "cue_only", "performance", "missing_words", "first_letter", "loop"],
+    "has_performance_mode": True,
+    "has_recording": True,
+    "has_smart_tracking": True,
+    "has_cloud_storage": True,
+    "has_director_notes": True,
+    "show_ads": False,
+}
+
+# Multi-region subscription pricing
+SUBSCRIPTION_PLANS_BY_REGION = {
+    "US": {
+        "currency": "USD",
+        "currency_symbol": "$",
+        "monthly": {
+            "id": "premium_monthly_usd",
+            "name": "Premium Monthly",
+            "price": 9.99,
+            "currency": "USD",
+            "period": "month",
+            "trial_days": 3,
+            "features": [
+                "Unlimited scripts",
+                "6 AI voice options",
+                "All training modes",
+                "Performance mode with recording",
+                "Smart line tracking",
+                "Cloud storage",
+                "No ads",
+            ]
+        },
+        "yearly": {
+            "id": "premium_yearly_usd",
+            "name": "Premium Yearly",
+            "price": 79.99,
+            "currency": "USD",
+            "period": "year",
+            "trial_days": 3,
+            "savings": "Save 33%",
+            "features": [
+                "Everything in monthly",
+                "Best value",
+                "Priority support",
+                "Early access to new features",
+            ]
+        }
+    },
+    "GB": {
+        "currency": "GBP",
+        "currency_symbol": "£",
+        "monthly": {
+            "id": "premium_monthly_gbp",
+            "name": "Premium Monthly",
+            "price": 4.99,
+            "currency": "GBP",
+            "period": "month",
+            "trial_days": 3,
+            "features": [
+                "Unlimited scripts",
+                "6 AI voice options",
+                "All training modes",
+                "Performance mode with recording",
+                "Smart line tracking",
+                "Cloud storage",
+                "No ads",
+            ]
+        },
+        "yearly": {
+            "id": "premium_yearly_gbp",
+            "name": "Premium Yearly",
+            "price": 34.99,
+            "currency": "GBP",
+            "period": "year",
+            "trial_days": 3,
+            "savings": "Save 42%",
+            "features": [
+                "Everything in monthly",
+                "Best value",
+                "Priority support",
+                "Early access to new features",
+            ]
+        }
+    },
+    "EU": {
+        "currency": "EUR",
+        "currency_symbol": "€",
+        "monthly": {
+            "id": "premium_monthly_eur",
+            "name": "Premium Monthly",
+            "price": 6.99,
+            "currency": "EUR",
+            "period": "month",
+            "trial_days": 3,
+            "features": [
+                "Unlimited scripts",
+                "6 AI voice options",
+                "All training modes",
+                "Performance mode with recording",
+                "Smart line tracking",
+                "Cloud storage",
+                "No ads",
+            ]
+        },
+        "yearly": {
+            "id": "premium_yearly_eur",
+            "name": "Premium Yearly",
+            "price": 39.99,
+            "currency": "EUR",
+            "period": "year",
+            "trial_days": 3,
+            "savings": "Save 52%",
+            "features": [
+                "Everything in monthly",
+                "Best value",
+                "Priority support",
+                "Early access to new features",
+            ]
+        }
+    }
+}
+
+# EU country codes for region detection
+EU_COUNTRIES = [
+    "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", 
+    "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", 
+    "PL", "PT", "RO", "SK", "SI", "ES", "SE"
+]
+
+# Default to US pricing for backwards compatibility
+SUBSCRIPTION_PLANS = SUBSCRIPTION_PLANS_BY_REGION["US"]
+
+# ==================== MODELS ====================
+
+class Character(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    line_count: int = 0
+    is_user_character: bool = False
+
+class DialogueLine(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    character: str
+    text: str
+    is_stage_direction: bool = False
+    line_number: int = 0
+
+class Script(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    raw_text: str = ""
+    characters: List[Character] = []
+    lines: List[DialogueLine] = []
+    user_id: str = "default"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ScriptCreate(BaseModel):
+    title: str
+    raw_text: str
+    user_id: str = "default"
+
+class ScriptUpdate(BaseModel):
+    title: Optional[str] = None
+    characters: Optional[List[Dict]] = None
+    user_character: Optional[str] = None
+
+class RehearsalSession(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    script_id: str
+    user_id: str = "default"
+    user_character: str
+    current_line_index: int = 0
+    completed_lines: List[int] = []
+    missed_lines: List[int] = []
+    weak_lines: List[int] = []  # Lines user struggled with
+    hesitation_times: Dict[str, float] = {}  # Line ID -> hesitation time
+    total_lines: int = 0
+    mode: str = "full_read"
+    voice_type: str = "alloy"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class RehearsalCreate(BaseModel):
+    script_id: str
+    user_character: str
+    mode: str = "full_read"
+    voice_type: str = "alloy"
+    user_id: str = "default"
+
+class UserProfile(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    device_id: str
+    email: Optional[str] = None
+    name: Optional[str] = None
+    subscription_tier: str = "free"  # free, premium
+    subscription_plan: Optional[str] = None  # monthly, yearly
+    subscription_start: Optional[datetime] = None
+    subscription_end: Optional[datetime] = None
+    trial_used: bool = False
+    trial_end: Optional[datetime] = None
+    scripts_count: int = 0
+    rehearsals_today: int = 0
+    last_rehearsal_date: Optional[str] = None
+    total_rehearsals: int = 0
+    total_lines_practiced: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UserProfileCreate(BaseModel):
+    device_id: str
+    email: Optional[str] = None
+    name: Optional[str] = None
+
+class SubscriptionUpdate(BaseModel):
+    plan: str  # monthly, yearly
+    receipt: Optional[str] = None  # App store receipt for validation
+    transaction_id: Optional[str] = None
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "alloy"
+
+class AnalyzeScriptRequest(BaseModel):
+    raw_text: str
+
+# ==================== HELPER FUNCTIONS ====================
+
+def get_tier_limits(tier: str) -> Dict:
+    """Get feature limits for a subscription tier"""
+    if tier == "premium":
+        return PREMIUM_TIER_LIMITS
+    return FREE_TIER_LIMITS
+
+async def check_user_limits(user_id: str, action: str) -> Dict[str, Any]:
+    """Check if user can perform an action based on their tier"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        user = await db.users.find_one({"device_id": user_id})
+    
+    tier = "free"
+    if user:
+        tier = user.get("subscription_tier", "free")
+        # Check if premium subscription is still valid
+        if tier == "premium" and user.get("subscription_end"):
+            if datetime.utcnow() > user["subscription_end"]:
+                tier = "free"
+                await db.users.update_one(
+                    {"id": user["id"]},
+                    {"$set": {"subscription_tier": "free"}}
+                )
+    
+    limits = get_tier_limits(tier)
+    
+    result = {
+        "allowed": True,
+        "tier": tier,
+        "limits": limits,
+        "upgrade_reason": None
+    }
+    
+    if action == "create_script" and user:
+        scripts_count = await db.scripts.count_documents({"user_id": user["id"]})
+        if scripts_count >= limits["max_scripts"]:
+            result["allowed"] = False
+            result["upgrade_reason"] = f"You've reached the limit of {limits['max_scripts']} scripts. Upgrade to Premium for unlimited scripts!"
+    
+    elif action == "create_rehearsal" and user:
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        if user.get("last_rehearsal_date") == today:
+            if user.get("rehearsals_today", 0) >= limits["max_rehearsals_per_day"]:
+                result["allowed"] = False
+                result["upgrade_reason"] = f"You've used all {limits['max_rehearsals_per_day']} rehearsals for today. Upgrade to Premium for unlimited rehearsals!"
+    
+    return result
+
+async def parse_script_with_ai(raw_text: str) -> Dict[str, Any]:
+    """Use OpenAI to analyze and parse script text into structured format"""
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"script-parse-{uuid.uuid4()}",
+            system_message="""You are a script parser for film/TV/theater scripts. 
+            Analyze the provided script text and extract:
+            1. All character names (speaking roles only)
+            2. Each line of dialogue with the character who speaks it
+            3. Stage directions (non-dialogue text)
+            
+            Return your response as a valid JSON object with this exact structure:
+            {
+                "characters": ["CHARACTER1", "CHARACTER2", ...],
+                "lines": [
+                    {"character": "CHARACTER1", "text": "dialogue text", "is_stage_direction": false},
+                    {"character": "", "text": "stage direction text", "is_stage_direction": true},
+                    ...
+                ]
+            }
+            
+            Rules:
+            - Character names should be uppercase
+            - Stage directions have empty character field and is_stage_direction=true
+            - Preserve the order of lines as they appear
+            - Combine multi-line dialogue for the same character into one entry
+            - Return ONLY valid JSON, no additional text"""
+        ).with_model("openai", "gpt-4o")
+        
+        user_message = UserMessage(text=f"Parse this script:\n\n{raw_text}")
+        response = await chat.send_message(user_message)
+        
+        response_text = response.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+        
+        parsed = json.loads(response_text)
+        return parsed
+    except Exception as e:
+        logger.error(f"Error parsing script with AI: {e}")
+        return fallback_parse_script(raw_text)
+
+def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
+    """Simple fallback parser for scripts"""
+    lines_data = []
+    characters = set()
+    
+    lines = raw_text.strip().split('\n')
+    current_character = ""
+    current_text = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        potential_char = line.replace(':', '').strip()
+        if potential_char.isupper() and len(potential_char.split()) <= 3 and len(potential_char) > 1:
+            if current_character and current_text:
+                lines_data.append({
+                    "character": current_character,
+                    "text": ' '.join(current_text),
+                    "is_stage_direction": False
+                })
+            current_character = potential_char
+            current_text = []
+            characters.add(current_character)
+        elif line.startswith('(') or line.startswith('['):
+            if current_character and current_text:
+                lines_data.append({
+                    "character": current_character,
+                    "text": ' '.join(current_text),
+                    "is_stage_direction": False
+                })
+                current_text = []
+            lines_data.append({
+                "character": "",
+                "text": line,
+                "is_stage_direction": True
+            })
+        else:
+            current_text.append(line)
+    
+    if current_character and current_text:
+        lines_data.append({
+            "character": current_character,
+            "text": ' '.join(current_text),
+            "is_stage_direction": False
+        })
+    
+    return {
+        "characters": list(characters),
+        "lines": lines_data
+    }
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """Extract text from PDF file"""
+    try:
+        pdf_file = io.BytesIO(pdf_bytes)
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text() + "\n"
+        return text
+    except Exception as e:
+        logger.error(f"Error extracting PDF text: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
+
+def extract_text_from_docx(docx_bytes: bytes) -> str:
+    """Extract text from Word document (.docx)"""
+    try:
+        docx_file = io.BytesIO(docx_bytes)
+        doc = Document(docx_file)
+        text = ""
+        for paragraph in doc.paragraphs:
+            text += paragraph.text + "\n"
+        return text
+    except Exception as e:
+        logger.error(f"Error extracting DOCX text: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse Word document: {str(e)}")
+
+# ==================== API ROUTES ====================
+
+@api_router.get("/")
+async def root():
+    return {"message": "ScriptMate API - AI Script Learning Partner for Actors"}
+
+@api_router.get("/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+# ==================== USER & SUBSCRIPTION ROUTES ====================
+
+@api_router.post("/users", response_model=UserProfile)
+async def create_or_get_user(user_data: UserProfileCreate):
+    """Create a new user or get existing user by device ID"""
+    existing = await db.users.find_one({"device_id": user_data.device_id})
+    if existing:
+        return UserProfile(**existing)
+    
+    user = UserProfile(
+        device_id=user_data.device_id,
+        email=user_data.email,
+        name=user_data.name
+    )
+    await db.users.insert_one(user.dict())
+    return user
+
+@api_router.get("/users/{device_id}", response_model=UserProfile)
+async def get_user(device_id: str):
+    """Get user profile by device ID"""
+    user = await db.users.find_one({"device_id": device_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserProfile(**user)
+
+@api_router.get("/users/{device_id}/limits")
+async def get_user_limits(device_id: str):
+    """Get user's current limits and usage"""
+    user = await db.users.find_one({"device_id": device_id})
+    
+    tier = "free"
+    if user:
+        tier = user.get("subscription_tier", "free")
+        if tier == "premium" and user.get("subscription_end"):
+            if datetime.utcnow() > user["subscription_end"]:
+                tier = "free"
+    
+    limits = get_tier_limits(tier)
+    
+    # Get current usage
+    scripts_count = 0
+    rehearsals_today = 0
+    if user:
+        scripts_count = await db.scripts.count_documents({"user_id": user["id"]})
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        if user.get("last_rehearsal_date") == today:
+            rehearsals_today = user.get("rehearsals_today", 0)
+    
+    return {
+        "tier": tier,
+        "limits": limits,
+        "usage": {
+            "scripts_count": scripts_count,
+            "scripts_limit": limits["max_scripts"],
+            "rehearsals_today": rehearsals_today,
+            "rehearsals_limit": limits["max_rehearsals_per_day"],
+        },
+        "is_premium": tier == "premium",
+        "subscription_end": user.get("subscription_end") if user else None,
+    }
+
+@api_router.get("/subscription/plans")
+async def get_subscription_plans(region: str = "US"):
+    """Get available subscription plans for a specific region"""
+    # Determine region plans
+    if region == "GB":
+        plans = SUBSCRIPTION_PLANS_BY_REGION["GB"]
+    elif region in EU_COUNTRIES or region == "EU":
+        plans = SUBSCRIPTION_PLANS_BY_REGION["EU"]
+    else:
+        plans = SUBSCRIPTION_PLANS_BY_REGION["US"]
+    
+    return {
+        "region": region,
+        "currency": plans["currency"],
+        "currency_symbol": plans["currency_symbol"],
+        "plans": {
+            "monthly": plans["monthly"],
+            "yearly": plans["yearly"]
+        },
+        "free_features": FREE_TIER_LIMITS,
+        "premium_features": PREMIUM_TIER_LIMITS,
+    }
+
+@api_router.get("/subscription/regions")
+async def get_all_regions():
+    """Get pricing for all available regions"""
+    return {
+        "regions": {
+            "US": {
+                "name": "United States",
+                "currency": "USD",
+                "symbol": "$",
+                "monthly_price": SUBSCRIPTION_PLANS_BY_REGION["US"]["monthly"]["price"],
+                "yearly_price": SUBSCRIPTION_PLANS_BY_REGION["US"]["yearly"]["price"],
+            },
+            "GB": {
+                "name": "United Kingdom",
+                "currency": "GBP",
+                "symbol": "£",
+                "monthly_price": SUBSCRIPTION_PLANS_BY_REGION["GB"]["monthly"]["price"],
+                "yearly_price": SUBSCRIPTION_PLANS_BY_REGION["GB"]["yearly"]["price"],
+            },
+            "EU": {
+                "name": "Europe",
+                "currency": "EUR",
+                "symbol": "€",
+                "monthly_price": SUBSCRIPTION_PLANS_BY_REGION["EU"]["monthly"]["price"],
+                "yearly_price": SUBSCRIPTION_PLANS_BY_REGION["EU"]["yearly"]["price"],
+            }
+        }
+    }
+
+@api_router.post("/users/{device_id}/subscribe")
+async def subscribe_user(device_id: str, subscription: SubscriptionUpdate):
+    """Activate or update user subscription"""
+    user = await db.users.find_one({"device_id": device_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    plan = SUBSCRIPTION_PLANS.get(subscription.plan)
+    if not plan:
+        raise HTTPException(status_code=400, detail="Invalid subscription plan")
+    
+    # Calculate subscription dates
+    now = datetime.utcnow()
+    
+    # Check for trial
+    trial_end = None
+    if not user.get("trial_used") and plan.get("trial_days", 0) > 0:
+        trial_end = now + timedelta(days=plan["trial_days"])
+    
+    # Calculate subscription end
+    if plan["period"] == "month":
+        sub_end = now + timedelta(days=30)
+    else:  # yearly
+        sub_end = now + timedelta(days=365)
+    
+    update_data = {
+        "subscription_tier": "premium",
+        "subscription_plan": subscription.plan,
+        "subscription_start": now,
+        "subscription_end": sub_end,
+        "updated_at": now,
+    }
+    
+    if trial_end:
+        update_data["trial_used"] = True
+        update_data["trial_end"] = trial_end
+    
+    await db.users.update_one(
+        {"device_id": device_id},
+        {"$set": update_data}
+    )
+    
+    updated_user = await db.users.find_one({"device_id": device_id})
+    return UserProfile(**updated_user)
+
+@api_router.post("/users/{device_id}/start-trial")
+async def start_trial(device_id: str):
+    """Start a 3-day premium trial"""
+    user = await db.users.find_one({"device_id": device_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.get("trial_used"):
+        raise HTTPException(status_code=400, detail="Trial already used")
+    
+    now = datetime.utcnow()
+    trial_end = now + timedelta(days=3)
+    
+    await db.users.update_one(
+        {"device_id": device_id},
+        {"$set": {
+            "subscription_tier": "premium",
+            "trial_used": True,
+            "trial_end": trial_end,
+            "subscription_end": trial_end,
+            "updated_at": now,
+        }}
+    )
+    
+    updated_user = await db.users.find_one({"device_id": device_id})
+    return UserProfile(**updated_user)
+
+@api_router.post("/users/{device_id}/cancel-subscription")
+async def cancel_subscription(device_id: str):
+    """Cancel user subscription (keeps access until end date)"""
+    user = await db.users.find_one({"device_id": device_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await db.users.update_one(
+        {"device_id": device_id},
+        {"$set": {
+            "subscription_plan": None,
+            "updated_at": datetime.utcnow(),
+        }}
+    )
+    
+    return {"message": "Subscription cancelled. Access continues until end date."}
+
+# ==================== SCRIPT ROUTES ====================
+
+@api_router.post("/scripts", response_model=Script)
+async def create_script(script_data: ScriptCreate):
+    """Create a new script from raw text"""
+    try:
+        # Check user limits
+        limits_check = await check_user_limits(script_data.user_id, "create_script")
+        if not limits_check["allowed"]:
+            raise HTTPException(status_code=403, detail=limits_check["upgrade_reason"])
+        
+        parsed = await parse_script_with_ai(script_data.raw_text)
+        
+        characters = []
+        char_line_counts = {}
+        for line in parsed.get("lines", []):
+            if line.get("character"):
+                char_line_counts[line["character"]] = char_line_counts.get(line["character"], 0) + 1
+        
+        for char_name in parsed.get("characters", []):
+            characters.append(Character(
+                name=char_name,
+                line_count=char_line_counts.get(char_name, 0)
+            ))
+        
+        lines = []
+        for idx, line in enumerate(parsed.get("lines", [])):
+            lines.append(DialogueLine(
+                character=line.get("character", ""),
+                text=line.get("text", ""),
+                is_stage_direction=line.get("is_stage_direction", False),
+                line_number=idx
+            ))
+        
+        script = Script(
+            title=script_data.title,
+            raw_text=script_data.raw_text,
+            characters=characters,
+            lines=lines,
+            user_id=script_data.user_id
+        )
+        
+        await db.scripts.insert_one(script.dict())
+        
+        # Update user script count
+        await db.users.update_one(
+            {"$or": [{"id": script_data.user_id}, {"device_id": script_data.user_id}]},
+            {"$inc": {"scripts_count": 1}}
+        )
+        
+        return script
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating script: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/scripts/upload")
+async def upload_script(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    user_id: str = Form(default="default")
+):
+    """Upload a PDF, Word document, or text file as a script"""
+    try:
+        # Check user limits
+        limits_check = await check_user_limits(user_id, "create_script")
+        if not limits_check["allowed"]:
+            raise HTTPException(status_code=403, detail=limits_check["upgrade_reason"])
+        
+        content = await file.read()
+        filename_lower = file.filename.lower()
+        
+        # Check file size for free tier
+        file_size_mb = len(content) / (1024 * 1024)
+        max_size = limits_check["limits"]["max_file_size_mb"]
+        if file_size_mb > max_size:
+            raise HTTPException(
+                status_code=403,
+                detail=f"File size ({file_size_mb:.1f}MB) exceeds limit ({max_size}MB). Upgrade to Premium for larger files!"
+            )
+        
+        if filename_lower.endswith('.pdf'):
+            raw_text = extract_text_from_pdf(content)
+        elif filename_lower.endswith(('.docx',)):
+            raw_text = extract_text_from_docx(content)
+        elif filename_lower.endswith(('.txt', '.text', '.rtf')):
+            try:
+                raw_text = content.decode('utf-8')
+            except UnicodeDecodeError:
+                raw_text = content.decode('latin-1')
+        else:
+            try:
+                raw_text = content.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    raw_text = content.decode('latin-1')
+                except Exception:
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="Unsupported file type. Use PDF, Word (.docx), or text files (.txt)"
+                    )
+        
+        script_data = ScriptCreate(title=title, raw_text=raw_text, user_id=user_id)
+        return await create_script(script_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading script: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/scripts", response_model=List[Script])
+async def get_scripts(user_id: str = "default"):
+    """Get all scripts for a user"""
+    scripts = await db.scripts.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
+    return [Script(**s) for s in scripts]
+
+@api_router.get("/scripts/{script_id}", response_model=Script)
+async def get_script(script_id: str):
+    """Get a specific script by ID"""
+    script = await db.scripts.find_one({"id": script_id})
+    if not script:
+        raise HTTPException(status_code=404, detail="Script not found")
+    return Script(**script)
+
+@api_router.put("/scripts/{script_id}")
+async def update_script(script_id: str, update_data: ScriptUpdate):
+    """Update script settings"""
+    script = await db.scripts.find_one({"id": script_id})
+    if not script:
+        raise HTTPException(status_code=404, detail="Script not found")
+    
+    update_dict = {"updated_at": datetime.utcnow()}
+    
+    if update_data.title:
+        update_dict["title"] = update_data.title
+    
+    if update_data.user_character:
+        characters = script.get("characters", [])
+        for char in characters:
+            char["is_user_character"] = (char["name"] == update_data.user_character)
+        update_dict["characters"] = characters
+    
+    if update_data.characters:
+        update_dict["characters"] = update_data.characters
+    
+    await db.scripts.update_one({"id": script_id}, {"$set": update_dict})
+    updated = await db.scripts.find_one({"id": script_id})
+    return Script(**updated)
+
+@api_router.delete("/scripts/{script_id}")
+async def delete_script(script_id: str):
+    """Delete a script"""
+    script = await db.scripts.find_one({"id": script_id})
+    if not script:
+        raise HTTPException(status_code=404, detail="Script not found")
+    
+    result = await db.scripts.delete_one({"id": script_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Script not found")
+    
+    await db.rehearsals.delete_many({"script_id": script_id})
+    
+    # Update user script count
+    if script.get("user_id"):
+        await db.users.update_one(
+            {"$or": [{"id": script["user_id"]}, {"device_id": script["user_id"]}]},
+            {"$inc": {"scripts_count": -1}}
+        )
+    
+    return {"message": "Script deleted successfully"}
+
+# ==================== REHEARSAL ROUTES ====================
+
+@api_router.post("/rehearsals", response_model=RehearsalSession)
+async def create_rehearsal(rehearsal_data: RehearsalCreate):
+    """Create a new rehearsal session"""
+    # Check user limits
+    limits_check = await check_user_limits(rehearsal_data.user_id, "create_rehearsal")
+    if not limits_check["allowed"]:
+        raise HTTPException(status_code=403, detail=limits_check["upgrade_reason"])
+    
+    # Check if mode is allowed
+    if rehearsal_data.mode not in limits_check["limits"]["available_modes"]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"'{rehearsal_data.mode}' mode requires Premium. Upgrade to unlock all training modes!"
+        )
+    
+    # Check if voice is allowed
+    if rehearsal_data.voice_type not in limits_check["limits"]["available_voices"]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"'{rehearsal_data.voice_type}' voice requires Premium. Upgrade to unlock all AI voices!"
+        )
+    
+    script = await db.scripts.find_one({"id": rehearsal_data.script_id})
+    if not script:
+        raise HTTPException(status_code=404, detail="Script not found")
+    
+    total_lines = sum(1 for line in script.get("lines", []) 
+                     if line.get("character") == rehearsal_data.user_character)
+    
+    rehearsal = RehearsalSession(
+        script_id=rehearsal_data.script_id,
+        user_id=rehearsal_data.user_id,
+        user_character=rehearsal_data.user_character,
+        mode=rehearsal_data.mode,
+        voice_type=rehearsal_data.voice_type,
+        total_lines=total_lines
+    )
+    
+    await db.rehearsals.insert_one(rehearsal.dict())
+    
+    # Update user rehearsal count
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    user = await db.users.find_one({"$or": [{"id": rehearsal_data.user_id}, {"device_id": rehearsal_data.user_id}]})
+    if user:
+        if user.get("last_rehearsal_date") == today:
+            await db.users.update_one(
+                {"_id": user["_id"]},
+                {"$inc": {"rehearsals_today": 1, "total_rehearsals": 1}}
+            )
+        else:
+            await db.users.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"last_rehearsal_date": today, "rehearsals_today": 1}, "$inc": {"total_rehearsals": 1}}
+            )
+    
+    return rehearsal
+
+@api_router.get("/rehearsals", response_model=List[RehearsalSession])
+async def get_rehearsals(user_id: str = "default"):
+    """Get all rehearsal sessions for a user"""
+    rehearsals = await db.rehearsals.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
+    return [RehearsalSession(**r) for r in rehearsals]
+
+@api_router.get("/rehearsals/{rehearsal_id}", response_model=RehearsalSession)
+async def get_rehearsal(rehearsal_id: str):
+    """Get a specific rehearsal session"""
+    rehearsal = await db.rehearsals.find_one({"id": rehearsal_id})
+    if not rehearsal:
+        raise HTTPException(status_code=404, detail="Rehearsal session not found")
+    return RehearsalSession(**rehearsal)
+
+@api_router.put("/rehearsals/{rehearsal_id}")
+async def update_rehearsal(rehearsal_id: str, update_data: Dict[str, Any]):
+    """Update rehearsal progress"""
+    rehearsal = await db.rehearsals.find_one({"id": rehearsal_id})
+    if not rehearsal:
+        raise HTTPException(status_code=404, detail="Rehearsal session not found")
+    
+    update_data["updated_at"] = datetime.utcnow()
+    await db.rehearsals.update_one({"id": rehearsal_id}, {"$set": update_data})
+    
+    # Update total lines practiced
+    if "completed_lines" in update_data:
+        lines_count = len(update_data["completed_lines"])
+        user_id = rehearsal.get("user_id")
+        if user_id:
+            await db.users.update_one(
+                {"$or": [{"id": user_id}, {"device_id": user_id}]},
+                {"$inc": {"total_lines_practiced": lines_count}}
+            )
+    
+    updated = await db.rehearsals.find_one({"id": rehearsal_id})
+    return RehearsalSession(**updated)
+
+@api_router.delete("/rehearsals/{rehearsal_id}")
+async def delete_rehearsal(rehearsal_id: str):
+    """Delete a rehearsal session"""
+    result = await db.rehearsals.delete_one({"id": rehearsal_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Rehearsal session not found")
+    return {"message": "Rehearsal session deleted"}
+
+# ==================== ANALYTICS ROUTES (PREMIUM) ====================
+
+@api_router.get("/users/{device_id}/stats")
+async def get_user_stats(device_id: str):
+    """Get user statistics (basic for free, detailed for premium)"""
+    user = await db.users.find_one({"device_id": device_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    tier = user.get("subscription_tier", "free")
+    
+    # Basic stats for all users
+    stats = {
+        "total_rehearsals": user.get("total_rehearsals", 0),
+        "total_lines_practiced": user.get("total_lines_practiced", 0),
+        "scripts_count": user.get("scripts_count", 0),
+    }
+    
+    # Premium stats
+    if tier == "premium":
+        # Get weak lines analysis
+        rehearsals = await db.rehearsals.find({"user_id": user["id"]}).to_list(100)
+        weak_lines_count = sum(len(r.get("weak_lines", [])) for r in rehearsals)
+        missed_lines_count = sum(len(r.get("missed_lines", [])) for r in rehearsals)
+        
+        stats["weak_lines_count"] = weak_lines_count
+        stats["missed_lines_count"] = missed_lines_count
+        stats["accuracy_rate"] = round(
+            (stats["total_lines_practiced"] - missed_lines_count) / max(stats["total_lines_practiced"], 1) * 100, 1
+        )
+        stats["has_detailed_stats"] = True
+    else:
+        stats["has_detailed_stats"] = False
+        stats["upgrade_message"] = "Upgrade to Premium to track weak lines and see detailed analytics!"
+    
+    return stats
+
+# ==================== ANALYZE ROUTES ====================
+
+@api_router.post("/analyze")
+async def analyze_script(request: AnalyzeScriptRequest):
+    """Analyze raw script text and return parsed structure"""
+    try:
+        parsed = await parse_script_with_ai(request.raw_text)
+        return parsed
+    except Exception as e:
+        logger.error(f"Error analyzing script: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Include the router in the main app
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()

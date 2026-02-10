@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+
+# Expo
+.expo/
+dist/
+
+# IDE
+.idea/
+.vscode/
+
+# Cache
+.ruff_cache/
+.metro-cache/
+
+# Build
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
