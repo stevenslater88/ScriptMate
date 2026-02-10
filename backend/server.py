@@ -276,6 +276,98 @@ class UserProfileCreate(BaseModel):
     email: Optional[str] = None
     name: Optional[str] = None
 
+# ==================== AUTHENTICATION MODELS ====================
+
+class AuthProvider(BaseModel):
+    """Authentication provider info (Apple, Google)"""
+    provider: str  # "apple", "google", "email"
+    provider_user_id: str
+    email: Optional[str] = None
+    name: Optional[str] = None
+
+class AuthenticatedUser(BaseModel):
+    """User with authentication linked"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: Optional[str] = None
+    name: Optional[str] = None
+    auth_providers: List[Dict] = []  # List of linked auth providers
+    device_ids: List[str] = []  # All devices this user has logged in from
+    subscription_tier: str = "free"
+    subscription_plan: Optional[str] = None
+    subscription_start: Optional[datetime] = None
+    subscription_end: Optional[datetime] = None
+    trial_used: bool = False
+    trial_end: Optional[datetime] = None
+    total_rehearsals: int = 0
+    total_lines_practiced: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class AppleAuthRequest(BaseModel):
+    """Apple Sign-In verification request"""
+    identity_token: str  # JWT from Apple
+    authorization_code: str
+    user_identifier: str
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    device_id: str
+
+class GoogleAuthRequest(BaseModel):
+    """Google Sign-In verification request"""
+    id_token: str  # JWT from Google
+    device_id: str
+
+class AuthResponse(BaseModel):
+    """Response after successful authentication"""
+    user_id: str
+    email: Optional[str] = None
+    name: Optional[str] = None
+    is_new_user: bool
+    subscription_tier: str
+    access_token: str  # Simple token for API calls
+
+class SyncDataRequest(BaseModel):
+    """Request to sync user data"""
+    user_id: str
+    director_notes: Optional[List[Dict]] = None
+    performance_stats: Optional[Dict] = None
+    settings: Optional[Dict] = None
+    last_sync: Optional[datetime] = None
+
+class DirectorNote(BaseModel):
+    """Director note for a specific line"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    script_id: str
+    line_index: int
+    note_type: str  # "blocking", "emotion", "cue", "general"
+    content: str
+    color: Optional[str] = "#f59e0b"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class PerformanceStats(BaseModel):
+    """User's performance statistics"""
+    user_id: str
+    total_rehearsals: int = 0
+    total_lines_completed: int = 0
+    total_practice_time: int = 0  # seconds
+    average_accuracy: float = 0.0
+    streak_days: int = 0
+    last_practice_date: Optional[str] = None
+    script_stats: List[Dict] = []  # Per-script breakdown
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UserSettings(BaseModel):
+    """User's app settings (synced across devices)"""
+    user_id: str
+    default_voice: str = "alloy"
+    default_voice_speed: float = 1.0
+    auto_advance_enabled: bool = True
+    hide_lines_by_default: bool = False
+    theme: str = "dark"
+    notifications_enabled: bool = True
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 class SubscriptionUpdate(BaseModel):
     plan: str  # monthly, yearly
     receipt: Optional[str] = None  # App store receipt for validation
