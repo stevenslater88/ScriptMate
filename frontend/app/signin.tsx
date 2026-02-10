@@ -16,7 +16,8 @@ import { router } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function SignInScreen() {
-  const { signInWithApple, signInWithGoogle, isAuthenticated } = useAuth();
+  // TEMPORARILY DISABLED: Apple Sign-In disabled until provisioning profile is updated
+  const { signInWithGoogle, isAuthenticated } = useAuth();
   const [loading, setLoading] = useState<'apple' | 'google' | null>(null);
 
   // Redirect if already authenticated
@@ -26,19 +27,20 @@ export default function SignInScreen() {
     }
   }, [isAuthenticated]);
 
-  const handleAppleSignIn = async () => {
-    setLoading('apple');
-    try {
-      await signInWithApple();
-      router.replace('/');
-    } catch (error: any) {
-      if (error.message !== 'User cancelled') {
-        Alert.alert('Sign-In Failed', error.message || 'Please try again');
-      }
-    } finally {
-      setLoading(null);
-    }
-  };
+  // TEMPORARILY DISABLED: Apple Sign-In disabled until provisioning profile is updated
+  // const handleAppleSignIn = async () => {
+  //   setLoading('apple');
+  //   try {
+  //     await signInWithApple();
+  //     router.replace('/');
+  //   } catch (error: any) {
+  //     if (error.message !== 'User cancelled') {
+  //       Alert.alert('Sign-In Failed', error.message || 'Please try again');
+  //     }
+  //   } finally {
+  //     setLoading(null);
+  //   }
+  // };
 
   const handleGoogleSignIn = async () => {
     setLoading('google');
