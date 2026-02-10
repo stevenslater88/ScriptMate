@@ -9,11 +9,19 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useScriptStore } from '../../../store/scriptStore';
+import { useAuth } from '../../../contexts/AuthContext';
+import { 
+  getNotesForScript, 
+  saveNote as syncSaveNote, 
+  deleteNote as syncDeleteNote,
+  DirectorNote as SyncDirectorNote 
+} from '../../../services/syncService';
 
 interface DirectorNote {
   id: string;
