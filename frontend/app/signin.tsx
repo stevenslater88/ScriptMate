@@ -43,17 +43,26 @@ export default function SignInScreen() {
   // };
 
   const handleGoogleSignIn = async () => {
-    setLoading('google');
-    try {
-      await signInWithGoogle();
-      router.replace('/');
-    } catch (error: any) {
-      if (error.message !== 'User cancelled') {
-        Alert.alert('Sign-In Failed', error.message || 'Please try again');
-      }
-    } finally {
-      setLoading(null);
-    }
+    // TEMPORARILY DISABLED: Google Sign-In requires OAuth credentials
+    Alert.alert(
+      'Coming Soon',
+      'Google Sign-In will be available in a future update. For now, you can use the app without signing in.',
+      [{ text: 'OK' }]
+    );
+    return;
+    
+    // Original implementation (uncomment when OAuth is configured):
+    // setLoading('google');
+    // try {
+    //   await signInWithGoogle();
+    //   router.replace('/');
+    // } catch (error: any) {
+    //   if (error.message !== 'User cancelled') {
+    //     Alert.alert('Sign-In Failed', error.message || 'Please try again');
+    //   }
+    // } finally {
+    //   setLoading(null);
+    // }
   };
 
   const handleSkip = () => {
