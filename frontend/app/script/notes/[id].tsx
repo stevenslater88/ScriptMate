@@ -104,9 +104,10 @@ export default function DirectorNotesScreen() {
     );
   }
 
-  const addNote = () => {
-    if (selectedLine === null || !noteText.trim()) return;
+  const addNote = async () => {
+    if (selectedLine === null || !noteText.trim() || !id) return;
 
+    setSaving(true);
     const newNote: DirectorNote = {
       id: Date.now().toString(),
       lineIndex: selectedLine,
@@ -115,17 +116,42 @@ export default function DirectorNotesScreen() {
       createdAt: new Date(),
     };
 
-    setNotes([...notes, newNote]);
-    setNoteText('');
-    setShowNoteInput(false);
-    setSelectedLine(null);
+    // Convert to sync format and save
+    const syncNote: SyncDirectorNote = {
+      id: newNote.id,
+      script_id: id,
+      line_index: newNote.lineIndex,
+      note_type: newNote.type,
+      content: newNote.note,
+      color: getNoteTypeInfo(newNote.type).color,
+    };
+
+    try {
+      await syncSaveNote(syncNote);
+      setNotes([...notes, newNote]);
+      setNoteText('');
+      setShowNoteInput(false);
+      setSelectedLine(null);
+    } catch (error) {
+      console.error('Error saving note:', error);
+      Alert.alert('Error', 'Failed to save note');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const deleteNote = (noteId: string) => {
+  const deleteNoteHandler = (noteId: string) => {
     Alert.alert('Delete Note', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => {
-        setNotes(notes.filter(n => n.id !== noteId));
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        if (!id) return;
+        try {
+          await syncDeleteNote(noteId, id);
+          setNotes(notes.filter(n => n.id !== noteId));
+        } catch (error) {
+          console.error('Error deleting note:', error);
+          Alert.alert('Error', 'Failed to delete note');
+        }
       }},
     ]);
   };
