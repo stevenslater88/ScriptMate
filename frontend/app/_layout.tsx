@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet, Platform } from 'react-native';
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
+import { AuthProvider } from '../contexts/AuthContext';
 
 // RevenueCat API Keys
 const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || 'test_DoejpADdRIFOhYLImArlqaAfLpz';
@@ -41,27 +42,32 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: '#0a0a0f' },
-          animation: 'slide_from_right',
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="scripts" />
-        <Stack.Screen name="upload" />
-        <Stack.Screen name="premium" />
-        <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="support" />
-        <Stack.Screen name="privacy" />
-        <Stack.Screen name="terms" />
-        <Stack.Screen name="script/[id]" />
-        <Stack.Screen name="rehearsal/[id]" />
-      </Stack>
-    </View>
+    <AuthProvider>
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: '#0a0a0f' },
+            animation: 'slide_from_right',
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="signin" />
+          <Stack.Screen name="profile" />
+          <Stack.Screen name="scripts" />
+          <Stack.Screen name="upload" />
+          <Stack.Screen name="premium" />
+          <Stack.Screen name="stats" />
+          <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="support" />
+          <Stack.Screen name="privacy" />
+          <Stack.Screen name="terms" />
+          <Stack.Screen name="script/[id]" />
+          <Stack.Screen name="rehearsal/[id]" />
+        </Stack>
+      </View>
+    </AuthProvider>
   );
 }
 
