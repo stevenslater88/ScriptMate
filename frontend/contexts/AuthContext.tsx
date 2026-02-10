@@ -238,7 +238,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user?.isAuthenticated,
         deviceId,
-        signInWithApple,
+        // TEMPORARILY DISABLED: Apple Sign-In disabled until provisioning profile is updated
+        // signInWithApple,
         signInWithGoogle,
         signOut,
         syncData,
