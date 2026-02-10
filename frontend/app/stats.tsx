@@ -6,12 +6,14 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useScriptStore } from '../store/scriptStore';
+import { useAuth } from '../contexts/AuthContext';
+import { getPerformanceStats, PerformanceStats } from '../services/syncService';
 
 interface PerformanceData {
   scriptId: string;
