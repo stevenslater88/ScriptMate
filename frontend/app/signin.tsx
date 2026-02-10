@@ -97,8 +97,9 @@ export default function SignInScreen() {
 
         {/* Sign-In Buttons */}
         <View style={styles.buttonsContainer}>
+          {/* TEMPORARILY DISABLED: Apple Sign-In disabled until provisioning profile is updated */}
           {/* Apple Sign-In (iOS only) */}
-          {Platform.OS === 'ios' && (
+          {/* {Platform.OS === 'ios' && (
             <AppleAuthentication.AppleAuthenticationButton
               buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
               buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
@@ -106,10 +107,10 @@ export default function SignInScreen() {
               style={styles.appleButton}
               onPress={handleAppleSignIn}
             />
-          )}
+          )} */}
 
-          {/* Fallback Apple button for web/Android preview */}
-          {Platform.OS !== 'ios' && (
+          {/* Fallback Apple button for web/Android preview - TEMPORARILY DISABLED */}
+          {/* {Platform.OS !== 'ios' && (
             <TouchableOpacity
               style={styles.socialButton}
               onPress={handleAppleSignIn}
@@ -124,7 +125,7 @@ export default function SignInScreen() {
                 </>
               )}
             </TouchableOpacity>
-          )}
+          )} */}
 
           {/* Google Sign-In */}
           <TouchableOpacity
