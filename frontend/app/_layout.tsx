@@ -5,9 +5,9 @@ import { View, StyleSheet, Platform } from 'react-native';
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { AuthProvider } from '../contexts/AuthContext';
 
-// RevenueCat API Keys
-const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || 'test_DoejpADdRIFOhYLImArlqaAfLpz';
-const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || 'test_DoejpADdRIFOhYLImArlqaAfLpz';
+// RevenueCat API Keys (Production - from environment)
+const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || '';
+const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || '';
 
 export default function RootLayout() {
   // Initialize RevenueCat on app start
