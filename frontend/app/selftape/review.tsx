@@ -185,6 +185,11 @@ export default function ReviewScreen() {
           </View>
         )}
 
+        {/* Watermark Overlay */}
+        <View style={styles.watermarkContainer}>
+          <Text style={styles.watermarkText}>Sent from ScriptMate</Text>
+        </View>
+
         {/* Play/Pause Overlay */}
         <TouchableOpacity style={styles.playOverlay} onPress={handlePlayPause}>
           {!isPlaying && (
