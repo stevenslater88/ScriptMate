@@ -46,6 +46,22 @@
       "expo-router",
       "expo-speech-recognition",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow ScriptMate to access your camera for self-tape recordings",
+          "microphonePermission": "Allow ScriptMate to access your microphone for self-tape recordings",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow ScriptMate to save your self-tape recordings",
+          "savePhotosPermission": "Allow ScriptMate to save your self-tape recordings",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
