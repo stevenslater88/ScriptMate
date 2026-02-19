@@ -511,7 +511,11 @@ export default function RecordScreen() {
   return (
     <View style={styles.container}>
       {/* Script Overlay - Top 40% */}
-      <View style={styles.scriptContainer}>
+      <TouchableOpacity 
+        style={styles.scriptContainer} 
+        activeOpacity={1}
+        onPress={handleScriptTap}
+      >
         <View style={styles.scriptHeader}>
           <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
             <Ionicons name="close" size={28} color="#fff" />
@@ -532,10 +536,10 @@ export default function RecordScreen() {
           ref={scrollViewRef}
           style={styles.scriptScroll}
           showsVerticalScrollIndicator={false}
-          scrollEnabled={!teleprompterActive || !isRecording}
+          scrollEnabled={!teleprompterPlaying}
           contentContainerStyle={{ 
             paddingBottom: 100,
-            transform: teleprompterActive && isRecording ? [{ translateY: Animated.multiply(teleprompterAnim, -1) }] : []
+            transform: teleprompterActive && teleprompterPlaying ? [{ translateY: Animated.multiply(teleprompterAnim, -1) }] : []
           }}
         >
           {lines.map((line: any, index: number) => {
@@ -544,23 +548,98 @@ export default function RecordScreen() {
               return (
                 <View key={index} style={styles.lineContainer}>
                   <Text style={[styles.characterName, styles.otherCharacter]}>{line.character}</Text>
-                  <Text style={[styles.lineText, { fontSize }, styles.hiddenLine]}>• • •</Text>
+                  <Text style={[styles.lineText, { fontSize: currentFontSize }, styles.hiddenLine]}>• • •</Text>
                 </View>
               );
             }
             return (
-              <View key={index} style={[styles.lineContainer, isMyLine && styles.myLineContainer]}>
-                <Text style={[styles.characterName, isMyLine && styles.myCharacterName]}>
+              <View key={index} style={[
+                styles.lineContainer, 
+                isMyLine && highlightEnabled && styles.myLineContainer
+              ]}>
+                <Text style={[
+                  styles.characterName, 
+                  isMyLine && highlightEnabled && styles.myCharacterName
+                ]}>
                   {line.character}
                 </Text>
-                <Text style={[styles.lineText, { fontSize }, isMyLine && styles.myLineText]}>
+                <Text style={[
+                  styles.lineText, 
+                  { fontSize: currentFontSize }, 
+                  isMyLine && highlightEnabled && styles.myLineText
+                ]}>
                   {line.text}
                 </Text>
               </View>
             );
           })}
         </Animated.ScrollView>
-      </View>
+
+        {/* Teleprompter Controls Overlay */}
+        {teleprompterActive && showControls && (
+          <Animated.View style={[styles.teleprompterControls, { opacity: controlsOpacity }]}>
+            {/* Play/Pause Button */}
+            <TouchableOpacity 
+              style={styles.controlPlayButton} 
+              onPress={toggleTeleprompterPlayPause}
+            >
+              <Ionicons 
+                name={teleprompterPlaying ? 'pause' : 'play'} 
+                size={24} 
+                color="#fff" 
+              />
+            </TouchableOpacity>
+
+            {/* Speed Slider */}
+            <View style={styles.speedControlContainer}>
+              <Ionicons name="speedometer-outline" size={16} color="#9ca3af" />
+              <Slider
+                style={styles.speedSlider}
+                minimumValue={1}
+                maximumValue={5}
+                step={1}
+                value={currentSpeed}
+                onValueChange={handleSpeedChange}
+                minimumTrackTintColor="#6366f1"
+                maximumTrackTintColor="#374151"
+                thumbTintColor="#6366f1"
+              />
+              <Text style={styles.speedLabel}>{currentSpeed}x</Text>
+            </View>
+
+            {/* Font Size Controls */}
+            <View style={styles.fontControls}>
+              <TouchableOpacity 
+                style={styles.fontButton} 
+                onPress={() => adjustFontSize(-2)}
+              >
+                <Text style={styles.fontButtonText}>A-</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.fontButton} 
+                onPress={() => adjustFontSize(2)}
+              >
+                <Text style={styles.fontButtonText}>A+</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Highlight Toggle */}
+            <TouchableOpacity 
+              style={[
+                styles.highlightToggle, 
+                highlightEnabled && styles.highlightToggleActive
+              ]} 
+              onPress={toggleHighlight}
+            >
+              <Ionicons 
+                name="color-wand" 
+                size={18} 
+                color={highlightEnabled ? '#6366f1' : '#6b7280'} 
+              />
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+      </TouchableOpacity>
 
       {/* Camera View - Bottom 60% */}
       <View style={styles.cameraContainer}>
