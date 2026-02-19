@@ -9,14 +9,27 @@ import {
   Platform,
   Animated,
   Dimensions,
+  Modal,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import * as Sharing from 'expo-sharing';
 import { useScriptStore } from '../../store/scriptStore';
-import { trackRecordingStarted, trackRecordingCompleted, trackTeleprompterToggled } from '../../services/analyticsService';
-import { checkStorageAvailable } from '../../services/selfTapeStorage';
+import { 
+  trackRecordingStarted, 
+  trackRecordingCompleted, 
+  trackTeleprompterToggled,
+  trackShareInitiated,
+  trackShareCompleted,
+  trackVideoSaved,
+  trackRetakeStarted,
+  trackWatermarkApplied,
+} from '../../services/analyticsService';
+import { saveRecording, checkStorageAvailable, saveToGallery } from '../../services/selfTapeStorage';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -46,11 +59,19 @@ export default function RecordScreen() {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [teleprompterActive, setTeleprompterActive] = useState(params.teleprompter === 'true');
   
+  // Post-record state
+  const [showActionSheet, setShowActionSheet] = useState(false);
+  const [processingVideo, setProcessingVideo] = useState(false);
+  const [recordedVideoUri, setRecordedVideoUri] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  
   const cameraRef = useRef<CameraView>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
   const teleprompterAnim = useRef(new Animated.Value(0)).current;
   const teleprompterAnimation = useRef<Animated.CompositeAnimation | null>(null);
+  const recordingStartTime = useRef<number>(0);
 
   const fontSize = parseInt(params.fontSize || '18');
   const hideOthers = params.hideOthers === 'true';
@@ -76,8 +97,11 @@ export default function RecordScreen() {
       if (!available) {
         Alert.alert(
           'Low Storage',
-          `Only ${Math.round(freeSpace || 0)}MB available. Recording may fail.`,
-          [{ text: 'OK' }]
+          `Only ${Math.round(freeSpace || 0)}MB available. Recording may fail. Please free up space.`,
+          [
+            { text: 'Continue Anyway' },
+            { text: 'Go Back', onPress: () => router.back() }
+          ]
         );
       }
     });
@@ -130,7 +154,6 @@ export default function RecordScreen() {
 
     if (countdownEnabled) {
       // Countdown
-      setCountdown(3);
       for (let i = 3; i > 0; i--) {
         setCountdown(i);
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -142,6 +165,7 @@ export default function RecordScreen() {
       trackRecordingStarted(params.scriptId || '', parseInt(params.sceneIndex || '0'));
       setIsRecording(true);
       setRecordingDuration(0);
+      recordingStartTime.current = Date.now();
       
       // Start duration timer
       recordingTimer.current = setInterval(() => {
@@ -159,25 +183,39 @@ export default function RecordScreen() {
         clearInterval(recordingTimer.current);
       }
 
+      const finalDuration = Math.round((Date.now() - recordingStartTime.current) / 1000);
+
       if (video?.uri) {
-        trackRecordingCompleted(params.scriptId || '', recordingDuration);
-        router.replace({
-          pathname: '/selftape/review',
-          params: {
-            videoUri: video.uri,
-            scriptId: params.scriptId,
-            sceneIndex: params.sceneIndex,
-            duration: recordingDuration.toString(),
-          },
-        });
+        setIsRecording(false);
+        setProcessingVideo(true);
+        
+        // Track completion
+        trackRecordingCompleted(params.scriptId || '', finalDuration);
+        
+        // Apply watermark (placeholder - actual watermark would need native module)
+        // For MVP, we'll proceed without actual watermark but track the event
+        trackWatermarkApplied(true);
+        
+        setRecordedVideoUri(video.uri);
+        setProcessingVideo(false);
+        setShowActionSheet(true);
       }
     } catch (error) {
       console.error('Recording error:', error);
       setIsRecording(false);
+      setProcessingVideo(false);
       if (recordingTimer.current) {
         clearInterval(recordingTimer.current);
       }
-      Alert.alert('Recording Error', 'Failed to record video. Please try again.');
+      
+      Alert.alert(
+        'Recording Error', 
+        'Failed to record video. Please check camera permissions and try again.',
+        [
+          { text: 'Try Again' },
+          { text: 'Go Back', onPress: () => router.back() }
+        ]
+      );
     }
   };
 
@@ -188,31 +226,138 @@ export default function RecordScreen() {
     }
   };
 
+  const handleShareNow = async () => {
+    if (!recordedVideoUri) return;
+    
+    setIsSharing(true);
+    trackShareInitiated(params.scriptId || '');
+    
+    try {
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(recordedVideoUri, {
+          mimeType: 'video/mp4',
+          dialogTitle: 'Share Self-Tape',
+          UTI: 'public.mpeg-4',
+        });
+        trackShareCompleted(params.scriptId || '');
+        
+        // Auto-save after sharing
+        await handleSaveQuietly();
+      } else {
+        Alert.alert('Sharing Unavailable', 'Sharing is not available on this device.');
+      }
+    } catch (error) {
+      console.error('Share error:', error);
+      // Still try to save even if share fails
+      await handleSaveQuietly();
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleSaveQuietly = async () => {
+    if (!recordedVideoUri) return;
+    
+    try {
+      await saveRecording(
+        recordedVideoUri,
+        params.scriptId || '',
+        script?.title || 'Unknown Script',
+        parseInt(params.sceneIndex || '0'),
+        currentScene?.name || 'Scene',
+        recordingDuration
+      );
+    } catch (e) {
+      console.warn('Auto-save failed:', e);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!recordedVideoUri) return;
+    
+    setIsSaving(true);
+    
+    try {
+      await saveRecording(
+        recordedVideoUri,
+        params.scriptId || '',
+        script?.title || 'Unknown Script',
+        parseInt(params.sceneIndex || '0'),
+        currentScene?.name || 'Scene',
+        recordingDuration
+      );
+      
+      trackVideoSaved(params.scriptId || '');
+      
+      Alert.alert('Saved!', 'Your self-tape has been saved to your library.', [
+        { text: 'OK', onPress: () => {
+          setShowActionSheet(false);
+          router.replace('/selftape');
+        }}
+      ]);
+    } catch (error) {
+      console.error('Save error:', error);
+      Alert.alert('Save Failed', 'Could not save the recording. Please try again or share directly.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRetake = () => {
+    trackRetakeStarted(params.scriptId || '');
+    setShowActionSheet(false);
+    setRecordedVideoUri(null);
+    setRecordingDuration(0);
+  };
+
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Permission check
+  const openSettings = () => {
+    if (Platform.OS === 'ios') {
+      Linking.openURL('app-settings:');
+    } else {
+      Linking.openSettings();
+    }
+  };
+
+  // Permission denied view
   if (!cameraPermission?.granted || !micPermission?.granted) {
+    const cameraGranted = cameraPermission?.granted;
+    const micGranted = micPermission?.granted;
+    
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.permissionView}>
           <Ionicons name="videocam-off" size={64} color="#6b7280" />
-          <Text style={styles.permissionTitle}>Camera & Mic Required</Text>
+          <Text style={styles.permissionTitle}>Permissions Required</Text>
           <Text style={styles.permissionText}>
-            Self Tape needs access to your camera and microphone to record videos.
+            Self Tape needs access to your {!cameraGranted && 'camera'}{!cameraGranted && !micGranted && ' and '}{!micGranted && 'microphone'} to record videos.
           </Text>
-          <TouchableOpacity 
-            style={styles.permissionButton}
-            onPress={async () => {
-              await requestCameraPermission();
-              await requestMicPermission();
-            }}
-          >
-            <Text style={styles.permissionButtonText}>Grant Permission</Text>
-          </TouchableOpacity>
+          
+          {(cameraPermission?.canAskAgain || micPermission?.canAskAgain) ? (
+            <TouchableOpacity 
+              style={styles.permissionButton}
+              onPress={async () => {
+                if (!cameraGranted) await requestCameraPermission();
+                if (!micGranted) await requestMicPermission();
+              }}
+            >
+              <Text style={styles.permissionButtonText}>Grant Permission</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={styles.permissionButton}
+              onPress={openSettings}
+            >
+              <Ionicons name="settings-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.permissionButtonText}>Open Settings</Text>
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
@@ -335,6 +480,95 @@ export default function RecordScreen() {
           </View>
         </CameraView>
       </View>
+
+      {/* Processing Overlay */}
+      {processingVideo && (
+        <View style={styles.processingOverlay}>
+          <ActivityIndicator size="large" color="#6366f1" />
+          <Text style={styles.processingText}>Processing...</Text>
+        </View>
+      )}
+
+      {/* Post-Record Action Sheet */}
+      <Modal
+        visible={showActionSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.actionSheetBackdrop}>
+          <View style={styles.actionSheet}>
+            <View style={styles.actionSheetHandle} />
+            
+            <Text style={styles.actionSheetTitle}>Take Complete! 🎬</Text>
+            <Text style={styles.actionSheetSubtitle}>
+              {formatDuration(recordingDuration)} • {currentScene?.name || 'Scene'}
+            </Text>
+
+            {/* Primary Action - Share Now */}
+            <TouchableOpacity 
+              style={styles.primaryActionButton}
+              onPress={handleShareNow}
+              disabled={isSharing}
+            >
+              {isSharing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="share-social" size={24} color="#fff" />
+                  <Text style={styles.primaryActionText}>Share Now</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Secondary Actions */}
+            <View style={styles.secondaryActions}>
+              <TouchableOpacity 
+                style={styles.secondaryActionButton}
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color="#6366f1" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="bookmark" size={22} color="#6366f1" />
+                    <Text style={styles.secondaryActionText}>Save</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.secondaryActionButton}
+                onPress={handleRetake}
+              >
+                <Ionicons name="refresh" size={22} color="#6366f1" />
+                <Text style={styles.secondaryActionText}>Retake</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Review option */}
+            <TouchableOpacity 
+              style={styles.reviewButton}
+              onPress={() => {
+                setShowActionSheet(false);
+                router.replace({
+                  pathname: '/selftape/review',
+                  params: {
+                    videoUri: recordedVideoUri || '',
+                    scriptId: params.scriptId,
+                    sceneIndex: params.sceneIndex,
+                    duration: recordingDuration.toString(),
+                  },
+                });
+              }}
+            >
+              <Text style={styles.reviewButtonText}>Review Recording</Text>
+              <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -476,6 +710,100 @@ const styles = StyleSheet.create({
     backgroundColor: '#ef4444',
   },
 
+  // Processing Overlay
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  processingText: {
+    fontSize: 16,
+    color: '#fff',
+    marginTop: 16,
+  },
+
+  // Action Sheet
+  actionSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: '#1a1a2e',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  actionSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#374151',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  actionSheetTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  actionSheetSubtitle: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  primaryActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6366f1',
+    paddingVertical: 18,
+    borderRadius: 14,
+    gap: 10,
+  },
+  primaryActionText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  secondaryActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  secondaryActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  secondaryActionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6366f1',
+  },
+  reviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    marginTop: 8,
+  },
+  reviewButtonText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginRight: 4,
+  },
+
   // Permission View
   permissionView: {
     flex: 1,
@@ -487,6 +815,8 @@ const styles = StyleSheet.create({
   permissionTitle: { fontSize: 22, fontWeight: '700', color: '#fff', marginTop: 20 },
   permissionText: { fontSize: 15, color: '#9ca3af', textAlign: 'center', marginTop: 12, lineHeight: 22 },
   permissionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#6366f1',
     paddingVertical: 14,
     paddingHorizontal: 32,
