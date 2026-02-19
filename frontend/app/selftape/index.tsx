@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,20 +7,35 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import axios from 'axios';
 import { useScriptStore } from '../../store/scriptStore';
 import useRevenueCat from '../../hooks/useRevenueCat';
 import { trackSelfTapeOpened, trackUpgradeTriggered } from '../../services/analyticsService';
 import { getRecordings, SelfTapeRecording } from '../../services/selfTapeStorage';
 
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+
 export default function SelfTapeHub() {
-  const { scripts, fetchScripts, loading } = useScriptStore();
+  const { scripts, fetchScripts, loading, createScript } = useScriptStore();
   const { isPremium, presentPaywall } = useRevenueCat();
   const [recordings, setRecordings] = useState<SelfTapeRecording[]>([]);
   const [loadingRecordings, setLoadingRecordings] = useState(true);
+  
+  // Quick Upload Modal State
+  const [showQuickUpload, setShowQuickUpload] = useState(false);
+  const [quickTitle, setQuickTitle] = useState('');
+  const [quickText, setQuickText] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const textInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     trackSelfTapeOpened();
@@ -51,6 +66,49 @@ export default function SelfTapeHub() {
       if (!purchased) return;
     }
     router.push('/selftape/library');
+  };
+
+  const handleQuickUpload = async () => {
+    if (!quickText.trim()) {
+      Alert.alert('Missing Script', 'Please paste your script text.');
+      return;
+    }
+
+    const title = quickTitle.trim() || `Self Tape ${new Date().toLocaleDateString()}`;
+    
+    setUploading(true);
+    Keyboard.dismiss();
+    
+    try {
+      const script = await createScript(title, quickText.trim());
+      
+      if (script) {
+        setShowQuickUpload(false);
+        setQuickTitle('');
+        setQuickText('');
+        
+        // Go directly to prep screen with the new script
+        if (!isPremium) {
+          trackUpgradeTriggered('selftape_quick_upload');
+          const purchased = await presentPaywall();
+          if (!purchased) {
+            await fetchScripts();
+            return;
+          }
+        }
+        router.push(`/selftape/prep?scriptId=${script.id}`);
+      }
+    } catch (error) {
+      console.error('Quick upload error:', error);
+      Alert.alert('Upload Failed', 'Could not process the script. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const openQuickUpload = () => {
+    setShowQuickUpload(true);
+    setTimeout(() => textInputRef.current?.focus(), 300);
   };
 
   return (
