@@ -20,13 +20,20 @@ ScriptMate is a mobile app for actors to practice scripts and record professiona
 A professional, minimal tool for actors to record auditions with split-screen script overlay and instant sharing capabilities.
 
 ### User Flow
-1. Select Script/Scene from Self Tape Hub
-2. Configure settings on Prep screen (font size, character, teleprompter)
-3. Record with camera preview + script overlay
-4. Post-recording action sheet: Share Now, Save, Retake, or Review
-5. Review screen with playback and branded watermark
+1. **Quick Paste**: Tap "Quick Paste Script" card → Paste text → Start Recording immediately
+2. **OR** Select existing Script/Scene from Self Tape Hub
+3. Configure settings on Prep screen (font size, character, teleprompter)
+4. Record with camera preview + script overlay
+5. Post-recording action sheet: Share Now, Save, Retake, or Review
+6. Review screen with playback and branded watermark
 
 ### Key Features Implemented
+
+#### Quick Upload (NEW)
+- [x] "Quick Paste Script" card at top of Self Tape Hub
+- [x] Modal with minimal fields (optional title + paste area)
+- [x] AI parses script and goes directly to recording prep
+- [x] "+" button in header for quick access
 
 #### Recording Screen (`/app/selftape/record.tsx`)
 - [x] Split-screen UI: 40% script overlay, 60% camera preview
@@ -55,7 +62,7 @@ A professional, minimal tool for actors to record auditions with split-screen sc
 - Note: Full video watermarking would require FFmpeg integration
 
 #### Supporting Screens
-- [x] Self Tape Hub (`/app/selftape/index.tsx`) - Script selection & recent takes
+- [x] Self Tape Hub (`/app/selftape/index.tsx`) - Quick paste, script selection & recent takes
 - [x] Prep Screen (`/app/selftape/prep.tsx`) - Recording settings
 - [x] Review Screen (`/app/selftape/review.tsx`) - Playback with watermark
 - [x] Library Screen (`/app/selftape/library.tsx`) - Saved recordings
@@ -63,6 +70,7 @@ A professional, minimal tool for actors to record auditions with split-screen sc
 #### Entry Points
 - [x] Home screen "Self Tape" button
 - [x] Script detail page dual-button layout (Self Tape + Rehearse)
+- [x] Quick Paste card in Self Tape Hub
 
 ---
 
@@ -73,6 +81,7 @@ A professional, minimal tool for actors to record auditions with split-screen sc
 - Added auto-hide controls during recording with tap-to-show
 - Added "Self Tape" button to script detail page with premium gating
 - Implemented visual watermark overlay in review screen
+- **Quick Upload feature**: "Quick Paste Script" card + modal for instant script entry
 - Wired up analytics tracking for all Self Tape events
 
 ---
@@ -103,6 +112,7 @@ A professional, minimal tool for actors to record auditions with split-screen sc
 ### Known Issues
 1. ESLint shows TypeScript parsing errors - config needs update for TypeScript support
 2. Package version warnings for @react-native-community/slider and @sentry/react-native
+3. expo-av deprecation warning (migrating to expo-audio/expo-video in SDK 54)
 
 ### Environment
 - Expo Tunnel: `exp://instant-share-video.exp.direct`
@@ -118,7 +128,7 @@ A professional, minimal tool for actors to record auditions with split-screen sc
 ```
 /app/frontend/app/selftape/
 ├── _layout.tsx
-├── index.tsx      # Self Tape Hub
+├── index.tsx      # Self Tape Hub with Quick Paste
 ├── library.tsx    # Saved recordings
 ├── prep.tsx       # Recording settings
 ├── record.tsx     # Recording screen (MAIN)
