@@ -119,12 +119,24 @@ export default function SelfTapeHub() {
           <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Self Tape Studio</Text>
-        <TouchableOpacity onPress={() => router.push('/upload')} style={styles.addButton}>
+        <TouchableOpacity onPress={openQuickUpload} style={styles.addButton}>
           <Ionicons name="add-circle" size={28} color="#6366f1" />
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Quick Paste Card */}
+        <TouchableOpacity onPress={openQuickUpload} style={styles.quickPasteCard}>
+          <View style={styles.quickPasteIcon}>
+            <Ionicons name="clipboard-outline" size={24} color="#10b981" />
+          </View>
+          <View style={styles.quickPasteInfo}>
+            <Text style={styles.quickPasteTitle}>Quick Paste Script</Text>
+            <Text style={styles.quickPasteSubtitle}>Paste text and start recording instantly</Text>
+          </View>
+          <Ionicons name="add" size={24} color="#10b981" />
+        </TouchableOpacity>
+
         {/* Library Button */}
         <TouchableOpacity onPress={handleViewLibrary} style={styles.libraryCard}>
           <View style={styles.libraryIcon}>
@@ -136,6 +148,7 @@ export default function SelfTapeHub() {
           </View>
           <Ionicons name="chevron-forward" size={20} color="#6b7280" />
         </TouchableOpacity>
+
         {/* Pro Badge */}
         <View style={styles.proBadge}>
           <Ionicons name="videocam" size={20} color="#6366f1" />
