@@ -82,19 +82,19 @@ export default function HomeScreen() {
             <View style={styles.headerButtons}>
               <TouchableOpacity 
                 style={styles.headerButton}
-                onPress={() => router.push('/stats')}
+                onPress={safeHandler(() => router.push('/stats'), 'Navigate to Stats')}
               >
                 <Ionicons name="stats-chart" size={24} color="#6b7280" />
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.headerButton}
-                onPress={() => router.push('/support')}
+                onPress={safeHandler(() => router.push('/support'), 'Navigate to Support')}
               >
                 <Ionicons name="help-circle-outline" size={24} color="#6b7280" />
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.headerButton}
-                onPress={() => router.push('/profile')}
+                onPress={safeHandler(() => router.push('/profile'), 'Navigate to Profile')}
               >
                 <Ionicons name="person-circle-outline" size={26} color="#6b7280" />
               </TouchableOpacity>
