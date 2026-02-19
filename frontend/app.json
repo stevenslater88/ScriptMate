@@ -2,7 +2,7 @@
   "expo": {
     "name": "ScriptMate",
     "slug": "scriptmate",
-    "version": "1.0.7",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "scriptmate",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.scriptmate.app",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Record audio for your self-tape auditions",
         "NSSpeechRecognitionUsageDescription": "Recognize when you finish speaking your lines",
@@ -28,7 +28,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.scriptmate.app",
-      "versionCode": 8,
+      "versionCode": 9,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
