@@ -15,7 +15,22 @@ export interface SelfTapeRecording {
   duration: number;
   createdAt: string;
   thumbnail?: string;
+  filename: string;
 }
+
+// Generate formatted filename
+const generateFilename = (scriptTitle: string, sceneName: string): string => {
+  const now = new Date();
+  const timestamp = now.toISOString()
+    .replace(/[-:]/g, '')
+    .replace('T', '_')
+    .split('.')[0];
+  
+  // Sanitize names for filesystem
+  const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+  
+  return `ScriptMate_${sanitize(scriptTitle)}_${sanitize(sceneName)}_${timestamp}.mp4`;
+};
 
 // Ensure directory exists
 export const ensureDirectory = async (): Promise<void> => {
@@ -25,7 +40,7 @@ export const ensureDirectory = async (): Promise<void> => {
   }
 };
 
-// Save recording
+// Save recording with proper filename
 export const saveRecording = async (
   tempUri: string,
   scriptId: string,
@@ -37,7 +52,7 @@ export const saveRecording = async (
   await ensureDirectory();
   
   const id = `selftape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const filename = `${id}.mp4`;
+  const filename = generateFilename(scriptTitle, sceneName);
   const permanentUri = `${SELF_TAPE_DIR}${filename}`;
   
   // Copy from temp to permanent location
@@ -55,6 +70,7 @@ export const saveRecording = async (
     uri: permanentUri,
     duration,
     createdAt: new Date().toISOString(),
+    filename,
   };
   
   // Update index
