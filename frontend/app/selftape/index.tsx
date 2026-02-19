@@ -251,6 +251,80 @@ export default function SelfTapeHub() {
           )}
         </View>
       </ScrollView>
+
+      {/* Quick Upload Modal */}
+      <Modal
+        visible={showQuickUpload}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowQuickUpload(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.quickUploadModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Quick Paste Script</Text>
+              <TouchableOpacity onPress={() => setShowQuickUpload(false)}>
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Paste your script text below and go straight to recording
+            </Text>
+
+            <TextInput
+              style={styles.titleInput}
+              placeholder="Script Title (optional)"
+              placeholderTextColor="#6b7280"
+              value={quickTitle}
+              onChangeText={setQuickTitle}
+            />
+
+            <TextInput
+              ref={textInputRef}
+              style={styles.scriptTextInput}
+              placeholder="Paste your script here...
+
+Example format:
+JOHN: Hey, how are you?
+SARAH: I'm doing great, thanks!
+JOHN: That's wonderful to hear."
+              placeholderTextColor="#4b5563"
+              value={quickText}
+              onChangeText={setQuickText}
+              multiline
+              textAlignVertical="top"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => setShowQuickUpload(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.uploadNowButton, uploading && styles.uploadNowButtonDisabled]}
+                onPress={handleQuickUpload}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="videocam" size={20} color="#fff" />
+                    <Text style={styles.uploadNowButtonText}>Start Recording</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
