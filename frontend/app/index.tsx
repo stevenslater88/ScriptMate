@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,17 +7,40 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useScriptStore } from '../store/scriptStore';
+import { safeHandler } from '../services/debugService';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 export default function HomeScreen() {
   const { scripts, fetchScripts, loading, initializeUser, user, isPremium, limits } = useScriptStore();
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Hidden debug screen - tap logo 5x
+  const logoTapCount = useRef(0);
+  const logoTapTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  const handleLogoTap = () => {
+    logoTapCount.current += 1;
+    
+    if (logoTapTimer.current) {
+      clearTimeout(logoTapTimer.current);
+    }
+    
+    if (logoTapCount.current >= 5) {
+      logoTapCount.current = 0;
+      router.push('/debug');
+    } else {
+      logoTapTimer.current = setTimeout(() => {
+        logoTapCount.current = 0;
+      }, 2000);
+    }
+  };
 
   const initialize = useCallback(async () => {
     await initializeUser();
