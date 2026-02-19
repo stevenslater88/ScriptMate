@@ -297,22 +297,32 @@ export default function ScriptDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Start Button */}
+      {/* Bottom Action Buttons */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={[styles.startButton, (!selectedCharacter || starting) && styles.startButtonDisabled]}
-          onPress={handleStartRehearsal}
-          disabled={!selectedCharacter || starting}
-        >
-          {starting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="play-circle" size={24} color="#fff" />
-              <Text style={styles.startButtonText}>Start Rehearsal</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.selfTapeButton}
+            onPress={() => router.push(`/selftape/prep?scriptId=${id}`)}
+          >
+            <Ionicons name="videocam" size={22} color="#fff" />
+            <Text style={styles.selfTapeButtonText}>Self Tape</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.startButton, (!selectedCharacter || starting) && styles.startButtonDisabled]}
+            onPress={handleStartRehearsal}
+            disabled={!selectedCharacter || starting}
+          >
+            {starting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="play-circle" size={22} color="#fff" />
+                <Text style={styles.startButtonText}>Rehearse</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Settings Modal */}
