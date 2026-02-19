@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Sharing from 'expo-sharing';
+import Slider from '@react-native-community/slider';
 import { useScriptStore } from '../../store/scriptStore';
 import { 
   trackRecordingStarted, 
@@ -66,17 +67,25 @@ export default function RecordScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   
+  // Teleprompter controls state
+  const [teleprompterPlaying, setTeleprompterPlaying] = useState(false);
+  const [currentFontSize, setCurrentFontSize] = useState(parseInt(params.fontSize || '18'));
+  const [currentSpeed, setCurrentSpeed] = useState(parseInt(params.teleprompterSpeed || '3'));
+  const [highlightEnabled, setHighlightEnabled] = useState(true);
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
+  const controlsOpacity = useRef(new Animated.Value(1)).current;
+  
   const cameraRef = useRef<CameraView>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
   const teleprompterAnim = useRef(new Animated.Value(0)).current;
   const teleprompterAnimation = useRef<Animated.CompositeAnimation | null>(null);
   const recordingStartTime = useRef<number>(0);
+  const currentScrollPosition = useRef(0);
 
-  const fontSize = parseInt(params.fontSize || '18');
   const hideOthers = params.hideOthers === 'true';
   const countdownEnabled = params.countdown === 'true';
-  const teleprompterSpeed = parseInt(params.teleprompterSpeed || '3');
 
   // Request permissions
   useEffect(() => {
@@ -113,9 +122,57 @@ export default function RecordScreen() {
       if (recordingTimer.current) {
         clearInterval(recordingTimer.current);
       }
+      if (controlsTimeout.current) {
+        clearTimeout(controlsTimeout.current);
+      }
       teleprompterAnimation.current?.stop();
     };
   }, []);
+
+  // Auto-hide controls during recording
+  useEffect(() => {
+    if (isRecording) {
+      hideControlsWithDelay();
+    } else {
+      showControlsAnimated();
+    }
+  }, [isRecording]);
+
+  const hideControlsWithDelay = () => {
+    if (controlsTimeout.current) {
+      clearTimeout(controlsTimeout.current);
+    }
+    controlsTimeout.current = setTimeout(() => {
+      Animated.timing(controlsOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => setShowControls(false));
+    }, 2000);
+  };
+
+  const showControlsAnimated = () => {
+    if (controlsTimeout.current) {
+      clearTimeout(controlsTimeout.current);
+    }
+    setShowControls(true);
+    Animated.timing(controlsOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleScriptTap = () => {
+    if (isRecording) {
+      if (showControls) {
+        hideControlsWithDelay();
+      } else {
+        showControlsAnimated();
+        hideControlsWithDelay();
+      }
+    }
+  };
 
   const toggleCamera = () => {
     setFacing(current => (current === 'front' ? 'back' : 'front'));
@@ -127,26 +184,105 @@ export default function RecordScreen() {
     trackTeleprompterToggled(newState);
     
     if (!newState) {
-      teleprompterAnimation.current?.stop();
-      teleprompterAnim.setValue(0);
+      pauseTeleprompter();
     }
+  };
+
+  const toggleTeleprompterPlayPause = () => {
+    if (teleprompterPlaying) {
+      pauseTeleprompter();
+    } else {
+      resumeTeleprompter();
+    }
+  };
+
+  const pauseTeleprompter = () => {
+    teleprompterAnimation.current?.stop();
+    // Store current position
+    teleprompterAnim.stopAnimation((value) => {
+      currentScrollPosition.current = value;
+    });
+    setTeleprompterPlaying(false);
+  };
+
+  const resumeTeleprompter = () => {
+    if (!teleprompterActive) return;
+    
+    const lines = currentScene?.lines || [];
+    const totalScrollHeight = lines.length * (currentFontSize + 20) * 2;
+    const speedMultiplier = [0.2, 0.4, 0.6, 0.8, 1.0][currentSpeed - 1];
+    const remainingHeight = totalScrollHeight - currentScrollPosition.current;
+    const duration = (remainingHeight / speedMultiplier) * 60;
+    
+    teleprompterAnimation.current = Animated.timing(teleprompterAnim, {
+      toValue: totalScrollHeight,
+      duration: Math.max(duration, 1000),
+      useNativeDriver: true,
+    });
+    teleprompterAnimation.current.start(({ finished }) => {
+      if (finished) {
+        setTeleprompterPlaying(false);
+      }
+    });
+    setTeleprompterPlaying(true);
   };
 
   const startTeleprompter = () => {
     if (!teleprompterActive) return;
     
     const lines = currentScene?.lines || [];
-    const totalScrollHeight = lines.length * (fontSize + 20) * 2;
-    const speedMultiplier = [0.3, 0.5, 0.7, 1, 1.5][teleprompterSpeed - 1];
-    const duration = (totalScrollHeight / speedMultiplier) * 50;
+    const totalScrollHeight = lines.length * (currentFontSize + 20) * 2;
+    const speedMultiplier = [0.2, 0.4, 0.6, 0.8, 1.0][currentSpeed - 1];
+    const duration = (totalScrollHeight / speedMultiplier) * 60;
     
+    currentScrollPosition.current = 0;
     teleprompterAnim.setValue(0);
     teleprompterAnimation.current = Animated.timing(teleprompterAnim, {
       toValue: totalScrollHeight,
       duration,
       useNativeDriver: true,
     });
-    teleprompterAnimation.current.start();
+    teleprompterAnimation.current.start(({ finished }) => {
+      if (finished) {
+        setTeleprompterPlaying(false);
+      }
+    });
+    setTeleprompterPlaying(true);
+  };
+
+  const handleSpeedChange = (value: number) => {
+    const newSpeed = Math.round(value);
+    setCurrentSpeed(newSpeed);
+    
+    // If playing, restart with new speed
+    if (teleprompterPlaying) {
+      teleprompterAnim.stopAnimation((currentValue) => {
+        currentScrollPosition.current = currentValue;
+        
+        const lines = currentScene?.lines || [];
+        const totalScrollHeight = lines.length * (currentFontSize + 20) * 2;
+        const speedMultiplier = [0.2, 0.4, 0.6, 0.8, 1.0][newSpeed - 1];
+        const remainingHeight = totalScrollHeight - currentValue;
+        const duration = (remainingHeight / speedMultiplier) * 60;
+        
+        teleprompterAnimation.current = Animated.timing(teleprompterAnim, {
+          toValue: totalScrollHeight,
+          duration: Math.max(duration, 1000),
+          useNativeDriver: true,
+        });
+        teleprompterAnimation.current.start(({ finished }) => {
+          if (finished) setTeleprompterPlaying(false);
+        });
+      });
+    }
+  };
+
+  const adjustFontSize = (delta: number) => {
+    setCurrentFontSize(prev => Math.max(12, Math.min(32, prev + delta)));
+  };
+
+  const toggleHighlight = () => {
+    setHighlightEnabled(prev => !prev);
   };
 
   const startRecording = async () => {
