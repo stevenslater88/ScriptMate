@@ -75,10 +75,10 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <View style={styles.logoContainer}>
+            <TouchableOpacity style={styles.logoContainer} onPress={handleLogoTap} activeOpacity={0.8}>
               <Ionicons name="mic" size={32} color="#6366f1" />
               <Text style={styles.logoText}>ScriptMate</Text>
-            </View>
+            </TouchableOpacity>
             <View style={styles.headerButtons}>
               <TouchableOpacity 
                 style={styles.headerButton}
