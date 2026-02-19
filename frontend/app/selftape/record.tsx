@@ -1023,6 +1023,77 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
 
+  // Teleprompter Controls
+  teleprompterControls: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(10, 10, 15, 0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  controlPlayButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#6366f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  speedControlContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 8,
+    gap: 4,
+  },
+  speedSlider: {
+    flex: 1,
+    height: 40,
+  },
+  speedLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6366f1',
+    width: 24,
+    textAlign: 'center',
+  },
+  fontControls: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  fontButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fontButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#e5e7eb',
+  },
+  highlightToggle: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: 'rgba(107, 114, 128, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  highlightToggleActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.25)',
+  },
+
   // Permission View
   permissionView: {
     flex: 1,
