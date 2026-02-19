@@ -309,7 +309,9 @@ export default function RecordScreen() {
       }, 1000);
 
       // Start teleprompter if enabled
-      startTeleprompter();
+      if (teleprompterActive) {
+        startTeleprompter();
+      }
 
       const video = await cameraRef.current.recordAsync({
         maxDuration: 600, // 10 minutes max
@@ -323,6 +325,7 @@ export default function RecordScreen() {
 
       if (video?.uri) {
         setIsRecording(false);
+        setTeleprompterPlaying(false);
         setProcessingVideo(true);
         
         // Track completion
@@ -339,6 +342,7 @@ export default function RecordScreen() {
     } catch (error) {
       console.error('Recording error:', error);
       setIsRecording(false);
+      setTeleprompterPlaying(false);
       setProcessingVideo(false);
       if (recordingTimer.current) {
         clearInterval(recordingTimer.current);
@@ -358,7 +362,7 @@ export default function RecordScreen() {
   const stopRecording = () => {
     if (cameraRef.current && isRecording) {
       cameraRef.current.stopRecording();
-      teleprompterAnimation.current?.stop();
+      pauseTeleprompter();
     }
   };
 
