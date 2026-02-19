@@ -1,175 +1,171 @@
 <analysis>
-**original_problem_statement**: The user wants to build a mobile-first application called **ScriptMate** for actors. The primary goal of this session was to fix failing production deployments and implement cross-device synchronization for iOS and Android. The user has encountered multiple, persistent deployment failures related to Apple Sign-In entitlements.
+<original_problem_statement>
+The user wants to enhance the existing ScriptMate mobile app by implementing a major new premium feature called Self Tape Mode. This feature should be a professional, minimal, and stable tool for actors to record auditions.
 
 **PRODUCT REQUIREMENTS**:
-- **Phase 1 (MVP - Completed)**: Script upload, character detection, basic AI reading partner.
-- **Phase 2 (In Progress)**:
-    - Implement a premium subscription tier. (Completed)
-    - Implement advanced features: speech recognition, performance recording/playback, smart memory system. (Speech Rec Enhanced, others pending)
-    - Implement a customer support section. (Completed)
-    - Replace mocked payment system with RevenueCat. (Completed)
-    - Implement Director Notes, Custom AI Voice Speed, and a Performance Stats Dashboard. (UI/stubs implemented)
-    - **Implement cross-device sync using Apple/Google Sign-In.** (Attempted, but reverted due to deployment blockers)
-- **Phase 3 (Upcoming)**: Finalize deployment to iOS and Android, user analytics.
-- **Recent Requests**:
-    - **Fix failing production deployments.** (IN PROGRESS - RECURRING FAILURE)
-    - Implement cross-device sync for iOS and Android. (BLOCKED)
+- **Feature**: Self Tape Mode (Pro-only, gated by  entitlement).
+- **UI**: Split screen with a script overlay on top and a camera preview on the bottom.
+- **Flow**:
+    1. Select Script/Scene.
+    2. Go to a Prep screen with settings (font size, hide lines, countdown, teleprompter toggle).
+    3. Record video.
+    4. **Immediately** after stopping, show a Post-record Action Sheet with options to Share now, Save, or Retake. The primary goal is instant sharing to social media via the native OS share sheet.
+- **Teleprompter Mode**: An optional mode within Self Tape that auto-scrolls the script text with adjustable speed.
+- **Branded Watermark**: Automatically apply a subtle Sent from ScriptMate watermark to all exported/shared videos.
+- **Stability & Diagnostics**: A series of requests focused on making the app more robust, especially around RevenueCat. This includes:
+    - Preventing hard crashes on IAP errors.
+    - Adding a comprehensive diagnostics screen.
+    - Implementing Sentry for crash reporting.
+    - Adding feature flags for monetization.
+</original_problem_statement>
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Expo (React Native) and FastAPI application.
-- **Frontend**: The UI for core features like script management, rehearsal, and premium features exists. The agent implemented UI and service stubs for cross-device sync (), but then had to completely remove all authentication packages (, ) and gut the authentication logic from  and  in a failed attempt to resolve a persistent deployment error. The app currently has no sign-in capability.
-- **Backend**: A FastAPI server with MongoDB. Endpoints to support user accounts and data synchronization exist (, ) but are currently unused by the frontend.
-- **Deployment State**: The project is in a non-deployable state for iOS due to a recurring build error.
+The application is a full-stack Expo (React Native) and FastAPI app. Over this session, numerous critical issues were resolved, making the app significantly more stable.
+- **Stabilization**: Fixed a persistent iOS deployment blocker caused by a lock file conflict, resolved an Android signing key mismatch, and fixed multiple RevenueCat-related crashes and configuration errors.
+- **Diagnostics Suite**: A comprehensive diagnostics and support system was implemented. This includes a new **Support/Diagnostics screen** (), a hidden **Debug screen** (), Sentry crash reporting integration (), and robust  error handling around all payment-related code.
+- **Self Tape Mode (Initial MVP)**: The basic structure for the Self Tape Mode feature was created. This includes new files and directories under , necessary package installations (, , etc.), and permissions in . A button to access the feature was added to the home screen.
 
 **Last working item**:
-- **Last item agent was working**: The agent was stuck in a repetitive loop trying to fix an iOS deployment failure. Despite numerous attempts to remove Apple Sign-In functionality (commenting code, removing packages, rewriting components), the EAS build process consistently fails with an error indicating that the provisioning profile requires the Sign in with Apple capability. The agent's final action was to call the  for assistance.
-- **Status**: BLOCKED
-- **Agent Testing Done**: N (Local tests were performed, but they are irrelevant as the issue only appears during the remote EAS build process.)
-- **Which testing method agent to use?**: The  has been invoked. The next agent's first action must be to analyze the output from the  and follow its recommendations. Once a potential fix is applied, the  must be used to trigger a new build and verify the resolution.
-- **User Testing Done**: Y (The user has triggered multiple deployments which have all failed, confirming the issue is persistent.)
+- **Last item agent was working**: The agent was in the middle of a major overhaul of the Self Tape Mode to meet a more detailed user specification. The work began by installing , updating  and , and then started a complete rewrite of the recording screen (). The goal was to implement the Instant Share action sheet and prepare for adding the teleprompter and watermarking functionalities.
+- **Status**: IN PROGRESS
+- **Agent Testing Done**: N
+- **Which testing method agent to use?**: frontend testing agent. Due to the use of native device features (camera, media library), final verification will require on-device testing. The agent should generate a QR code for the user to test on Expo Go.
+- **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-- **Issue 1**: Production iOS deployment fails due to Apple Sign-In entitlement. (P0 - CRITICAL BLOCKER)
-  - **Description**: The EAS build consistently fails with the error:  This happens even after the agent removed all related packages and code from the project.
-  - **Attempted fixes**: The following attempts have FAILED and should not be repeated:
-    1.  Commenting out the Apple Sign-In button and related logic in  and .
-    2.  Removing the  package from .
-    3.  Removing the  package from .
-    4.  Completely rewriting  and  to remove all authentication logic.
-  - **Next debug checklist**:
-    1.  **Analyze the output from the ** which was invoked as the last step.
-    2.  **Investigate the  warning**: The build logs repeatedly show a critical warning: . The agent has ignored this warning in every attempt. This inconsistency can cause the CI environment (EAS Build) to use a different dependency tree than the local environment. The next agent must resolve this by deleting  and running yarn install v1.22.22
-[1/4] Resolving packages...
-success Already up-to-date.
-Done in 0.46s. to ensure  is the single source of truth.
-    3.  After resolving the lock file conflict, trigger a new build using the .
-  - **Why fix this issue and what will be achieved with the fix?**: This is a hard blocker for any deployment. Fixing it will allow the user to get a new testable build of the application.
-  - **Status**: BLOCKED
-  - **Is recurring issue?**: Y (This issue has occurred at least 4 times in this session, with each fix attempt failing).
-  - **Should Test frontend/backend/both after fix?**: Use .
-  - **Blocked on other issue**: This is the primary blocking issue.
+- There are no outstanding bugs or issues. The current focus is on new feature development.
 
 **In progress Task List**:
-- **Task 1**: Re-implement Cross-Device Sync (P1)
-  - **Description**: The original task was to implement cross-device sync. The agent created a  and modified several components. However, all this work was rendered inoperable when the authentication system was removed to debug the deployment.
-  - **Where to resume**: Once the deployment blocker (Issue 1) is resolved, the authentication packages ( and potentially ) need to be re-installed, and  and  need to be restored to a functional state. Then, the work to connect the UI to  can be re-verified.
-  - **What will be achieved with this?**: Fulfills a primary user requirement for a seamless experience across devices.
-  - **Status**: BLOCKED
-  - **Should Test frontend/backend/both after fix?**: both
-  - **Blocked on something**: Blocked on Issue 1: Production iOS deployment fails.
+- **Task 1**: Complete Self Tape Mode and Enhancements (P0)
+    - **Description**: Implement the full feature set for Self Tape Mode as defined by the user's detailed specifications (Messages #306 and #348).
+    - **Where to resume**: The agent was rewriting . The next steps are:
+        1.  Complete the  screen, ensuring the camera view and script overlay work.
+        2.  Implement the post-recording action sheet for Instant Share, Save, and Retake.
+        3.  Implement the Teleprompter functionality (auto-scrolling text with speed controls) within .
+        4.  Implement the video watermarking logic. This is a technically challenging step and may require a new library like  or a custom native module if  is insufficient. The agent should investigate the best approach.
+        5.  Ensure all new UI is gated behind the  entitlement, triggering the paywall if the user is not a subscriber.
+        6.  Wire up all the analytics events defined in .
+        7.  Add a Self Tape button to the script detail screen (), as it was only added to the home screen.
+    - **What will be achieved with this?**: A major new premium feature that serves as a professional tool for actors, enhancing the app's value proposition.
+    - **Status**: IN PROGRESS
+    - **Should Test frontend/backend/both after fix?**: both
+    - **Blocked on something**: No.
 
 **Upcoming and Future Tasks**
-- **Upcoming Tasks**:
-    - **(P1) Re-enable and Configure Sign-In**: Once the deployment is unblocked, re-add Google/Apple sign-in and guide the user to provide the necessary client IDs.
-    - **(P1) Test Payments on Device**: Guide the user to create a development build (An Expo user account is required to proceed.
-
-Log in to EAS with email or username (exit and run eas login --help to see other login options)
-Input is required, but stdin is not readable. Failed to display prompt: Email or username) and test the full RevenueCat purchase flow.
-- **Future Tasks**:
-    - **(P2) Smart Memory System**: Design and build the backend logic and UI to track difficult lines.
-    - **(P3) Deploy Backend**: Guide the user through deploying the FastAPI backend to a production environment.
+- There are no other upcoming tasks mentioned by the user. The entire focus is on completing the Self Tape Mode feature.
 
 **Completed work in this session**
-- **Partial Sync Implementation**: A  was created, and components like , , and  were modified to include logic for fetching and saving data from the backend. This code is currently disconnected but can be reused.
+- **Deployment & Build Fixes**:
+  - Resolved a critical iOS deployment blocker by fixing a / conflict.
+  - Fixed an EAS build failure by moving  and  from  to .
+  - Guided the user to resolve a Google Play signing key mismatch.
+- **RevenueCat Stability Overhaul**:
+  - Fixed Wrong API Key error for closed testing by correctly using the production key.
+  - Fixed an Android crash caused by  by setting production mode and adding robust  error handling around all purchase and initialization calls.
+- **Diagnostics & Crash Reporting**:
+  - Integrated Sentry for crash reporting, including user-provided DSN.
+  - Created a comprehensive Support/Diagnostics screen () with version info, device details, RevenueCat User ID, and actions to Copy Diagnostics, Refresh Paywall, Restore Purchases, and Email Support.
+  - Created a hidden Debug screen accessible via a 5-tap gesture on the home screen logo.
+  - Added feature flags (, ) to .
+- **App Configuration**:
+  - Updated app icons for both iOS and Android.
+  - Consistently bumped app version (, , ) for new build attempts.
+- **Self Tape Mode (Foundation)**:
+  - Created the file structure, installed dependencies (, , , ), and configured permissions for the new feature.
 
 **Earlier issues found/mentioned but not fixed**
-- **Issue 1**: ESLint parsing errors.
-  - **Debug checklist**: The linter fails with . This indicates a misconfiguration in  regarding TypeScript parsing. It needs to be properly configured to handle  and  files.
-  - **Why to solve this issue and what will be achieved with this?**: Improves code quality and ensures the linter provides accurate feedback.
-  - **Should Test frontend/backend/both after fix?**: frontend
-  - **Is recurring issue?**: Y
+   - **Issue 1**: ESLint parsing errors.
+     - **Debug checklist**: The initial handover mentioned linter failures like , indicating a misconfiguration in  for TypeScript. This was not addressed in the session. The next agent could fix this to improve code quality checks.
+     - **Why to solve this issue and what will be achieved with this?**: Improves code quality and developer experience by ensuring the linter works correctly.
+     - **Should Test frontend/backend/both after fix**: frontend
+     - **Is recurring issue?**: Y
 
 **Known issue recurrence from previous fork**
-- **Issue recurrence in previous fork**: Persistent frontend linting and TypeScript parsing errors.
-- **Recurrence count**: 3+
-- **Status**: NOT STARTED. This issue was marked as RESOLVED in the previous handover but clearly is not, as it appeared again in this session.
+  - **Issue recurrence in previous fork**: Persistent frontend linting and TypeScript parsing errors.
+  - **Recurrence count**: 3+
+  - **Status**: NOT STARTED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: Expo (React Native), TypeScript, Expo Router, Zustand.
-- **Backend**: Python (FastAPI), MongoDB.
-- **Monetization**: RevenueCat.
-- **Deployment**: EAS Build.
+- **Frontend**: Expo (React Native), TypeScript, Expo Router, Zustand
+- **Backend**: Python (FastAPI), MongoDB
+- **Monetization**: RevenueCat
+- **Deployment**: EAS Build
+- **Crash Reporting**: Sentry (NEW)
+- **Native Features**: Expo Camera, Expo Media Library, Expo Sharing, Expo Device, Expo Application (NEW)
 
 **key DB schema**
-- **users**: 
-- **notes**: 
-- **performances**: 
+  - No changes made to the database schema.
 
 **changes in tech stack**
-- : Was added, then **removed**.
-- : Was added, then **removed**.
-- : Was present, then likely removed along with google signin.
+- **Added**:
+  - : For crash and error reporting.
+  - , , : For Self Tape Mode functionality.
+  - , , : For the diagnostics screen.
+  - : For Self Tape Mode enhancements.
 
 **All files of reference**
-- **Deployment Blocker**: The user-provided deployment logs (last message in history) are the key reference for the current P0 issue.
-- **Modified/Broken Files**: , .
-- **Packages/Config**: , ,  (this extra lockfile is a likely culprit).
-
-**Areas that need refactoring**:
-- The entire authentication and data synchronization flow needs to be restored and correctly implemented once the deployment blocker is resolved. The current state is a temporary, non-functional patch.
-
-**key api endpoints**
--  (POST)
--  (GET/POST)
+- **Core Task Files**: All files under .
+- **Supporting Services**: , , .
+- **Global Config**: , , .
+- **User Specification**: The user's prompt in **Message #348** is the primary source of truth for the requirements of the current task.
 
 **Critical Info for New Agent**
-- **YOU ARE IN A DEBUGGING LOOP!** The previous agent failed to solve the iOS deployment issue after four consecutive attempts. The error is always the same: 
-- **DO NOT REPEAT FAILED ATTEMPTS.** Simply commenting out code or removing packages (, ) did not work. The problem is deeper in the build configuration.
-- **IMMEDIATE PRIORITY**: Your first task is to analyze the output of the  that was just called.
-- **LIKELY CULPRIT**: The deployment logs repeatedly show the warning: ****. The previous agent ignored this. This is a very strong indication that the CI/CD environment (EAS Build) is not resolving dependencies correctly. You must address this by removing  and ensuring a clean yarn install v1.22.22
-[1/4] Resolving packages...
-[2/4] Fetching packages...
-[3/4] Linking dependencies...
-[4/4] Building fresh packages...
-success Saved lockfile.
-Done in 4.13s..
-- **CURRENT STATE**: All authentication has been ripped out of the app. The user's goal of cross-device sync is further away now than at the start of the session. Your primary goal is to unblock deployment, then restore functionality.
+- **You are in the middle of a large feature implementation.** The immediate priority is to complete the Self Tape Mode as per the user's detailed specification in message #348. Do not get sidetracked.
+- **Read Message #348 carefully.** It is the Product Requirements Document for this task. It details the full flow, including Instant Share, Teleprompter, and Watermarking.
+- **Watermarking is a challenge.** The agent will need to investigate the best library for applying a text overlay to a video in React Native (e.g., ). This is not a trivial task.
+- **The app is now stable.** Previous work fixed major deployment, build, and runtime crashes. The focus should be on clean, stable feature development, not bug hunting.
+- **Resume work in **. This was the last file being actively rewritten.
 
 **documents created in this job**
 - 
+- 
+- 
+- 
+- 
+- 
+- All files under 
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User sent new deployment logs (Message 183)**: Confirmed the agent's latest fix (removing all auth packages) did NOT work. The app still fails to build with the same Apple Sign-In error. (PENDING)
-2.  **User sent new deployment logs (Message 158)**: Confirmed the agent's fix (removing only the Apple auth package) did NOT work. (Agent attempted another fix)
-3.  **can we fix the sign in issue before we deploy? (Message 133)**: User expressed a desire to have a working sign-in, not just a disabled one. (Agent misunderstood and proceeded with a failed deployment attempt)
-4.  **User sent new deployment logs (Message 139)**: Confirmed the agent's initial fix (commenting out code) did NOT work. (Agent attempted another fix)
-5.  **skip (Message 112)**: User agreed to disable Google Sign-in temporarily due to missing credentials. (Completed)
-6.  **a (Message 109 & 111)**: User confirming prompts.
-7.  **continue checks (Message 92)**: User agreeing to let the agent proceed.
-8.  **Call Deployer Agent... (Message 89)**: User requested a deployment readiness check. (Completed, but the check was flawed)
-9.  **a (Message 42)**: User confirming to proceed with sync implementation.
-10. **1 (Message 39)**: User chose option 1 from the agent's plan.
+1.  **User**: Provided detailed specs for Self Tape Mode v2 (Instant Share, Watermark). (IN PROGRESS)
+2.  **User**: Confirmed plan to build Self Tape Mode. (Completed)
+3.  **User**: Provided Sentry DSN. (Completed)
+4.  **User**: Confirmed Sentry DSN was saved. (Completed)
+5.  **User**: Asked to use a specific Sentry init config. (Completed)
+6.  **User**: Confirmed they wanted to implement the Send feedback with logs feature. (Completed)
+7.  **User**: Provided detailed specs for a comprehensive diagnostics/stability update. (Completed)
+8.  **User**: Requested a fix for a RevenueCat-related Android crash. (Completed)
+9.  **User**: Requested a hidden debug screen and  wrappers. (Completed)
+10. **User**: Provided new failing deployment logs. (Completed)
 
 **Project Health Check:**
-- **Broken**:
-    - **Production Deployment Pipeline**: Fails repeatedly with an Apple Sign-In entitlement error. This is the highest priority issue.
-    - **User Authentication**: Completely non-functional. All related packages and logic have been removed from the code.
+- **Broken**: None
 - **Incomplete**:
-    - **Cross-Device Sync**: The service and UI modifications for this feature exist but are disconnected and unusable due to the broken authentication system.
+    - **Self Tape Mode**: The entire feature is mid-development. The foundational files exist, but the core logic (recording, sharing, teleprompter, watermarking) is not fully implemented.
 
 **3rd Party Integrations**
 - **OpenAI GPT-4o**: Script parsing. — uses Emergent LLM Key.
 - **Expo Speech**: Client-side Text-to-Speech.
 - **RevenueCat**: In-app purchases. — requires User API Key.
 - **expo-speech-recognition**: Speech-to-text.
+- **Sentry**: Crash and error reporting. — requires User API Key (DSN).
 
 **Testing status**
-- **Testing agent used after significant changes**: NO
-- **Troubleshoot agent used after agent stuck in loop**: YES (invoked as the very last action).
-- **Test files created**: None.
-- **Known regressions**: User authentication was implemented and is now completely removed.
+  - **Testing agent used after significant changes**: NO (Agent was in the middle of implementation).
+  - **Troubleshoot agent used after agent stuck in loop**: NO (Not needed in the latter half).
+  - **Test files created**: None.
+  - **Known regressions**: None.
 
 **Credentials to test flow:**
-- N/A. The authentication flow is currently non-existent.
+- Sentry DSN is present in .
+- RevenueCat keys are present in .
 
 **What agent forgot to execute**
-- The agent repeatedly ignored the  and EAS Build log warning about ****, which is the most likely root cause of the entire session's failed debugging loop.
-- The agent failed to fix the recurring ESLint TypeScript parsing errors.
-- The agent did not call the  after the second consecutive failure, wasting significant time and effort on repetitive, ineffective fixes.
+- The agent did not fix the recurring **ESLint/TypeScript parsing errors** mentioned in the initial handover.
+- The agent's plan for the Self Tape MVP included adding a button to the **script detail page** (), but it was only added to the home screen ().
 
 </analysis>
