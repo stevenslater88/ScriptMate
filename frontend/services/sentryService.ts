@@ -2,40 +2,23 @@ import * as Sentry from '@sentry/react-native';
 import { Platform } from 'react-native';
 import * as Application from 'expo-application';
 
-// Sentry DSN - should be set in environment variable
-const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN || '';
-
 // Initialize Sentry
 export const initSentry = () => {
-  if (!SENTRY_DSN) {
-    console.log('[Sentry] DSN not configured - crash reporting disabled');
-    return;
-  }
-
   try {
     Sentry.init({
-      dsn: SENTRY_DSN,
+      dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+      tracesSampleRate: 1.0,
       
       // Set release and environment
       release: `scriptmate@${Application.nativeApplicationVersion || '1.0.0'}`,
       dist: Application.nativeBuildVersion || '1',
       environment: __DEV__ ? 'development' : 'production',
       
-      // Enable performance monitoring
-      enableAutoSessionTracking: true,
-      sessionTrackingIntervalMillis: 30000,
-      
       // Only report in production by default
       enabled: !__DEV__,
       
       // Attach stack traces
       attachStacktrace: true,
-      
-      // Sample rate for errors (1.0 = 100%)
-      sampleRate: 1.0,
-      
-      // Sample rate for performance (0.2 = 20%)
-      tracesSampleRate: 0.2,
       
       // Configure before send hook
       beforeSend: (event) => {
