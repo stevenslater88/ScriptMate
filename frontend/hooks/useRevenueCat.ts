@@ -193,6 +193,7 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
   /**
    * Present RevenueCat Paywall UI
    * Returns true if purchase was made
+   * Protected against crashes from SimulatedStoreErrorDialog
    */
   const presentPaywall = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'web') {
@@ -206,12 +207,18 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       console.log('[useRevenueCat] Paywall result:', result);
       
       // Refresh customer info after paywall closes
-      const info = await getCustomerInfo();
-      setCustomerInfo(info);
+      try {
+        const info = await getCustomerInfo();
+        setCustomerInfo(info);
+      } catch (refreshError) {
+        console.warn('[useRevenueCat] Failed to refresh after paywall:', refreshError);
+      }
       
       return result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
     } catch (err) {
-      console.error('[useRevenueCat] Paywall error:', err);
+      // Catch any crash-causing errors including SimulatedStoreErrorDialog
+      console.error('[useRevenueCat] Paywall error (handled):', err);
+      setError('Unable to show subscription options. Please try again.');
       return false;
     }
   }, []);
@@ -219,6 +226,7 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
   /**
    * Present Paywall only if user doesn't have premium
    * Returns true if user now has premium
+   * Protected against crashes
    */
   const presentPaywallIfNeeded = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'web') return false;
@@ -231,14 +239,20 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       console.log('[useRevenueCat] PaywallIfNeeded result:', result);
       
       // Refresh customer info
-      const info = await getCustomerInfo();
-      setCustomerInfo(info);
+      try {
+        const info = await getCustomerInfo();
+        setCustomerInfo(info);
+      } catch (refreshError) {
+        console.warn('[useRevenueCat] Failed to refresh after paywall:', refreshError);
+      }
       
       return result === PAYWALL_RESULT.PURCHASED || 
              result === PAYWALL_RESULT.RESTORED ||
              result === PAYWALL_RESULT.NOT_PRESENTED; // Already has entitlement
     } catch (err) {
-      console.error('[useRevenueCat] PaywallIfNeeded error:', err);
+      // Catch any crash-causing errors including SimulatedStoreErrorDialog
+      console.error('[useRevenueCat] PaywallIfNeeded error (handled):', err);
+      setError('Unable to check subscription status. Please try again.');
       return false;
     }
   }, []);
