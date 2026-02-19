@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useScriptStore, Script, Character } from '../../store/scriptStore';
 import { getSettings, saveSettings } from '../../services/syncService';
+import useRevenueCat from '../../hooks/useRevenueCat';
+import { trackUpgradeTriggered } from '../../services/analyticsService';
 
 const VOICE_OPTIONS = [
   { id: 'alloy', name: 'Alloy', description: 'Neutral, balanced' },
