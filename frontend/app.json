@@ -2,7 +2,7 @@
   "expo": {
     "name": "ScriptMate",
     "slug": "scriptmate",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "scriptmate",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.scriptmate.app",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Record your rehearsal performances",
         "NSSpeechRecognitionUsageDescription": "Recognize when you finish speaking your lines",
@@ -25,7 +25,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.scriptmate.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
