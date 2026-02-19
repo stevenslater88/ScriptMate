@@ -698,21 +698,41 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#1a1a2e',
   },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  selfTapeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10b981',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  selfTapeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   startButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#6366f1',
     paddingVertical: 16,
     borderRadius: 12,
-    gap: 10,
+    gap: 8,
   },
   startButtonDisabled: {
     opacity: 0.5,
   },
   startButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
   modalOverlay: {
