@@ -287,6 +287,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   noVideoText: { fontSize: 14, color: '#6b7280', marginTop: 12 },
+  watermarkContainer: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  watermarkText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+    letterSpacing: 0.3,
+  },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
