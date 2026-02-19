@@ -316,10 +316,13 @@ export default function ScriptDetailScreen() {
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={styles.selfTapeButton}
-            onPress={() => router.push(`/selftape/prep?scriptId=${id}`)}
+            onPress={handleSelfTape}
           >
             <Ionicons name="videocam" size={22} color="#fff" />
             <Text style={styles.selfTapeButtonText}>Self Tape</Text>
+            {!isPremium && (
+              <Ionicons name="lock-closed" size={14} color="rgba(255,255,255,0.7)" />
+            )}
           </TouchableOpacity>
           
           <TouchableOpacity
