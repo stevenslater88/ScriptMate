@@ -134,6 +134,25 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Self Tape Button */}
+        <TouchableOpacity
+          style={styles.selfTapeButton}
+          onPress={() => router.push('/selftape')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.selfTapeIcon}>
+            <Ionicons name="videocam" size={24} color="#fff" />
+          </View>
+          <View style={styles.selfTapeContent}>
+            <Text style={styles.selfTapeTitle}>Self Tape Studio</Text>
+            <Text style={styles.selfTapeSubtitle}>Record professional audition tapes</Text>
+          </View>
+          <View style={styles.proBadgeSmall}>
+            <Text style={styles.proBadgeText}>PRO</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+        </TouchableOpacity>
+
         {/* Quick Actions */}
         <View style={styles.quickActions}>
           <TouchableOpacity
