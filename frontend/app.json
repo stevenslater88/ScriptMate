@@ -13,8 +13,11 @@
       "bundleIdentifier": "com.scriptmate.app",
       "buildNumber": "8",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Record your rehearsal performances",
+        "NSMicrophoneUsageDescription": "Record audio for your self-tape auditions",
         "NSSpeechRecognitionUsageDescription": "Recognize when you finish speaking your lines",
+        "NSCameraUsageDescription": "Record video self-tapes for auditions",
+        "NSPhotoLibraryUsageDescription": "Save your self-tape recordings",
+        "NSPhotoLibraryAddUsageDescription": "Save your self-tape recordings to your photo library",
         "UIBackgroundModes": ["audio"]
       }
     },
