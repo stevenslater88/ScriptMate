@@ -35,7 +35,10 @@ const MODE_OPTIONS = [
 
 export default function ScriptDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentScript, fetchScript, updateScript, createRehearsal, loading, isPremium } = useScriptStore();
+  const { currentScript, fetchScript, updateScript, createRehearsal, loading, isPremium: isPremiumFromStore } = useScriptStore();
+  const { isPremium: isPremiumFromRevenueCat, presentPaywall } = useRevenueCat();
+  const isPremium = isPremiumFromStore || isPremiumFromRevenueCat;
+  
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
   const [selectedVoice, setSelectedVoice] = useState('alloy');
   const [selectedMode, setSelectedMode] = useState('full_read');
@@ -43,6 +46,15 @@ export default function ScriptDetailScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [starting, setStarting] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  const handleSelfTape = async () => {
+    if (!isPremium) {
+      trackUpgradeTriggered('script_detail_selftape');
+      const purchased = await presentPaywall();
+      if (!purchased) return;
+    }
+    router.push(`/selftape/prep?scriptId=${id}`);
+  };
 
   // Load saved settings on mount
   useEffect(() => {
