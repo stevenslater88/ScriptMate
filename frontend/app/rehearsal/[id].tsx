@@ -397,6 +397,7 @@ export default function RehearsalScreen() {
   // Track if speech is in progress to prevent multiple calls
   const isSpeakingRef = useRef(false);
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const advanceToNextLineRef = useRef<() => void>(() => {});
 
   // Speak a line using device TTS (with crash protection)
   const speakLine = useCallback(
@@ -429,9 +430,9 @@ export default function RehearsalScreen() {
           onDone: () => {
             isSpeakingRef.current = false;
             setSpeaking(false);
-            // Use timeout to prevent immediate re-entry
+            // Use timeout and ref to prevent circular dependency issues
             speechTimeoutRef.current = setTimeout(() => {
-              advanceToNextLine();
+              advanceToNextLineRef.current();
             }, 200);
           },
           onError: (error) => {
@@ -439,7 +440,7 @@ export default function RehearsalScreen() {
             isSpeakingRef.current = false;
             setSpeaking(false);
             speechTimeoutRef.current = setTimeout(() => {
-              advanceToNextLine();
+              advanceToNextLineRef.current();
             }, 200);
           },
           onStopped: () => {
@@ -452,7 +453,7 @@ export default function RehearsalScreen() {
         isSpeakingRef.current = false;
         setSpeaking(false);
         speechTimeoutRef.current = setTimeout(() => {
-          advanceToNextLine();
+          advanceToNextLineRef.current();
         }, 200);
       }
     },
@@ -489,9 +490,14 @@ export default function RehearsalScreen() {
         }
       }, 500);
     } else {
-      setTimeout(() => advanceToNextLine(), 300);
+      setTimeout(() => advanceToNextLineRef.current(), 300);
     }
   }, [currentLineIndex, lines, userCharacter, isPaused, mode, speakLine]);
+
+  // Keep ref updated
+  useEffect(() => {
+    advanceToNextLineRef.current = advanceToNextLine;
+  }, [advanceToNextLine]);
 
   // Save progress to backend
   const saveProgress = async (lineIndex: number) => {
