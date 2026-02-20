@@ -260,6 +260,70 @@ export default function PremiumScreen() {
     );
   }
 
+  // Show loading state while RevenueCat initializes (native only)
+  if (isNative && rcLoading && !hasOfferings) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6366f1" />
+          <Text style={styles.loadingText}>Loading subscription options...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show error state with retry button if offerings failed to load (native only)
+  if (isNative && !rcLoading && !hasOfferings) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.errorContainer}>
+          <View style={styles.errorIcon}>
+            <Ionicons name="cloud-offline-outline" size={48} color="#f59e0b" />
+          </View>
+          <Text style={styles.errorTitle}>Unable to Load Plans</Text>
+          <Text style={styles.errorMessage}>
+            {error || 'Subscription options are temporarily unavailable. Please check your connection and try again.'}
+          </Text>
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={handleRetryLoadOfferings}
+            disabled={loading}
+            data-testid="retry-load-offerings-btn"
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="refresh" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.retryButtonText}>Try Again</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.secondaryButton} 
+            onPress={handleRestore}
+            disabled={loading}
+          >
+            <Text style={styles.secondaryButtonText}>Restore Previous Purchase</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.backLink} onPress={() => router.back()}>
+            <Text style={styles.backLinkText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
