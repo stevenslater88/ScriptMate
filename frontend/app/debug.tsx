@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { getDebugInfo, clearDebugLogs } from '../services/debugService';
+import { generateTestCrash } from '../services/sentryService';
 
 export default function DebugScreen() {
   const [debugInfo, setDebugInfo] = useState(getDebugInfo());
