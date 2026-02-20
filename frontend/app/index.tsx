@@ -14,12 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useScriptStore } from '../store/scriptStore';
 import { safeHandler } from '../services/debugService';
+import { shouldShowOnboarding } from '../components/OnboardingTutorial';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 export default function HomeScreen() {
   const { scripts, fetchScripts, loading, initializeUser, user, isPremium, limits } = useScriptStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   
   // Hidden debug screen - tap logo 5x
   const logoTapCount = useRef(0);
@@ -42,20 +44,46 @@ export default function HomeScreen() {
     }
   };
 
+  // Check if onboarding should be shown on first launch
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      const showOnboarding = await shouldShowOnboarding();
+      if (showOnboarding) {
+        router.replace('/onboarding');
+      } else {
+        setCheckingOnboarding(false);
+      }
+    };
+    checkOnboarding();
+  }, []);
+
   const initialize = useCallback(async () => {
     await initializeUser();
     await fetchScripts();
   }, [initializeUser, fetchScripts]);
 
   useEffect(() => {
-    initialize();
-  }, [initialize]);
+    if (!checkingOnboarding) {
+      initialize();
+    }
+  }, [initialize, checkingOnboarding]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchScripts();
     setRefreshing(false);
   };
+
+  // Show loading while checking onboarding status
+  if (checkingOnboarding) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6366f1" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const recentScript = scripts.length > 0 ? scripts[0] : null;
 
