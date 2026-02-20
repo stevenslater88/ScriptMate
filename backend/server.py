@@ -152,7 +152,7 @@ SUBSCRIPTION_PLANS_BY_REGION = {
         "monthly": {
             "id": "premium_monthly_eur",
             "name": "Premium Monthly",
-            "price": 54.99,
+            "price": 4.99,
             "currency": "EUR",
             "period": "month",
             "trial_days": 3,
@@ -169,11 +169,11 @@ SUBSCRIPTION_PLANS_BY_REGION = {
         "yearly": {
             "id": "premium_yearly_eur",
             "name": "Premium Yearly",
-            "price": 39.99,
+            "price": 54.99,
             "currency": "EUR",
             "period": "year",
             "trial_days": 3,
-            "savings": "Save 33%",
+            "savings": "Save 8%",
             "features": [
                 "Everything in monthly",
                 "Best value",
