@@ -658,10 +658,22 @@ export default function RecordScreen() {
           facing={facing}
           mode="video"
         >
+          {/* Shot Coach Overlay */}
+          {showShotCoach && (
+            <ShotCoachOverlay
+              showGrid={showGrid}
+              showEyeLine={showEyeLine}
+              showHeadroom={showHeadroom}
+              cameraHeight={CAMERA_HEIGHT}
+            />
+          )}
+
           {/* Face Guide Overlay */}
-          <View style={styles.faceGuide}>
-            <View style={styles.faceGuideOval} />
-          </View>
+          {!showShotCoach && (
+            <View style={styles.faceGuide}>
+              <View style={styles.faceGuideOval} />
+            </View>
+          )}
 
           {/* Recording Indicator */}
           {isRecording && (
@@ -689,6 +701,15 @@ export default function RecordScreen() {
               >
                 <Ionicons name="camera-reverse" size={28} color="#fff" />
               </TouchableOpacity>
+              
+              {/* Shot Coach Toggle */}
+              <TouchableOpacity 
+                style={[styles.controlButton, showShotCoach && styles.controlButtonActive]} 
+                onPress={() => setShowShotCoach(!showShotCoach)}
+                onLongPress={() => setShowShotCoachMenu(true)}
+              >
+                <Ionicons name="grid" size={24} color={showShotCoach ? '#10b981' : '#fff'} />
+              </TouchableOpacity>
             </View>
 
             {/* Bottom Controls */}
@@ -708,6 +729,59 @@ export default function RecordScreen() {
           </View>
         </CameraView>
       </View>
+
+      {/* Shot Coach Menu */}
+      <Modal visible={showShotCoachMenu} transparent animationType="fade">
+        <TouchableOpacity 
+          style={styles.shotCoachMenuOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowShotCoachMenu(false)}
+        >
+          <View style={styles.shotCoachMenu}>
+            <Text style={styles.shotCoachMenuTitle}>Shot Coach Overlays</Text>
+            
+            <TouchableOpacity 
+              style={styles.shotCoachMenuItem} 
+              onPress={() => setShowGrid(!showGrid)}
+            >
+              <Ionicons name="grid-outline" size={20} color={showGrid ? '#10b981' : '#6b7280'} />
+              <Text style={[styles.shotCoachMenuText, showGrid && styles.shotCoachMenuTextActive]}>
+                Rule of Thirds Grid
+              </Text>
+              <Ionicons name={showGrid ? 'checkbox' : 'square-outline'} size={20} color={showGrid ? '#10b981' : '#6b7280'} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.shotCoachMenuItem} 
+              onPress={() => setShowEyeLine(!showEyeLine)}
+            >
+              <Ionicons name="eye-outline" size={20} color={showEyeLine ? '#6366f1' : '#6b7280'} />
+              <Text style={[styles.shotCoachMenuText, showEyeLine && styles.shotCoachMenuTextActive]}>
+                Eye-line Markers
+              </Text>
+              <Ionicons name={showEyeLine ? 'checkbox' : 'square-outline'} size={20} color={showEyeLine ? '#6366f1' : '#6b7280'} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.shotCoachMenuItem} 
+              onPress={() => setShowHeadroom(!showHeadroom)}
+            >
+              <Ionicons name="resize-outline" size={20} color={showHeadroom ? '#f59e0b' : '#6b7280'} />
+              <Text style={[styles.shotCoachMenuText, showHeadroom && styles.shotCoachMenuTextActive]}>
+                Headroom Boundary
+              </Text>
+              <Ionicons name={showHeadroom ? 'checkbox' : 'square-outline'} size={20} color={showHeadroom ? '#f59e0b' : '#6b7280'} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.shotCoachMenuClose} 
+              onPress={() => setShowShotCoachMenu(false)}
+            >
+              <Text style={styles.shotCoachMenuCloseText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Processing Overlay */}
       {processingVideo && (
