@@ -261,6 +261,23 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontWeight: '600',
   },
+  crashButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a150a',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#78350f',
+  },
+  crashButtonText: {
+    fontSize: 14,
+    color: '#f59e0b',
+    marginLeft: 8,
+    fontWeight: '600',
+  },
   footer: {
     fontSize: 12,
     color: '#6b7280',
