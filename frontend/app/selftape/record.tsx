@@ -652,12 +652,18 @@ export default function RecordScreen() {
 
       {/* Camera View - Bottom 60% */}
       <View style={styles.cameraContainer}>
-        <CameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing={facing}
-          mode="video"
-        >
+        {cameraPermission?.granted && micPermission?.granted ? (
+          <CameraView
+            ref={cameraRef}
+            style={styles.camera}
+            facing={facing}
+            mode="video"
+            onCameraReady={() => console.log('[Camera] Camera ready')}
+            onMountError={(error) => {
+              console.error('[Camera] Mount error:', error);
+              Alert.alert('Camera Error', 'Failed to initialize camera. Please try again.');
+            }}
+          >
           {/* Shot Coach Overlay */}
           {showShotCoach && (
             <ShotCoachOverlay
