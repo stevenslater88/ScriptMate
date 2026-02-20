@@ -350,6 +350,10 @@ export default function RehearsalScreen() {
 
     return () => {
       Speech.stop();
+      isSpeakingRef.current = false;
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+      }
       if (recording) {
         recording.stopAndUnloadAsync();
       }
