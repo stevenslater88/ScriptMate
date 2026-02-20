@@ -31,8 +31,10 @@ import {
   trackWatermarkApplied,
 } from '../../services/analyticsService';
 import { saveRecording, checkStorageAvailable, saveToGallery } from '../../services/selfTapeStorage';
+import ShotCoachOverlay from '../../components/ShotCoachOverlay';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const CAMERA_HEIGHT = SCREEN_HEIGHT * 0.6;
 
 export default function RecordScreen() {
   const params = useLocalSearchParams<{
@@ -75,6 +77,13 @@ export default function RecordScreen() {
   const [showControls, setShowControls] = useState(true);
   const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
   const controlsOpacity = useRef(new Animated.Value(1)).current;
+  
+  // Shot Coach state
+  const [showShotCoach, setShowShotCoach] = useState(false);
+  const [showGrid, setShowGrid] = useState(true);
+  const [showEyeLine, setShowEyeLine] = useState(true);
+  const [showHeadroom, setShowHeadroom] = useState(true);
+  const [showShotCoachMenu, setShowShotCoachMenu] = useState(false);
   
   const cameraRef = useRef<CameraView>(null);
   const scrollViewRef = useRef<ScrollView>(null);
