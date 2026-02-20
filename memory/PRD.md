@@ -159,6 +159,19 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 ## Completed Work (This Session)
 
 ### February 2026 (Latest)
+- **P0 Bug Fix - RevenueCat "Error 23"**: Completely refactored RevenueCat integration for crash-safe premium screen
+  - Refactored `useRevenueCat.ts` hook to safely fetch "production" offering from RevenueCat dashboard
+  - Added `offeringsReady` state to track if offerings loaded successfully
+  - Added `retryLoadOfferings()` function for user-triggered retry when offerings fail
+  - Added `getProductionOffering()` helper that safely accesses `offerings.all["production"]` with fallback to `current`
+  - Updated `PurchaseResult` interface to include `restored` flag for clearer restore flow
+  - All RevenueCat operations now wrapped in try/catch for crash protection
+- **Crash-Safe Premium Screen UI**: Updated `premium.tsx` with proper loading and error states
+  - Shows loading spinner while RevenueCat initializes
+  - Shows "Unable to Load Plans" error state with retry button when offerings fail
+  - Retry button calls `retryLoadOfferings()` to attempt re-fetching
+  - "Restore Previous Purchase" option available even when offerings fail
+  - Graceful fallback to backend pricing when RevenueCat unavailable
 - **P0 Bug Fix - AI Cue Loop in Rehearsal**: Fixed the repeating AI cue loop in rehearsal/[id].tsx
   - Added `speakingLineIndexRef` to track which line is being spoken (prevents duplicate TTS calls)
   - Added `advanceProcessedRef` to ensure advance only happens once per speech cycle
