@@ -6,7 +6,51 @@ const reactHooksPlugin = require('eslint-plugin-react-hooks');
 
 module.exports = [
   {
-    ignores: ['dist/*', 'node_modules/*', '.expo/*', '*.config.js'],
+    ignores: ['dist/*', 'node_modules/*', '.expo/*', '*.config.js', '*.config.mjs'],
+  },
+  {
+    files: ['**/*.js', '**/*.jsx'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+      globals: {
+        __DEV__: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        fetch: 'readonly',
+        alert: 'readonly',
+        process: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+        exports: 'readonly',
+      },
+    },
+    plugins: {
+      'react': reactPlugin,
+      'react-hooks': reactHooksPlugin,
+    },
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': 'warn',
+      'react/no-unescaped-entities': 'off',
+      'react/react-in-jsx-scope': 'off',
+      'react/prop-types': 'off',
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+    settings: {
+      react: {
+        version: 'detect',
+      },
+    },
   },
   {
     files: ['**/*.ts', '**/*.tsx'],
@@ -18,6 +62,7 @@ module.exports = [
         ecmaFeatures: {
           jsx: true,
         },
+        project: null, // Disable type-aware linting for speed
       },
       globals: {
         __DEV__: 'readonly',
@@ -56,6 +101,7 @@ module.exports = [
         AbortSignal: 'readonly',
         requestAnimationFrame: 'readonly',
         cancelAnimationFrame: 'readonly',
+        NodeJS: 'readonly',
       },
     },
     plugins: {
@@ -73,6 +119,7 @@ module.exports = [
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
       }],
+      '@typescript-eslint/no-explicit-any': 'off',
       
       // React rules
       'react/no-unescaped-entities': 'off',
