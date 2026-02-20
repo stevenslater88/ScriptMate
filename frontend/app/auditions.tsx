@@ -187,17 +187,7 @@ export default function AuditionsScreen() {
   };
 
   const handleShowStats = () => {
-    if (!isPremium) {
-      Alert.alert(
-        'Upgrade Your Career Toolkit',
-        'Track your callback and booking rates to understand what is working.\n\nSee trends over time and make data-driven decisions about your auditions.',
-        [
-          { text: 'Maybe Later', style: 'cancel' },
-          { text: 'Unlock Pro Tools', onPress: () => router.push('/premium') },
-        ]
-      );
-      return;
-    }
+    // Always show stats modal - it will show upgrade prompt inside if not premium
     setShowStatsModal(true);
   };
 
