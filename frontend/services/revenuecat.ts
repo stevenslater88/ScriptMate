@@ -216,10 +216,11 @@ export const restorePurchases = async (): Promise<PurchaseResult> => {
 
     if (isPremium) {
       console.log('[RevenueCat] Purchases restored successfully');
-      return { success: true, customerInfo };
+      return { success: true, customerInfo, restored: true };
     } else {
       return { 
-        success: false, 
+        success: true, // Restore itself succeeded, just no purchases found
+        restored: false,
         error: 'No previous purchases found.',
         customerInfo 
       };
