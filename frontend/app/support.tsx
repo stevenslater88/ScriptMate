@@ -158,8 +158,25 @@ export default function SupportScreen() {
     setBugReport({ title: '', description: '' });
   };
 
+  const handleShowTutorial = async () => {
+    await resetOnboarding();
+    router.push('/onboarding');
+  };
+
   const renderFAQ = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+      {/* Quick Tutorial Card */}
+      <TouchableOpacity style={styles.tutorialCard} onPress={handleShowTutorial}>
+        <View style={styles.tutorialIcon}>
+          <Ionicons name="school" size={24} color="#6366f1" />
+        </View>
+        <View style={styles.tutorialContent}>
+          <Text style={styles.tutorialTitle}>Show Tutorial</Text>
+          <Text style={styles.tutorialSubtitle}>Learn about all features</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+      </TouchableOpacity>
+
       <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
       {FAQ_ITEMS.map((item, index) => (
         <TouchableOpacity
