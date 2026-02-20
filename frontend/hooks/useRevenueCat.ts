@@ -392,12 +392,15 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
   const presentPaywallIfNeeded = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'web') return false;
 
+    addBreadcrumb('Paywall if needed opened', 'revenuecat', { action: 'present_paywall_if_needed' });
+
     try {
       const result = await RevenueCatUI.presentPaywallIfNeeded({
         requiredEntitlementIdentifier: PREMIUM_ENTITLEMENT_ID,
       });
       
       console.log('[useRevenueCat] PaywallIfNeeded result:', result);
+      addBreadcrumb('Paywall if needed closed', 'revenuecat', { result: String(result) });
       
       // Refresh customer info
       try {
@@ -414,6 +417,7 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       // Catch any crash-causing errors including SimulatedStoreErrorDialog
       console.error('[useRevenueCat] PaywallIfNeeded error (handled):', err);
       setError('Unable to check subscription status. Please try again.');
+      capturePaywallError(err instanceof Error ? err : new Error(String(err)), 'if_needed');
       return false;
     }
   }, []);
