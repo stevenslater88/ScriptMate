@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.scriptmate.app",
-      "buildNumber": "9",
+      "buildNumber": "10",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Record audio for your self-tape auditions",
         "NSSpeechRecognitionUsageDescription": "Recognize when you finish speaking your lines",
