@@ -1199,4 +1199,57 @@ const styles = StyleSheet.create({
   permissionButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
   cancelButton: { marginTop: 16 },
   cancelButtonText: { fontSize: 15, color: '#6b7280' },
+  
+  // Shot Coach Menu
+  controlButtonActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  shotCoachMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shotCoachMenu: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 16,
+    padding: 20,
+    width: '80%',
+    maxWidth: 300,
+  },
+  shotCoachMenuTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  shotCoachMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a3e',
+  },
+  shotCoachMenuText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#9ca3af',
+    marginLeft: 12,
+  },
+  shotCoachMenuTextActive: {
+    color: '#fff',
+  },
+  shotCoachMenuClose: {
+    backgroundColor: '#6366f1',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  shotCoachMenuCloseText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
 });
