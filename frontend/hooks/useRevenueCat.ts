@@ -240,13 +240,25 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
     setIsLoading(true);
     setError(null);
 
+    // Track purchase attempt
+    addBreadcrumb('Purchase initiated', 'revenuecat', {
+      packageId: pkg.identifier,
+      productId: pkg.product.identifier,
+      price: pkg.product.priceString,
+    });
+
     try {
       const result = await purchasePackage(pkg);
       
       if (result.success && result.customerInfo) {
         setCustomerInfo(result.customerInfo);
+        addBreadcrumb('Purchase successful', 'revenuecat', {
+          packageId: pkg.identifier,
+          hasPremium: result.customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined,
+        });
       } else if (!result.cancelled && result.error) {
         setError(result.error);
+        captureIAPError(new Error(result.error), pkg.product.identifier, result.errorCode?.toString());
       }
       
       return result;
@@ -255,6 +267,11 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       console.error('[useRevenueCat] Purchase error (caught):', err);
       const errorMsg = 'Purchase failed. Please try again.';
       setError(errorMsg);
+      captureIAPError(
+        err instanceof Error ? err : new Error(String(err)),
+        pkg.product.identifier,
+        'UNEXPECTED_ERROR'
+      );
       return { success: false, error: errorMsg };
     } finally {
       setIsLoading(false);
