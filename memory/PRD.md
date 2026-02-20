@@ -172,6 +172,24 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 - **"Show Tutorial" Button**: Added to Help & Support screen for users to re-view the tutorial anytime
 - **Fixed Navigation Routes**: Updated selftape navigation to use correct `/selftape/index` path
 
+### Home Dashboard Redesign (February 2026)
+- **Clean, Professional Layout**: Redesigned "Today in ScriptMate" dashboard
+- **Daily Progress Section**: Practice time, streak days, XP with mastery level badge
+- **Scene Mastery Progress Bar**: Shows current/last practiced scene with visual XP progress
+- **Career Momentum Section**: Pending auditions, submissions this month, callback count
+- **Quick Stats Row**: Callback rate and booking rate percentages
+- **Quick Actions Grid**: Practice Scene, Record Self-Tape, Audition Tracker buttons
+- **Soft Premium Upgrade Card**: Non-intrusive upgrade prompt at bottom
+
+### Natural Premium Upgrade Experience (February 2026)
+- **Value-Driven Copy**: Replaced generic "Premium Feature" prompts with benefit-focused messaging
+- **Adaptive Recall Prompt**: "Unlock Advanced Recall" - emphasizes pro training benefits
+- **Audition Tracker Prompt**: "Upgrade Your Career Toolkit" - emphasizes stats and tracking
+- **Premium Value Page Redesign**: Clean hero, feature checklist, plan selection cards
+- **Supportive Tone**: "Maybe Later" instead of "Cancel", benefits explained before upgrade
+- **No Forced Paywall**: Prompts only appear when user hits value limit
+- **Reusable Components**: Created `PremiumPrompts.tsx` with SoftUpgradePrompt, UpgradeModal, CompactUpgradeBanner
+
 ### December 2025
 - **Adaptive Recall Mode**: Full gamified memorization with difficulty slider, word hiding, timer challenge, XP/mastery system
 - **Shot Coach Overlays**: Rule of thirds grid, eye-line markers, headroom boundary, toggleable overlays
