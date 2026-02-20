@@ -44,6 +44,33 @@ export default function DebugScreen() {
     );
   };
 
+  const handleTestCrash = () => {
+    Alert.alert(
+      'Generate Test Crash',
+      'This will send a test crash report to Sentry. Use this to verify crash reporting is working.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send Test Crash',
+          onPress: () => {
+            const success = generateTestCrash();
+            if (success) {
+              Alert.alert(
+                'Test Crash Sent',
+                'A test crash report has been sent to Sentry. Check your Sentry dashboard to verify it was received.'
+              );
+            } else {
+              Alert.alert(
+                'Failed',
+                'Could not send test crash. Sentry may not be configured properly.'
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const InfoRow = ({ label, value, isError = false }: { label: string; value: string; isError?: boolean }) => (
     <View style={styles.infoRow}>
       <Text style={styles.label}>{label}</Text>
