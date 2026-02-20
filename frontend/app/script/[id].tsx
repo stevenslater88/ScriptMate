@@ -228,7 +228,14 @@ export default function ScriptDetailScreen() {
                   styles.modeCard,
                   selectedMode === mode.id && styles.modeCardSelected,
                 ]}
-                onPress={() => setSelectedMode(mode.id)}
+                onPress={() => {
+                  if (mode.navigable && mode.route) {
+                    // Navigate to the specific training mode screen
+                    router.push(`${mode.route}?scriptId=${id}&sceneIndex=0`);
+                  } else {
+                    setSelectedMode(mode.id);
+                  }
+                }}
               >
                 <View
                   style={[
@@ -253,9 +260,11 @@ export default function ScriptDetailScreen() {
                   </Text>
                   <Text style={styles.modeDescription}>{mode.description}</Text>
                 </View>
-                {selectedMode === mode.id && (
+                {mode.navigable ? (
+                  <Ionicons name="chevron-forward" size={20} color="#6366f1" />
+                ) : selectedMode === mode.id ? (
                   <Ionicons name="checkmark-circle" size={20} color="#6366f1" />
-                )}
+                ) : null}
               </TouchableOpacity>
             ))}
           </View>
