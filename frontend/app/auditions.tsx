@@ -104,15 +104,15 @@ export default function AuditionsScreen() {
   };
 
   const handleAddAudition = async () => {
-    // Check free limit
+    // Check free limit - Natural, value-driven prompt
     const count = await getAuditionCount();
     if (!isPremium && count >= FREE_AUDITION_LIMIT) {
       Alert.alert(
-        'Upgrade to Premium',
-        `Free users can track up to ${FREE_AUDITION_LIMIT} auditions. Upgrade for unlimited tracking and stats.`,
+        'Upgrade Your Career Toolkit',
+        'Track unlimited auditions, follow-ups, and performance stats in one place.\n\nSee your callback and booking rates to understand what's working.',
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => presentPaywall() },
+          { text: 'Maybe Later', style: 'cancel' },
+          { text: 'Unlock Pro Tools', onPress: () => router.push('/premium') },
         ]
       );
       return;
