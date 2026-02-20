@@ -51,19 +51,49 @@ interface UseRevenueCatReturn {
 
 /**
  * Custom hook for RevenueCat subscription management
+ * 
+ * CRASH-SAFE: All RevenueCat operations are wrapped in try/catch.
+ * Uses the "production" offering from RevenueCat dashboard.
  */
 export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
   const [isConfigured, setIsConfigured] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [offeringsReady, setOfferingsReady] = useState(false);
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Derived state
-  const currentOffering = offerings?.current || null;
+  /**
+   * Safely get the "production" offering from RevenueCat.
+   * Falls back to 'current' offering if 'production' is not available.
+   * Returns null if no offerings are available.
+   */
+  const getProductionOffering = useCallback((allOfferings: PurchasesOfferings | null): PurchasesOffering | null => {
+    if (!allOfferings) return null;
+    
+    // Try to get the "production" offering first (configured in RevenueCat dashboard)
+    const productionOffering = allOfferings.all?.[PRODUCTION_OFFERING_ID];
+    if (productionOffering) {
+      console.log('[useRevenueCat] Using "production" offering');
+      return productionOffering;
+    }
+    
+    // Fallback to "current" offering if "production" is not found
+    if (allOfferings.current) {
+      console.log('[useRevenueCat] Falling back to "current" offering');
+      return allOfferings.current;
+    }
+    
+    console.warn('[useRevenueCat] No offerings available');
+    return null;
+  }, []);
+
+  // Derived state - use production offering
+  const currentOffering = getProductionOffering(offerings);
   const isPremium = customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
   
-  // Get packages from current offering
+  // Get packages from production offering
+  // Match by packageType first, then by identifier (for flexibility)
   const monthlyPackage = currentOffering?.availablePackages?.find(
     (pkg) => pkg.packageType === 'MONTHLY' || pkg.identifier === PRODUCT_IDS.MONTHLY || pkg.identifier === '$rc_monthly'
   );
@@ -73,6 +103,44 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
   const lifetimePackage = currentOffering?.availablePackages?.find(
     (pkg) => pkg.packageType === 'LIFETIME' || pkg.identifier === PRODUCT_IDS.LIFETIME || pkg.identifier === '$rc_lifetime'
   );
+
+  /**
+   * Load offerings with error handling
+   * Sets offeringsReady to true only if packages are available
+   */
+  const loadOfferings = useCallback(async (): Promise<void> => {
+    try {
+      const fetchedOfferings = await getOfferings();
+      setOfferings(fetchedOfferings);
+      
+      // Check if production offering has packages
+      const productionOffer = getProductionOffering(fetchedOfferings);
+      const hasPackages = (productionOffer?.availablePackages?.length ?? 0) > 0;
+      
+      setOfferingsReady(hasPackages);
+      
+      if (!hasPackages) {
+        console.warn('[useRevenueCat] Production offering has no packages');
+      }
+    } catch (err) {
+      console.error('[useRevenueCat] Failed to load offerings:', err);
+      setOfferingsReady(false);
+      // Don't set error here - offerings may still load on retry
+    }
+  }, [getProductionOffering]);
+
+  /**
+   * Load customer info with error handling
+   */
+  const loadCustomerInfo = useCallback(async (): Promise<void> => {
+    try {
+      const info = await getCustomerInfo();
+      setCustomerInfo(info);
+    } catch (err) {
+      console.error('[useRevenueCat] Failed to load customer info:', err);
+      // Don't crash - premium status will default to false
+    }
+  }, []);
 
   // Initialize RevenueCat
   useEffect(() => {
@@ -88,29 +156,27 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
         setIsLoading(true);
         setError(null);
 
-        // Configure SDK
+        // Configure SDK (already done in _layout.tsx, this is a no-op)
         await configureRevenueCat(userId);
         setIsConfigured(isRevenueCatConfigured());
 
-        // Fetch initial data
-        const [fetchedOfferings, fetchedCustomerInfo] = await Promise.all([
-          getOfferings().catch(() => null),
-          getCustomerInfo().catch(() => null),
+        // Fetch initial data in parallel (with individual error handling)
+        await Promise.all([
+          loadOfferings(),
+          loadCustomerInfo(),
         ]);
-
-        if (fetchedOfferings) setOfferings(fetchedOfferings);
-        if (fetchedCustomerInfo) setCustomerInfo(fetchedCustomerInfo);
         
       } catch (err) {
+        // This should rarely happen since loadOfferings/loadCustomerInfo have their own try/catch
         console.error('[useRevenueCat] Init error:', err);
-        setError('Failed to initialize subscriptions');
+        setError('Failed to initialize subscriptions. Please try again.');
       } finally {
         setIsLoading(false);
       }
     };
 
     init();
-  }, [userId]);
+  }, [userId, loadOfferings, loadCustomerInfo]);
 
   // Listen for customer info updates
   useEffect(() => {
