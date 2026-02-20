@@ -355,6 +355,7 @@ export default function RehearsalScreen() {
     return () => {
       Speech.stop();
       isSpeakingRef.current = false;
+      speakingLineIndexRef.current = null;
       if (speechTimeoutRef.current) {
         clearTimeout(speechTimeoutRef.current);
       }
