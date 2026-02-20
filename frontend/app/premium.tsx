@@ -209,8 +209,15 @@ export default function PremiumScreen() {
     }
   };
 
+  // Retry loading offerings when they fail
+  const handleRetryLoadOfferings = async () => {
+    setLoading(true);
+    await retryLoadOfferings();
+    setLoading(false);
+  };
+
   const getPriceDisplay = (plan: 'monthly' | 'yearly' | 'lifetime') => {
-    if (isNative && offerings) {
+    if (isNative && hasOfferings) {
       if (plan === 'monthly' && monthlyPackage) {
         return monthlyPackage.product.priceString;
       } else if (plan === 'yearly' && yearlyPackage) {
