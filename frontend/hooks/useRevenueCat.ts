@@ -255,11 +255,18 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       
       if (result.success && result.customerInfo) {
         setCustomerInfo(result.customerInfo);
+        return { ...result, restored: true };
       } else if (result.error) {
         setError(result.error);
       }
       
       return result;
+    } catch (err) {
+      // Catch any unexpected errors
+      console.error('[useRevenueCat] Restore error (caught):', err);
+      const errorMsg = 'Failed to restore purchases. Please try again.';
+      setError(errorMsg);
+      return { success: false, error: errorMsg };
     } finally {
       setIsLoading(false);
     }
