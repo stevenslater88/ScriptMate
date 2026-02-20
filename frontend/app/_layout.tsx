@@ -153,6 +153,11 @@ export default function RootLayout() {
           <Stack.Screen name="terms" />
           <Stack.Screen name="script/[id]" />
           <Stack.Screen name="rehearsal/[id]" />
+          <Stack.Screen name="dashboard" />
+          <Stack.Screen name="auditions" />
+          <Stack.Screen name="recall" />
+          <Stack.Screen name="selftape" />
+          <Stack.Screen name="selftape/record" />
         </Stack>
       </View>
     </AuthProvider>
