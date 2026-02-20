@@ -53,8 +53,8 @@ export default function SelfTapeHub() {
   const handleSelectScript = async (scriptId: string) => {
     if (!isPremium) {
       trackUpgradeTriggered('selftape_script_select');
-      const purchased = await presentPaywall();
-      if (!purchased) return;
+      router.push('/premium');
+      return;
     }
     router.push(`/selftape/prep?scriptId=${scriptId}`);
   };
@@ -62,8 +62,8 @@ export default function SelfTapeHub() {
   const handleViewLibrary = async () => {
     if (!isPremium) {
       trackUpgradeTriggered('selftape_library');
-      const purchased = await presentPaywall();
-      if (!purchased) return;
+      router.push('/premium');
+      return;
     }
     router.push('/selftape/library');
   };
@@ -90,11 +90,8 @@ export default function SelfTapeHub() {
         // Go directly to prep screen with the new script
         if (!isPremium) {
           trackUpgradeTriggered('selftape_quick_upload');
-          const purchased = await presentPaywall();
-          if (!purchased) {
-            await fetchScripts();
-            return;
-          }
+          router.push('/premium');
+          return;
         }
         router.push(`/selftape/prep?scriptId=${script.id}`);
       }
