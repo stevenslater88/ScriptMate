@@ -734,6 +734,12 @@ export default function RecordScreen() {
             </View>
           </View>
         </CameraView>
+        ) : (
+          <View style={[styles.camera, { backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }]}>
+            <Ionicons name="videocam-off" size={48} color="#6b7280" />
+            <Text style={{ color: '#9ca3af', marginTop: 12 }}>Waiting for camera permission...</Text>
+          </View>
+        )}
       </View>
 
       {/* Shot Coach Menu */}
