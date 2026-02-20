@@ -390,40 +390,66 @@ export default function RehearsalScreen() {
     }
   }, []);
 
-  // Speak a line using device TTS
+  // Track if speech is in progress to prevent multiple calls
+  const isSpeakingRef = useRef(false);
+  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Speak a line using device TTS (with crash protection)
   const speakLine = useCallback(
     async (text: string) => {
       if (!text || isPaused) return;
+      
+      // Prevent multiple simultaneous speech calls
+      if (isSpeakingRef.current) {
+        console.log('[Rehearsal] Speech already in progress, skipping');
+        return;
+      }
 
+      isSpeakingRef.current = true;
       setSpeaking(true);
       setState('ai_speaking');
 
       const voiceSettings = getVoiceSettings(voiceType);
 
       try {
+        // Stop any existing speech first
         await Speech.stop();
+        
+        // Small delay to ensure previous speech is fully stopped
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         Speech.speak(text, {
           language: 'en-US',
           pitch: voiceSettings.pitch,
           rate: voiceSettings.rate,
           onDone: () => {
+            isSpeakingRef.current = false;
             setSpeaking(false);
-            advanceToNextLine();
+            // Use timeout to prevent immediate re-entry
+            speechTimeoutRef.current = setTimeout(() => {
+              advanceToNextLine();
+            }, 200);
           },
           onError: (error) => {
             console.error('Speech error:', error);
+            isSpeakingRef.current = false;
             setSpeaking(false);
-            advanceToNextLine();
+            speechTimeoutRef.current = setTimeout(() => {
+              advanceToNextLine();
+            }, 200);
           },
           onStopped: () => {
+            isSpeakingRef.current = false;
             setSpeaking(false);
           },
         });
       } catch (error) {
         console.error('TTS error:', error);
+        isSpeakingRef.current = false;
         setSpeaking(false);
-        advanceToNextLine();
+        speechTimeoutRef.current = setTimeout(() => {
+          advanceToNextLine();
+        }, 200);
       }
     },
     [voiceType, isPaused, getVoiceSettings]
