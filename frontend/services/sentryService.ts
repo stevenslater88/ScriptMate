@@ -192,6 +192,36 @@ export const logEvent = (
   }
 };
 
+// Generate a test crash to verify Sentry is working
+export const generateTestCrash = () => {
+  try {
+    // Add breadcrumb before crash
+    Sentry.addBreadcrumb({
+      message: 'Test crash initiated by user',
+      category: 'test',
+      level: 'warning',
+    });
+    
+    // Capture a test exception
+    Sentry.captureException(new Error('Test crash generated from ScriptMate debug screen'));
+    
+    console.log('[Sentry] Test crash sent to Sentry');
+    return true;
+  } catch (e) {
+    console.error('[Sentry] Failed to generate test crash:', e);
+    return false;
+  }
+};
+
+// Generate a native crash (more severe test)
+export const generateNativeCrash = () => {
+  try {
+    Sentry.nativeCrash();
+  } catch (e) {
+    console.error('[Sentry] Native crash not available:', e);
+  }
+};
+
 export default {
   initSentry,
   setSentryUserId,
@@ -201,4 +231,6 @@ export default {
   captureError,
   addBreadcrumb,
   logEvent,
+  generateTestCrash,
+  generateNativeCrash,
 };
