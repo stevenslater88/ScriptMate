@@ -159,6 +159,14 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 ## Completed Work (This Session)
 
 ### February 2026 (Latest)
+- **P0 Build Configuration Fix - EAS Dependency Mismatch**: Fixed recurring build failures
+  - Removed `package-lock.json` which was conflicting with `yarn.lock`
+  - Added `resolutions` block to `package.json` to force `@react-native-community/slider@5.0.1`
+  - Updated `eas.json` with `base` profile specifying `node: 20.18.0` and `yarn: 1.22.22`
+  - Created `.npmrc` with `package-lock=false` to prevent npm from creating lock files
+  - Added `package-lock.json` to `.gitignore` to prevent future conflicts
+  - All builds now extend from `base` profile ensuring consistent yarn usage
+  - `expo doctor` passes all 17 checks
 - **P0 Bug Fix - RevenueCat "Error 23"**: Completely refactored RevenueCat integration for crash-safe premium screen
   - Refactored `useRevenueCat.ts` hook to safely fetch "production" offering from RevenueCat dashboard
   - Added `offeringsReady` state to track if offerings loaded successfully
