@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "scriptmate",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.scriptmate.app",
