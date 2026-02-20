@@ -407,6 +407,8 @@ export default function RehearsalScreen() {
   const advanceProcessedRef = useRef(false);
   // Track the line index we're currently speaking to prevent duplicate advances
   const speakingLineIndexRef = useRef<number | null>(null);
+  // Ref to hold advanceToNextLine to avoid circular dependency
+  const advanceToNextLineRef = useRef<() => void>(() => {});
 
   // Keep line index ref updated
   useEffect(() => {
