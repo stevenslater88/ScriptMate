@@ -16,11 +16,19 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
 import { useScriptStore } from '../../store/scriptStore';
+
+// Conditionally import speech recognition
+let ExpoSpeechRecognitionModule: any = null;
+let useSpeechRecognitionEvent: any = () => {};
+
+try {
+  const speechRecognition = require('expo-speech-recognition');
+  ExpoSpeechRecognitionModule = speechRecognition.ExpoSpeechRecognitionModule;
+  useSpeechRecognitionEvent = speechRecognition.useSpeechRecognitionEvent;
+} catch (e) {
+  console.log('[Rehearsal] Speech recognition not available:', e);
+}
 
 type RehearsalState = 'idle' | 'ai_speaking' | 'user_turn' | 'waiting' | 'finished';
 
