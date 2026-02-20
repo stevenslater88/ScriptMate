@@ -8,7 +8,7 @@ import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
-BACKEND_URL = "https://instant-share-video.preview.emergentagent.com/api"
+BACKEND_URL = "https://audition-hub-2.preview.emergentagent.com/api"
 
 def create_test_pdf():
     """Create a test PDF with script content"""
