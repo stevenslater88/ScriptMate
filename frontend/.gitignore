@@ -10,6 +10,8 @@ web-build/
 expo-env.d.ts
 
 # Native
+ios/
+android/
 .kotlin/
 *.orig.*
 *.jks
@@ -20,6 +22,7 @@ expo-env.d.ts
 
 # Metro
 .metro-health-check*
+.metro-cache/
 
 # debug
 npm-debug.*
@@ -35,5 +38,8 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# Corrupted/binary files
+*[^a-zA-Z0-9._-]*
 
 app-example
