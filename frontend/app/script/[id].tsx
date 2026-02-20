@@ -724,6 +724,23 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#1a1a2e',
   },
+  practiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  practiceButtonText: {
+    color: '#10b981',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   buttonRow: {
     flexDirection: 'row',
     gap: 12,
