@@ -1,136 +1,204 @@
 # ScriptMate - Product Requirements Document
 
 ## Overview
-ScriptMate is a mobile app for actors to practice scripts and record professional self-tape auditions. The app features AI-powered line reading, script parsing, and a comprehensive Self Tape recording studio.
+ScriptMate is a mobile app for actors to practice scripts, record professional self-tape auditions, and track their audition journey. The app features AI-powered line reading, gamified memorization, and comprehensive actor tools.
 
 ## Tech Stack
 - **Frontend**: Expo (React Native) with TypeScript
 - **Backend**: FastAPI (Python) with MongoDB
 - **Monetization**: RevenueCat (scriptmate_premium entitlement)
 - **Crash Reporting**: Sentry
-- **Native Features**: expo-camera, expo-media-library, expo-sharing
+- **Native Features**: expo-camera, expo-media-library, expo-sharing, expo-notifications
 
 ---
 
-## Feature: Self Tape Mode (PRO)
+## Feature 1: Adaptive Recall Mode (Smart Memorisation + Gamified)
 
 ### Status: MVP Complete
 
 ### Description
-A professional, minimal tool for actors to record auditions with split-screen script overlay and instant sharing capabilities.
+A gamified practice mode for memorizing scripts with progressive difficulty and XP-based mastery levels.
 
-### User Flow
-1. **Quick Paste**: Tap "Quick Paste Script" card → Paste text → Start Recording immediately
-2. **OR** Select existing Script/Scene from Self Tape Hub
-3. Configure settings on Prep screen (font size, character, teleprompter)
-4. Record with camera preview + script overlay
-5. Post-recording action sheet: Share Now, Save, Retake, or Review
-6. Review screen with playback and branded watermark
+### Features Implemented
+- [x] Progressive word hiding based on difficulty slider (10-100%)
+- [x] Blank replacement mode (hidden words shown as underscores)
+- [x] Hide partner lines toggle
+- [x] Difficulty slider (10-100%)
+- [x] Speed slider (0.5x - 2.0x)
+- [x] Timer challenge mode ("Beat the Scene") - Premium only
+- [x] Post-session summary (accuracy %, time, difficulty, XP earned)
+- [x] Scene mastery levels: Rookie, Working Actor, Series Regular, Lead, Master
+- [x] XP system with scene-based progression
+- [x] Save progress per scene (AsyncStorage)
 
-### Key Features Implemented
+### Premium Gating
+- **Free**: Basic recall up to 50% difficulty
+- **Premium**: Full 0-100% difficulty, timer challenge mode, mastery levels, streak history
 
-#### Quick Upload (NEW)
-- [x] "Quick Paste Script" card at top of Self Tape Hub
-- [x] Modal with minimal fields (optional title + paste area)
-- [x] AI parses script and goes directly to recording prep
-- [x] "+" button in header for quick access
+---
 
-#### Recording Screen (`/app/selftape/record.tsx`)
-- [x] Split-screen UI: 40% script overlay, 60% camera preview
-- [x] Camera controls (flip camera, record/stop)
-- [x] 3-second countdown before recording
-- [x] Recording duration timer
-- [x] Face guide oval overlay
-- [x] Post-record action sheet with "Share Now", "Save", "Retake"
-- [x] Instant share via native OS share sheet
+## Feature 2: Self-Tape Shot Coach + Director Mode
 
-#### Enhanced Teleprompter Controls
-- [x] Play/Pause button for auto-scroll
-- [x] Speed slider (1-5x speeds, large thumb-friendly control)
-- [x] Font size +/- buttons
-- [x] Line highlight toggle
-- [x] Controls auto-hide during recording, reappear on tap
-- [x] Manual scroll when teleprompter paused
+### Status: MVP Complete
 
-#### Premium Gating
-- [x] Self Tape Hub gated behind `scriptmate_premium`
-- [x] Script detail page Self Tape button shows lock icon for free users
-- [x] Paywall triggered on access attempt
+### Description
+Professional framing guides and overlays for self-tape recording.
 
-#### Watermark (MVP - Visual Overlay)
-- [x] "Sent from ScriptMate" text overlay in review screen
-- Note: Full video watermarking would require FFmpeg integration
+### Features Implemented
+- [x] Mid-shot framing grid overlay (Rule of Thirds)
+- [x] Eye-line markers
+- [x] Headroom boundary indicator
+- [x] Safe zone frame corners
+- [x] Center face guide oval
+- [x] Toggle overlays on/off (tap grid icon)
+- [x] Long-press menu for individual overlay toggles
+- [x] All overlays work during recording
 
-#### Supporting Screens
-- [x] Self Tape Hub (`/app/selftape/index.tsx`) - Quick paste, script selection & recent takes
-- [x] Prep Screen (`/app/selftape/prep.tsx`) - Recording settings
-- [x] Review Screen (`/app/selftape/review.tsx`) - Playback with watermark
-- [x] Library Screen (`/app/selftape/library.tsx`) - Saved recordings
+### Premium Gating
+- **Free**: Manual framing grid overlays
+- **Premium**: Director Mode feedback summary (future: framing score, "Casting Ready" badge)
 
-#### Entry Points
-- [x] Home screen "Self Tape" button
-- [x] Script detail page dual-button layout (Self Tape + Rehearse)
-- [x] Quick Paste card in Self Tape Hub
+---
+
+## Feature 3: Audition Tracker + Momentum System
+
+### Status: MVP Complete
+
+### Description
+Track auditions with status updates, follow-up reminders, and performance analytics.
+
+### Features Implemented
+- [x] Create/Edit/Delete auditions
+- [x] Fields: Project name, Role, Date submitted, Status, Notes
+- [x] Status options: Submitted, Callback, Booked, Passed
+- [x] Follow-up reminder notifications (local)
+- [x] Sortable/filterable list
+- [x] Search by project or role
+- [x] Quick stats (Total, Pending, Callbacks, Booked)
+- [x] Stats dashboard: Auditions per month, Callback rate, Booking rate
+- [x] Momentum indicator (rising/steady/declining)
+- [x] "Backup/Sync (coming soon)" placeholder
+
+### Premium Gating
+- **Free**: Up to 10 auditions, local reminders included
+- **Premium**: Unlimited auditions, filters, full stats dashboard
+
+---
+
+## Feature 4: Home Dashboard ("Today in ScriptMate")
+
+### Status: MVP Complete
+
+### Description
+Central dashboard showing daily progress, stats, and quick actions.
+
+### Features Implemented
+- [x] Practice time today
+- [x] Current streak
+- [x] Pending auditions count
+- [x] Global XP
+- [x] Momentum indicator badge
+- [x] Quick action buttons: Practice, Self Tape, Auditions, New Script
+- [x] Premium upgrade banner
+- [x] Continue Learning card
+- [x] Mastery level card with progress bar
+- [x] Actor Tools grid
+
+---
+
+## Premium Monetization Split
+
+### Free Tier
+- Basic recall up to 50% difficulty
+- Manual framing grid overlays
+- Audition tracker up to 10 auditions
+- Local follow-up reminders
+- Basic streak tracking
+
+### Premium Tier
+- Full recall 0-100% difficulty
+- Timer challenge mode
+- Full mastery levels + streak history
+- Unlimited auditions
+- Full filters + stats dashboard
+- Director Mode feedback summary (future)
+
+---
+
+## Data Storage
+
+All data stored locally via AsyncStorage:
+- Progress & XP per scene
+- Streak data
+- Practice time tracking
+- Auditions list
+- Settings
+
+Future: "Backup & Sync (coming soon)" placeholder added.
+
+---
+
+## File Structure (New Files)
+
+```
+/app/frontend/
+├── app/
+│   ├── dashboard.tsx         # NEW: Home dashboard
+│   ├── auditions.tsx         # NEW: Audition tracker
+│   ├── recall.tsx            # NEW: Adaptive recall mode
+│   └── selftape/record.tsx   # UPDATED: Shot Coach overlay
+├── components/
+│   └── ShotCoachOverlay.tsx  # NEW: Framing grid component
+├── services/
+│   ├── progressService.ts    # NEW: XP/mastery/streak tracking
+│   └── auditionService.ts    # NEW: Audition CRUD & stats
+```
 
 ---
 
 ## Completed Work (This Session)
 
 ### December 2025
-- Implemented enhanced teleprompter controls (play/pause, speed slider, font +/-, highlight toggle)
-- Added auto-hide controls during recording with tap-to-show
-- Added "Self Tape" button to script detail page with premium gating
-- Implemented visual watermark overlay in review screen
-- **Quick Upload feature**: "Quick Paste Script" card + modal for instant script entry
-- Wired up analytics tracking for all Self Tape events
+- **Adaptive Recall Mode**: Full gamified memorization with difficulty slider, word hiding, timer challenge, XP/mastery system
+- **Shot Coach Overlays**: Rule of thirds grid, eye-line markers, headroom boundary, toggleable overlays
+- **Audition Tracker**: Full CRUD with status tracking, filters, search, stats dashboard, momentum indicator
+- **Dashboard**: Progress stats, quick actions, mastery level display
+- **Services**: progressService.ts (XP/mastery), auditionService.ts (auditions)
+- **Premium Gating**: Implemented across all features with specified split
+- Added expo-notifications for local reminders
 
 ---
 
 ## Backlog / Future Tasks
 
-### P0 (Critical)
-- None currently blocking
-
 ### P1 (High Priority)
-- [ ] FFmpeg-based video watermarking (burn watermark into exported video)
-- [ ] Multiple takes management (take 1, take 2, etc.)
+- [ ] Overall progress summary (aggregate across all scenes)
+- [ ] Director Mode: Manual framing scoring with feedback
+- [ ] "Casting Ready" badge for score >85
 
 ### P2 (Medium Priority)
-- [ ] Fix ESLint/TypeScript parsing errors (recurring technical debt)
-- [ ] Thumbnail generation for saved recordings
-- [ ] Cloud backup for recordings
+- [ ] Random word removal mode
+- [ ] Multiple difficulty presets
+- [ ] Cloud backup/sync for data
+- [ ] FFmpeg-based video watermarking
 
 ### P3 (Low Priority)
+- [ ] Fix ESLint/TypeScript parsing errors
 - [ ] Recording analytics dashboard
-- [ ] Export to specific social platforms (TikTok, Instagram)
-- [ ] Collaborative review (share with coach)
+- [ ] Export to social platforms
+- [ ] Collaborative review
 
 ---
 
-## Technical Notes
+## Environment
 
-### Known Issues
-1. ESLint shows TypeScript parsing errors - config needs update for TypeScript support
-2. Package version warnings for @react-native-community/slider and @sentry/react-native
-3. expo-av deprecation warning (migrating to expo-audio/expo-video in SDK 54)
-
-### Environment
 - Expo Tunnel: `exp://instant-share-video.exp.direct`
-- Backend: Running on port 8001
-- MongoDB: Connected
+- Backend: FastAPI on port 8001
+- Database: MongoDB
 
-### Dependencies Added
-- expo-camera, expo-media-library, expo-sharing
-- expo-video-thumbnails
-- @sentry/react-native
+## Testing Notes
 
-### File Structure
-```
-/app/frontend/app/selftape/
-├── _layout.tsx
-├── index.tsx      # Self Tape Hub with Quick Paste
-├── library.tsx    # Saved recordings
-├── prep.tsx       # Recording settings
-├── record.tsx     # Recording screen (MAIN)
-└── review.tsx     # Playback/review
-```
+⚠️ **Requires on-device testing** for:
+- Camera recording with Shot Coach overlays
+- Local push notifications for audition reminders
+- Full Adaptive Recall gameplay
