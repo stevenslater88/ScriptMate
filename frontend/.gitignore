@@ -29,6 +29,9 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+# Force yarn-only dependency management
+package-lock.json
+
 # macOS
 .DS_Store
 *.pem
