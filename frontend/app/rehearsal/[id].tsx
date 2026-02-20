@@ -233,50 +233,52 @@ export default function RehearsalScreen() {
     checkAvailability();
   }, []);
 
-  // Speech recognition event handlers
-  useSpeechRecognitionEvent('start', () => {
-    setIsListening(true);
-    setCurrentAccuracy(0);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  });
+  // Speech recognition event handlers (only if available)
+  if (ExpoSpeechRecognitionModule) {
+    useSpeechRecognitionEvent('start', () => {
+      setIsListening(true);
+      setCurrentAccuracy(0);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    });
 
-  useSpeechRecognitionEvent('end', () => {
-    setIsListening(false);
-    // Show accuracy feedback briefly after listening ends
-    if (currentAccuracy > 0) {
-      setShowAccuracyFeedback(true);
-      setTimeout(() => setShowAccuracyFeedback(false), 2000);
-    }
-  });
-
-  useSpeechRecognitionEvent('result', (event) => {
-    const transcript = event.results[0]?.transcript || '';
-    setRecognizedText(transcript);
-    
-    // Calculate and update accuracy in real-time
-    if (state === 'user_turn' && transcript.length > 0) {
-      const lines = currentScript?.lines || [];
-      const currentLine = lines[currentLineIndex];
-      const expectedText = currentLine?.text || '';
-      
-      const similarity = calculateSimilarity(transcript, expectedText);
-      setCurrentAccuracy(similarity);
-      
-      // Auto-advance when accuracy is high enough
-      if (autoAdvanceEnabled && similarity >= 0.65 && transcript.length > 5) {
-        // Success feedback
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        stopListening();
-        onUserLineDone(false, similarity);
+    useSpeechRecognitionEvent('end', () => {
+      setIsListening(false);
+      // Show accuracy feedback briefly after listening ends
+      if (currentAccuracy > 0) {
+        setShowAccuracyFeedback(true);
+        setTimeout(() => setShowAccuracyFeedback(false), 2000);
       }
-    }
-  });
+    });
 
-  useSpeechRecognitionEvent('error', (event) => {
-    console.log('Speech recognition error:', event.error);
-    setIsListening(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-  });
+    useSpeechRecognitionEvent('result', (event: any) => {
+      const transcript = event.results[0]?.transcript || '';
+      setRecognizedText(transcript);
+      
+      // Calculate and update accuracy in real-time
+      if (state === 'user_turn' && transcript.length > 0) {
+        const lines = currentScript?.lines || [];
+        const currentLine = lines[currentLineIndex];
+        const expectedText = currentLine?.text || '';
+        
+        const similarity = calculateSimilarity(transcript, expectedText);
+        setCurrentAccuracy(similarity);
+        
+        // Auto-advance when accuracy is high enough
+        if (autoAdvanceEnabled && similarity >= 0.65 && transcript.length > 5) {
+          // Success feedback
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          stopListening();
+          onUserLineDone(false, similarity);
+        }
+      }
+    });
+
+    useSpeechRecognitionEvent('error', (event: any) => {
+      console.log('Speech recognition error:', event.error);
+      setIsListening(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    });
+  }
 
   // Start listening for user's line
   const startListening = async () => {
