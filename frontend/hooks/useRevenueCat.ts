@@ -287,6 +287,8 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
     setIsLoading(true);
     setError(null);
 
+    addBreadcrumb('Restore initiated', 'revenuecat', { action: 'restore' });
+
     try {
       const result = await restorePurchases();
       
@@ -296,6 +298,14 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       
       if (!result.success && result.error) {
         setError(result.error);
+        captureRevenueCatError(new Error(result.error), {
+          phase: 'restore',
+          errorCode: result.errorCode?.toString(),
+        });
+      } else if (result.restored) {
+        addBreadcrumb('Restore successful', 'revenuecat', {
+          hasPremium: result.customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined,
+        });
       }
       
       return result;
@@ -304,6 +314,10 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       console.error('[useRevenueCat] Restore error (caught):', err);
       const errorMsg = 'Failed to restore purchases. Please try again.';
       setError(errorMsg);
+      captureRevenueCatError(err instanceof Error ? err : new Error(String(err)), {
+        phase: 'restore',
+        errorType: 'unexpected',
+      });
       return { success: false, error: errorMsg };
     } finally {
       setIsLoading(false);
