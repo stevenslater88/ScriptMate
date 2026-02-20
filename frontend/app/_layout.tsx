@@ -156,8 +156,12 @@ export default function RootLayout() {
           <Stack.Screen name="dashboard" />
           <Stack.Screen name="auditions" />
           <Stack.Screen name="recall" />
-          <Stack.Screen name="selftape" />
+          <Stack.Screen name="selftape/index" />
           <Stack.Screen name="selftape/record" />
+          <Stack.Screen name="selftape/library" />
+          <Stack.Screen name="selftape/prep" />
+          <Stack.Screen name="selftape/review" />
+          <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal' }} />
         </Stack>
       </View>
     </AuthProvider>
