@@ -463,7 +463,7 @@ export default function RehearsalScreen() {
         speechTimeoutRef.current = setTimeout(() => {
           // Double-check we're still on the expected line before advancing
           if (currentLineIndexRef.current === targetLineIndex) {
-            advanceToNextLine();
+            advanceToNextLineRef.current();
           }
         }, 300);
       };
