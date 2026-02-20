@@ -500,6 +500,18 @@ export default function RehearsalScreen() {
     [voiceType, isPaused, getVoiceSettings]
   );
 
+  // Save progress to backend
+  const saveProgress = useCallback(async (lineIndex: number) => {
+    if (id) {
+      await updateRehearsal(id, {
+        current_line_index: lineIndex,
+        completed_lines: completedLines,
+        missed_lines: missedLines,
+        weak_lines: weakLines,
+      });
+    }
+  }, [id, completedLines, missedLines, weakLines, updateRehearsal]);
+
   // Advance to next line
   const advanceToNextLine = useCallback(() => {
     if (isPaused) return;
@@ -549,18 +561,6 @@ export default function RehearsalScreen() {
   }, [lines, userCharacter, isPaused, mode, speakLine, saveProgress]);
 
   // No need for advanceToNextLineRef - we call advanceToNextLine directly now
-
-  // Save progress to backend
-  const saveProgress = async (lineIndex: number) => {
-    if (id) {
-      await updateRehearsal(id, {
-        current_line_index: lineIndex,
-        completed_lines: completedLines,
-        missed_lines: missedLines,
-        weak_lines: weakLines,
-      });
-    }
-  };
 
   // Start rehearsal
   const startRehearsal = () => {
