@@ -80,7 +80,7 @@ SUBSCRIPTION_PLANS_BY_REGION = {
         "monthly": {
             "id": "premium_monthly_usd",
             "name": "Premium Monthly",
-            "price": 54.99,
+            "price": 4.99,
             "currency": "USD",
             "period": "month",
             "trial_days": 3,
@@ -97,11 +97,11 @@ SUBSCRIPTION_PLANS_BY_REGION = {
         "yearly": {
             "id": "premium_yearly_usd",
             "name": "Premium Yearly",
-            "price": 39.99,
+            "price": 54.99,
             "currency": "USD",
             "period": "year",
             "trial_days": 3,
-            "savings": "Save 33%",
+            "savings": "Save 8%",
             "features": [
                 "Everything in monthly",
                 "Best value",
@@ -116,7 +116,7 @@ SUBSCRIPTION_PLANS_BY_REGION = {
         "monthly": {
             "id": "premium_monthly_gbp",
             "name": "Premium Monthly",
-            "price": 47.99,
+            "price": 4.99,
             "currency": "GBP",
             "period": "month",
             "trial_days": 3,
@@ -133,11 +133,11 @@ SUBSCRIPTION_PLANS_BY_REGION = {
         "yearly": {
             "id": "premium_yearly_gbp",
             "name": "Premium Yearly",
-            "price": 39.99,
+            "price": 47.99,
             "currency": "GBP",
             "period": "year",
             "trial_days": 3,
-            "savings": "Save 33%",
+            "savings": "Save 20%",
             "features": [
                 "Everything in monthly",
                 "Best value",
