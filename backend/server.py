@@ -116,7 +116,7 @@ SUBSCRIPTION_PLANS_BY_REGION = {
         "monthly": {
             "id": "premium_monthly_gbp",
             "name": "Premium Monthly",
-            "price": 5.99,
+            "price": 4.99,
             "currency": "GBP",
             "period": "month",
             "trial_days": 3,
