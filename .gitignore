@@ -26,6 +26,6 @@ build/
 .DS_Store
 Thumbs.db
 -e 
-# Environment files
-*.env
-*.env.*
+# Environment files (keep committed for Emergent deployment)
+# *.env
+# *.env.*
