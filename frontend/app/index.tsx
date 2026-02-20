@@ -165,7 +165,7 @@ export default function HomeScreen() {
         {/* Self Tape Button */}
         <TouchableOpacity
           style={styles.selfTapeButton}
-          onPress={() => router.push('/selftape')}
+          onPress={() => router.push('/selftape/index')}
           activeOpacity={0.8}
         >
           <View style={styles.selfTapeIcon}>

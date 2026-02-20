@@ -181,7 +181,7 @@ export default function DashboardScreen() {
             <Text style={styles.quickActionText}>Practice</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/selftape')}>
+          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/selftape/index')}>
             <View style={[styles.quickActionIcon, { backgroundColor: '#10b981' }]}>
               <Ionicons name="videocam" size={24} color="#fff" />
             </View>
@@ -276,7 +276,7 @@ export default function DashboardScreen() {
               <Text style={styles.featureDesc}>Smart memorization</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/selftape')}>
+            <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/selftape/index')}>
               <Ionicons name="grid" size={28} color="#3b82f6" />
               <Text style={styles.featureTitle}>Shot Coach</Text>
               <Text style={styles.featureDesc}>Framing guides</Text>
