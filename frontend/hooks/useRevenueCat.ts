@@ -358,10 +358,13 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       return false;
     }
 
+    addBreadcrumb('Paywall opened', 'revenuecat', { action: 'present_paywall' });
+
     try {
       const result = await RevenueCatUI.presentPaywall();
       
       console.log('[useRevenueCat] Paywall result:', result);
+      addBreadcrumb('Paywall closed', 'revenuecat', { result: String(result) });
       
       // Refresh customer info after paywall closes
       try {
@@ -376,6 +379,7 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       // Catch any crash-causing errors including SimulatedStoreErrorDialog
       console.error('[useRevenueCat] Paywall error (handled):', err);
       setError('Unable to show subscription options. Please try again.');
+      capturePaywallError(err instanceof Error ? err : new Error(String(err)), 'default');
       return false;
     }
   }, []);
