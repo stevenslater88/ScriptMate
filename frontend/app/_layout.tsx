@@ -19,10 +19,10 @@ const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY 
 const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || '';
 
 export default function RootLayout() {
-  // Initialize Sentry for crash reporting - DISABLED for debugging
-  // useEffect(() => {
-  //   initSentry();
-  // }, []);
+  // Initialize Sentry for crash reporting
+  useEffect(() => {
+    initSentry();
+  }, []);
 
   // Initialize RevenueCat on app start - with crash protection
   useEffect(() => {
