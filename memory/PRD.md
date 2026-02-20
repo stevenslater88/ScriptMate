@@ -166,6 +166,8 @@ Future: "Backup & Sync (coming soon)" placeholder added.
   - Added `getProductionOffering()` helper that safely accesses `offerings.all["production"]` with fallback to `current`
   - Updated `PurchaseResult` interface to include `restored` flag for clearer restore flow
   - All RevenueCat operations now wrapped in try/catch for crash protection
+  - **Added Sentry error logging** for all RevenueCat operations (offerings load, purchase, restore, paywall)
+  - Re-enabled Sentry initialization in `_layout.tsx` for production crash reporting
 - **Crash-Safe Premium Screen UI**: Updated `premium.tsx` with proper loading and error states
   - Shows loading spinner while RevenueCat initializes
   - Shows "Unable to Load Plans" error state with retry button when offerings fail
