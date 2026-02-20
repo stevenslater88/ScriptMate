@@ -109,7 +109,7 @@ export default function AuditionsScreen() {
     if (!isPremium && count >= FREE_AUDITION_LIMIT) {
       Alert.alert(
         'Upgrade Your Career Toolkit',
-        'Track unlimited auditions, follow-ups, and performance stats in one place.\n\nSee your callback and booking rates to understand what's working.',
+        'Track unlimited auditions, follow-ups, and performance stats in one place.\n\nSee your callback and booking rates to understand what is working.',
         [
           { text: 'Maybe Later', style: 'cancel' },
           { text: 'Unlock Pro Tools', onPress: () => router.push('/premium') },
@@ -190,7 +190,7 @@ export default function AuditionsScreen() {
     if (!isPremium) {
       Alert.alert(
         'Upgrade Your Career Toolkit',
-        'Track your callback and booking rates to understand what's working.\n\nSee trends over time and make data-driven decisions about your auditions.',
+        'Track your callback and booking rates to understand what is working.\n\nSee trends over time and make data-driven decisions about your auditions.',
         [
           { text: 'Maybe Later', style: 'cancel' },
           { text: 'Unlock Pro Tools', onPress: () => router.push('/premium') },
