@@ -737,6 +737,22 @@ export default function RehearsalScreen() {
     );
   }
 
+  // Check if script has no lines
+  if (lines.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="document-text-outline" size={48} color="#f59e0b" />
+          <Text style={styles.errorText}>No dialogue lines found in script</Text>
+          <Text style={styles.errorSubtext}>The script may not have been parsed correctly</Text>
+          <TouchableOpacity style={styles.errorButton} onPress={() => router.back()}>
+            <Text style={styles.errorButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const progress = lines.length > 0 ? (currentLineIndex / lines.length) * 100 : 0;
   const stats = getStats();
 
