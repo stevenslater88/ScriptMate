@@ -365,6 +365,7 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
   return {
     isConfigured,
     isLoading,
+    offeringsReady,
     offerings,
     currentOffering,
     customerInfo,
@@ -376,6 +377,7 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
     purchase,
     restore,
     refresh,
+    retryLoadOfferings,
     presentPaywall,
     presentPaywallIfNeeded,
   };
