@@ -235,52 +235,54 @@ export default function RehearsalScreen() {
     checkAvailability();
   }, []);
 
-  // Speech recognition event handlers (only if available)
-  if (ExpoSpeechRecognitionModule) {
-    useSpeechRecognitionEvent('start', () => {
-      setIsListening(true);
-      setCurrentAccuracy(0);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    });
+  // Speech recognition event handlers (safely wrapped)
+  useSpeechRecognitionEvent('start', () => {
+    if (!speechRecognitionImported) return;
+    setIsListening(true);
+    setCurrentAccuracy(0);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  });
 
-    useSpeechRecognitionEvent('end', () => {
-      setIsListening(false);
-      // Show accuracy feedback briefly after listening ends
-      if (currentAccuracy > 0) {
-        setShowAccuracyFeedback(true);
-        setTimeout(() => setShowAccuracyFeedback(false), 2000);
-      }
-    });
+  useSpeechRecognitionEvent('end', () => {
+    if (!speechRecognitionImported) return;
+    setIsListening(false);
+    // Show accuracy feedback briefly after listening ends
+    if (currentAccuracy > 0) {
+      setShowAccuracyFeedback(true);
+      setTimeout(() => setShowAccuracyFeedback(false), 2000);
+    }
+  });
 
-    useSpeechRecognitionEvent('result', (event: any) => {
-      const transcript = event.results[0]?.transcript || '';
-      setRecognizedText(transcript);
+  useSpeechRecognitionEvent('result', (event: any) => {
+    if (!speechRecognitionImported) return;
+    const transcript = event.results[0]?.transcript || '';
+    setRecognizedText(transcript);
+    
+    // Calculate and update accuracy in real-time
+    if (state === 'user_turn' && transcript.length > 0) {
+      const lines = currentScript?.lines || [];
+      const currentLine = lines[currentLineIndex];
+      const expectedText = currentLine?.text || '';
       
-      // Calculate and update accuracy in real-time
-      if (state === 'user_turn' && transcript.length > 0) {
-        const lines = currentScript?.lines || [];
-        const currentLine = lines[currentLineIndex];
-        const expectedText = currentLine?.text || '';
-        
-        const similarity = calculateSimilarity(transcript, expectedText);
-        setCurrentAccuracy(similarity);
-        
-        // Auto-advance when accuracy is high enough
-        if (autoAdvanceEnabled && similarity >= 0.65 && transcript.length > 5) {
-          // Success feedback
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          stopListening();
-          onUserLineDone(false, similarity);
-        }
+      const similarity = calculateSimilarity(transcript, expectedText);
+      setCurrentAccuracy(similarity);
+      
+      // Auto-advance when accuracy is high enough
+      if (autoAdvanceEnabled && similarity >= 0.65 && transcript.length > 5) {
+        // Success feedback
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        stopListening();
+        onUserLineDone(false, similarity);
       }
-    });
+    }
+  });
 
-    useSpeechRecognitionEvent('error', (event: any) => {
-      console.log('Speech recognition error:', event.error);
-      setIsListening(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    });
-  }
+  useSpeechRecognitionEvent('error', (event: any) => {
+    if (!speechRecognitionImported) return;
+    console.log('Speech recognition error:', event.error);
+    setIsListening(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  });
 
   // Start listening for user's line
   const startListening = async () => {
