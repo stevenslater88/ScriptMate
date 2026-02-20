@@ -17,7 +17,8 @@
         "react-native-reanimated",
         "react-native-worklets",
         "@types/react",
-        "@expo/config-plugins"
+        "@expo/config-plugins",
+        "@react-native-community/slider"
       ]
     }
   },
