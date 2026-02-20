@@ -64,6 +64,7 @@ export default function PremiumScreen() {
   const {
     isConfigured: rcConfigured,
     isLoading: rcLoading,
+    offeringsReady,
     currentOffering,
     isPremium: rcIsPremium,
     monthlyPackage,
@@ -71,6 +72,7 @@ export default function PremiumScreen() {
     lifetimePackage,
     purchase,
     restore,
+    retryLoadOfferings,
     error: rcError,
   } = useRevenueCat();
 
@@ -100,8 +102,10 @@ export default function PremiumScreen() {
   // Show lifetime option based on env config
   const showLifetime = process.env.EXPO_PUBLIC_SHOW_LIFETIME === 'true';
 
-  // Get offerings for display
-  const offerings = currentOffering?.availablePackages?.length > 0;
+  // Check if offerings are available (crash-safe check)
+  const hasOfferings = isNative 
+    ? offeringsReady && (monthlyPackage || yearlyPackage || lifetimePackage)
+    : true;
 
   useEffect(() => {
     const detectRegion = () => {
