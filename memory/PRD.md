@@ -163,6 +163,14 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 - **Navigation Routes Added**: Added Stack.Screen entries for dashboard, auditions, recall, selftape routes
 - **Backend Testing**: All 15 API tests passed (health, scripts CRUD, users, subscriptions, rehearsals)
 - **Deployment Health**: Verified deployment ready with all environment variables configured correctly
+- **Quick Tutorial Onboarding**: Added 5-step swipeable onboarding flow for new users
+  - Welcome screen introducing ScriptMate
+  - Audition Tracker feature highlight
+  - Adaptive Recall feature highlight  
+  - Shot Coach feature highlight
+  - Dashboard feature highlight
+- **"Show Tutorial" Button**: Added to Help & Support screen for users to re-view the tutorial anytime
+- **Fixed Navigation Routes**: Updated selftape navigation to use correct `/selftape/index` path
 
 ### December 2025
 - **Adaptive Recall Mode**: Full gamified memorization with difficulty slider, word hiding, timer challenge, XP/mastery system
