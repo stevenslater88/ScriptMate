@@ -503,8 +503,9 @@ export default function RehearsalScreen() {
   const advanceToNextLine = useCallback(() => {
     if (isPaused) return;
 
-    const nextIndex = currentLineIndexRef.current + 1;
-    console.log('[Rehearsal] Advancing to line:', nextIndex, 'of', lines.length);
+    const currentIdx = currentLineIndexRef.current;
+    const nextIndex = currentIdx + 1;
+    console.log('[Rehearsal] Advancing from line:', currentIdx, 'to line:', nextIndex, 'of', lines.length);
     
     if (nextIndex >= lines.length) {
       console.log('[Rehearsal] Finished!');
@@ -513,9 +514,14 @@ export default function RehearsalScreen() {
       return;
     }
 
-    setCompletedLines((prev) => [...prev, currentLineIndexRef.current]);
+    // Update completed lines and current index
+    setCompletedLines((prev) => [...prev, currentIdx]);
     setCurrentLineIndex(nextIndex);
     currentLineIndexRef.current = nextIndex;
+    
+    // Reset speaking state for next line
+    speakingLineIndexRef.current = null;
+    advanceProcessedRef.current = false;
 
     const nextLine = lines[nextIndex];
     console.log('[Rehearsal] Next line character:', nextLine?.character, 'User:', userCharacter);
@@ -529,22 +535,19 @@ export default function RehearsalScreen() {
         setUserLineVisible(true);
       }
     } else if (!nextLine?.is_stage_direction) {
-      // AI line - speak it
+      // AI line - speak it after a short delay
       setTimeout(() => {
-        if (!isPaused) {
+        if (!isPaused && currentLineIndexRef.current === nextIndex) {
           speakLine(nextLine.text, nextIndex);
         }
       }, 500);
     } else {
       // Stage direction - skip
-      setTimeout(() => advanceToNextLineRef.current(), 300);
+      setTimeout(() => advanceToNextLine(), 300);
     }
-  }, [lines, userCharacter, isPaused, mode, speakLine]);
+  }, [lines, userCharacter, isPaused, mode, speakLine, saveProgress]);
 
-  // Keep ref updated
-  useEffect(() => {
-    advanceToNextLineRef.current = advanceToNextLine;
-  }, [advanceToNextLine]);
+  // No need for advanceToNextLineRef - we call advanceToNextLine directly now
 
   // Save progress to backend
   const saveProgress = async (lineIndex: number) => {
