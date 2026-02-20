@@ -1198,6 +1198,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     marginTop: 16,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    color: '#9ca3af',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   errorButton: {
     backgroundColor: '#6366f1',
