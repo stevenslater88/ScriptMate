@@ -143,6 +143,7 @@ export interface PurchaseResult {
   error?: string;
   errorCode?: PURCHASES_ERROR_CODE;
   cancelled?: boolean;
+  restored?: boolean;
 }
 
 /**
