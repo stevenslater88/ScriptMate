@@ -28,9 +28,9 @@ const VOICE_OPTIONS = [
 ];
 
 const MODE_OPTIONS = [
-  { id: 'full_read', name: 'Full Read', icon: 'chatbubbles', description: 'Practice with AI partner reading all other lines' },
-  { id: 'cue_only', name: 'Cue Only', icon: 'flash', description: 'Only hear the line before yours' },
-  { id: 'performance', name: 'Performance', icon: 'trophy', description: 'No prompts - simulate real audition' },
+  { id: 'full_read', name: 'Full Read', icon: 'chatbubbles', description: 'Practice the complete scene with prompts', navigable: false },
+  { id: 'recall', name: 'Recall', icon: 'flash', description: 'Test your memory with hidden lines', navigable: true, route: '/recall' },
+  { id: 'character', name: 'Character', icon: 'person', description: 'Focus on your character lines only', navigable: false },
 ];
 
 export default function ScriptDetailScreen() {
