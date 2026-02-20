@@ -481,10 +481,26 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1, paddingHorizontal: 24 },
   
   // Header
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, paddingBottom: 16 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, paddingBottom: 16, paddingHorizontal: 24 },
   backButton: { padding: 8, marginLeft: -8 },
   restoreButton: { padding: 8 },
   restoreText: { fontSize: 14, color: '#6b7280', fontWeight: '500' },
+  
+  // Loading State
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  loadingText: { fontSize: 16, color: '#9ca3af', marginTop: 16, textAlign: 'center' },
+  
+  // Error State
+  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  errorIcon: { width: 96, height: 96, borderRadius: 28, backgroundColor: 'rgba(245, 158, 11, 0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  errorTitle: { fontSize: 24, fontWeight: '700', color: '#fff', marginBottom: 12, textAlign: 'center' },
+  errorMessage: { fontSize: 15, color: '#9ca3af', textAlign: 'center', marginBottom: 32, lineHeight: 22, paddingHorizontal: 16 },
+  retryButton: { flexDirection: 'row', backgroundColor: '#6366f1', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  retryButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  secondaryButton: { borderWidth: 1, borderColor: '#374151', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 24, marginBottom: 16 },
+  secondaryButtonText: { fontSize: 14, fontWeight: '500', color: '#9ca3af' },
+  backLink: { padding: 12 },
+  backLinkText: { fontSize: 14, color: '#6b7280' },
   
   // Hero
   hero: { alignItems: 'center', paddingVertical: 24 },
