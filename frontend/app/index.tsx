@@ -416,6 +416,31 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
   },
+  toolsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  toolCard: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+  },
+  toolCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    marginTop: 8,
+  },
+  toolCardSubtitle: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 2,
+  },
   section: {
     marginBottom: 24,
   },
