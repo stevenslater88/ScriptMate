@@ -15,7 +15,9 @@
       "exclude": [
         "react-native-gesture-handler",
         "react-native-reanimated",
-        "react-native-worklets"
+        "react-native-worklets",
+        "@types/react",
+        "@expo/config-plugins"
       ]
     }
   },
