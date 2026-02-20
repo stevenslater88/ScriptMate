@@ -102,27 +102,27 @@ export default function RecallScreen() {
   }, [currentScene, difficulty]);
 
   const startGame = () => {
-    // Check premium for advanced difficulty
+    // Check premium for advanced difficulty - Natural, value-driven prompt
     if (!isPremium && difficulty > FREE_DIFFICULTY_LIMIT) {
       Alert.alert(
-        'Premium Feature',
-        `Free users can practice up to ${FREE_DIFFICULTY_LIMIT}% difficulty. Upgrade for full range!`,
+        'Unlock Advanced Recall',
+        "You've reached the basic practice level.\n\nUnlock full difficulty control, timed challenges, and mastery tracking to train like a professional.",
         [
-          { text: 'Use 50%', onPress: () => { setDifficulty(50); } },
-          { text: 'Upgrade', onPress: () => presentPaywall() },
+          { text: 'Use 50%', onPress: () => { setDifficulty(50); }, style: 'cancel' },
+          { text: 'Unlock Advanced Practice', onPress: () => router.push('/premium') },
         ]
       );
       return;
     }
     
-    // Check premium for timer mode
+    // Check premium for timer mode - Natural, value-driven prompt
     if (!isPremium && timerMode) {
       Alert.alert(
-        'Premium Feature',
-        'Timer challenge mode is a premium feature. Upgrade to unlock!',
+        'Unlock Advanced Recall',
+        'Timed challenges help you build confidence under pressure—just like a real audition.\n\nUpgrade to unlock timer mode and track your progress.',
         [
-          { text: 'Disable Timer', onPress: () => { setTimerMode(false); } },
-          { text: 'Upgrade', onPress: () => presentPaywall() },
+          { text: 'Disable Timer', onPress: () => { setTimerMode(false); }, style: 'cancel' },
+          { text: 'Unlock Advanced Practice', onPress: () => router.push('/premium') },
         ]
       );
       return;
