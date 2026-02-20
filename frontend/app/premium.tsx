@@ -134,7 +134,7 @@ export default function PremiumScreen() {
   const handlePurchase = async (packageType: 'monthly' | 'yearly' | 'lifetime') => {
     setLoading(true);
 
-    if (isNative && offerings) {
+    if (isNative && hasOfferings) {
       let selectedPackage: PurchasesPackage | undefined;
       if (packageType === 'monthly') selectedPackage = monthlyPackage;
       else if (packageType === 'yearly') selectedPackage = yearlyPackage;
