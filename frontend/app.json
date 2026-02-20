@@ -18,7 +18,9 @@
         "NSCameraUsageDescription": "Record video self-tapes for auditions",
         "NSPhotoLibraryUsageDescription": "Save your self-tape recordings",
         "NSPhotoLibraryAddUsageDescription": "Save your self-tape recordings to your photo library",
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
@@ -69,7 +71,9 @@
           "resizeMode": "contain",
           "backgroundColor": "#0a0a0f"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker",
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true
