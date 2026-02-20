@@ -189,11 +189,11 @@ export default function AuditionsScreen() {
   const handleShowStats = () => {
     if (!isPremium) {
       Alert.alert(
-        'Premium Feature',
-        'Stats dashboard is a premium feature. Upgrade to see your callback and booking rates.',
+        'Upgrade Your Career Toolkit',
+        'Track your callback and booking rates to understand what's working.\n\nSee trends over time and make data-driven decisions about your auditions.',
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => presentPaywall() },
+          { text: 'Maybe Later', style: 'cancel' },
+          { text: 'Unlock Pro Tools', onPress: () => router.push('/premium') },
         ]
       );
       return;
