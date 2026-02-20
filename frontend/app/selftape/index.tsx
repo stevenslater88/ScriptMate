@@ -156,9 +156,9 @@ export default function SelfTapeHub() {
           {!isPremium && (
             <TouchableOpacity 
               style={styles.unlockButton}
-              onPress={async () => {
+              onPress={() => {
                 trackUpgradeTriggered('selftape_badge');
-                await presentPaywall();
+                router.push('/premium');
               }}
             >
               <Text style={styles.unlockButtonText}>Unlock</Text>
