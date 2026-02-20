@@ -414,22 +414,56 @@ export default function RehearsalScreen() {
 
   // Speak a line using device TTS (with crash protection)
   const speakLine = useCallback(
-    async (text: string, lineIndex: number) => {
+    async (text: string, lineIndex?: number) => {
+      // Use the passed lineIndex or fall back to current ref
+      const targetLineIndex = lineIndex ?? currentLineIndexRef.current;
+      
       if (!text || isPaused) return;
       
-      // Prevent multiple simultaneous speech calls
+      // Prevent multiple simultaneous speech calls for the same line
       if (isSpeakingRef.current) {
         console.log('[Rehearsal] Speech already in progress, skipping');
         return;
       }
+      
+      // Prevent speaking the same line twice
+      if (speakingLineIndexRef.current === targetLineIndex) {
+        console.log('[Rehearsal] Already spoke/speaking this line, skipping');
+        return;
+      }
 
-      console.log('[Rehearsal] Speaking line:', lineIndex, text.substring(0, 30));
+      console.log('[Rehearsal] Speaking line:', targetLineIndex, text.substring(0, 30));
       isSpeakingRef.current = true;
-      hasAdvancedRef.current = false;
+      speakingLineIndexRef.current = targetLineIndex;
+      advanceProcessedRef.current = false;
       setSpeaking(true);
       setState('ai_speaking');
 
       const voiceSettings = getVoiceSettings(voiceType);
+
+      // Helper to safely advance once
+      const safeAdvance = () => {
+        if (advanceProcessedRef.current) {
+          console.log('[Rehearsal] Advance already processed, skipping');
+          return;
+        }
+        advanceProcessedRef.current = true;
+        isSpeakingRef.current = false;
+        setSpeaking(false);
+        
+        // Clear any pending timeouts
+        if (speechTimeoutRef.current) {
+          clearTimeout(speechTimeoutRef.current);
+        }
+        
+        // Use a timeout to ensure state has settled
+        speechTimeoutRef.current = setTimeout(() => {
+          // Double-check we're still on the expected line before advancing
+          if (currentLineIndexRef.current === targetLineIndex) {
+            advanceToNextLine();
+          }
+        }, 300);
+      };
 
       try {
         // Stop any existing speech first
@@ -443,44 +477,23 @@ export default function RehearsalScreen() {
           pitch: voiceSettings.pitch,
           rate: voiceSettings.rate,
           onDone: () => {
-            console.log('[Rehearsal] Speech done for line:', lineIndex);
-            isSpeakingRef.current = false;
-            setSpeaking(false);
-            // Only advance if we haven't already
-            if (!hasAdvancedRef.current) {
-              hasAdvancedRef.current = true;
-              speechTimeoutRef.current = setTimeout(() => {
-                advanceToNextLineRef.current();
-              }, 300);
-            }
+            console.log('[Rehearsal] Speech done for line:', targetLineIndex);
+            safeAdvance();
           },
           onError: (error) => {
             console.error('[Rehearsal] Speech error:', error);
-            isSpeakingRef.current = false;
-            setSpeaking(false);
-            if (!hasAdvancedRef.current) {
-              hasAdvancedRef.current = true;
-              speechTimeoutRef.current = setTimeout(() => {
-                advanceToNextLineRef.current();
-              }, 300);
-            }
+            safeAdvance();
           },
           onStopped: () => {
             console.log('[Rehearsal] Speech stopped');
             isSpeakingRef.current = false;
             setSpeaking(false);
+            // Don't advance on manual stop - user may have paused
           },
         });
       } catch (error) {
         console.error('[Rehearsal] TTS error:', error);
-        isSpeakingRef.current = false;
-        setSpeaking(false);
-        if (!hasAdvancedRef.current) {
-          hasAdvancedRef.current = true;
-          speechTimeoutRef.current = setTimeout(() => {
-            advanceToNextLineRef.current();
-          }, 300);
-        }
+        safeAdvance();
       }
     },
     [voiceType, isPaused, getVoiceSettings]
