@@ -646,4 +646,37 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   refreshDiagText: { fontSize: 14, color: '#6b7280' },
+  // Tutorial card styles
+  tutorialCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+  },
+  tutorialIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tutorialContent: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  tutorialTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6366f1',
+  },
+  tutorialSubtitle: {
+    fontSize: 13,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
 });
