@@ -323,23 +323,27 @@ export default function RehearsalScreen() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        console.log('[Rehearsal] Loading data for id:', id);
         if (id) {
           const rehearsal = await fetchRehearsal(id);
+          console.log('[Rehearsal] Fetched rehearsal:', rehearsal ? 'found' : 'null');
           if (rehearsal) {
-            await fetchScript(rehearsal.script_id);
+            const script = await fetchScript(rehearsal.script_id);
+            console.log('[Rehearsal] Fetched script:', script ? 'found' : 'null');
+            console.log('[Rehearsal] Script lines count:', script?.lines?.length || 0);
             setCurrentLineIndex(rehearsal.current_line_index || 0);
             setCompletedLines(rehearsal.completed_lines || []);
             setMissedLines(rehearsal.missed_lines || []);
             setWeakLines(rehearsal.weak_lines || []);
           } else {
-            console.error('Rehearsal not found:', id);
+            console.error('[Rehearsal] Rehearsal not found:', id);
             Alert.alert('Error', 'Rehearsal not found. Please try again.');
             router.back();
             return;
           }
         }
       } catch (error) {
-        console.error('Error loading rehearsal data:', error);
+        console.error('[Rehearsal] Error loading data:', error);
         Alert.alert('Error', 'Failed to load rehearsal. Please try again.');
         router.back();
         return;
