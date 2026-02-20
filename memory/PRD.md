@@ -159,6 +159,15 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 ## Completed Work (This Session)
 
 ### February 2026 (Latest)
+- **P0 Bug Fix - AI Cue Loop in Rehearsal**: Fixed the repeating AI cue loop in rehearsal/[id].tsx
+  - Added `speakingLineIndexRef` to track which line is being spoken (prevents duplicate TTS calls)
+  - Added `advanceProcessedRef` to ensure advance only happens once per speech cycle
+  - Converted `saveProgress` to `useCallback` and moved before `advanceToNextLine` to fix variable ordering
+  - Improved state management to prevent race conditions between speech callbacks
+- **ESLint Configuration Updated**: Fixed ESLint config for better TypeScript support
+  - Added separate configs for JS/JSX and TS/TSX files
+  - Updated parser options and globals
+  - Disabled `@typescript-eslint/no-explicit-any` for flexibility
 - **Deployment Blocker Fixed**: Installed missing `@react-native-community/datetimepicker` dependency
 - **Navigation Routes Added**: Added Stack.Screen entries for dashboard, auditions, recall, selftape routes
 - **Backend Testing**: All 15 API tests passed (health, scripts CRUD, users, subscriptions, rehearsals)
@@ -201,6 +210,17 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 
 ---
 
+## Bug Fixes Summary (This Session)
+
+| Issue | Status | Notes |
+|-------|--------|-------|
+| P0: AI cue loop in rehearsal | FIXED | Refactored TTS callback logic with refs |
+| P1: Self-Tape navigation | VERIFIED WORKING | Routes load correctly |
+| P1: Audition stats graph button | VERIFIED WORKING | Modal opens correctly |
+| P2: ESLint parsing errors | FIXED | Updated eslint.config.js |
+
+---
+
 ## Backlog / Future Tasks
 
 ### P1 (High Priority)
@@ -215,7 +235,6 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 - [ ] FFmpeg-based video watermarking
 
 ### P3 (Low Priority)
-- [ ] Fix ESLint/TypeScript parsing errors
 - [ ] Recording analytics dashboard
 - [ ] Export to social platforms
 - [ ] Collaborative review
@@ -224,9 +243,10 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 
 ## Environment
 
-- Expo Tunnel: `exp://instant-share-video.exp.direct`
+- Expo Tunnel: Available via Expo CLI
 - Backend: FastAPI on port 8001
 - Database: MongoDB
+- Preview URL: https://actor-tools-preview.preview.emergentagent.com
 
 ## Testing Notes
 
@@ -234,3 +254,4 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 - Camera recording with Shot Coach overlays
 - Local push notifications for audition reminders
 - Full Adaptive Recall gameplay
+- **Rehearsal TTS callback flow (AI cue loop fix)**
