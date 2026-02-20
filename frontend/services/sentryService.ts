@@ -1,44 +1,29 @@
 import * as Sentry from '@sentry/react-native';
 import { Platform } from 'react-native';
-import * as Application from 'expo-application';
 
-// Initialize Sentry
+// Initialize Sentry - with full crash protection
 export const initSentry = () => {
-  try {
-    Sentry.init({
-      dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-      tracesSampleRate: 1.0,
-      
-      // Set release and environment
-      release: `scriptmate@${Application.nativeApplicationVersion || '1.0.0'}`,
-      dist: Application.nativeBuildVersion || '1',
-      environment: __DEV__ ? 'development' : 'production',
-      
-      // Only report in production by default
-      enabled: !__DEV__,
-      
-      // Attach stack traces
-      attachStacktrace: true,
-      
-      // Configure before send hook
-      beforeSend: (event) => {
-        // Add platform info
-        event.tags = {
-          ...event.tags,
-          platform: Platform.OS,
-          build_number: Application.nativeBuildVersion || 'unknown',
-        };
-        
-        return event;
-      },
-    });
+  // Skip on web platform
+  if (Platform.OS === 'web') {
+    console.log('[Sentry] Skipping on web platform');
+    return;
+  }
 
-    // Set initial context
-    Sentry.setContext('app', {
-      app_name: Application.applicationName || 'ScriptMate',
-      app_version: Application.nativeApplicationVersion || 'unknown',
-      build_number: Application.nativeBuildVersion || 'unknown',
-      bundle_id: Application.applicationId || 'unknown',
+  try {
+    const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+    
+    // Skip if no DSN configured
+    if (!dsn) {
+      console.log('[Sentry] No DSN configured, skipping initialization');
+      return;
+    }
+
+    Sentry.init({
+      dsn,
+      tracesSampleRate: 0.5,
+      environment: __DEV__ ? 'development' : 'production',
+      enabled: !__DEV__,
+      debug: false,
     });
 
     console.log('[Sentry] Initialized successfully');
