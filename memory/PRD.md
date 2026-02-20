@@ -227,6 +227,7 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 
 | Issue | Status | Notes |
 |-------|--------|-------|
+| P0: RevenueCat "Error 23" | FIXED | Refactored hook with safe offering fetch, added retry UI |
 | P0: AI cue loop in rehearsal | FIXED | Refactored TTS callback logic with refs |
 | P1: Self-Tape navigation | VERIFIED WORKING | Routes load correctly |
 | P1: Audition stats graph button | VERIFIED WORKING | Modal opens correctly |
