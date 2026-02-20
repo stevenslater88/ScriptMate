@@ -190,6 +190,27 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
     return unsubscribe;
   }, [isConfigured]);
 
+  /**
+   * Retry loading offerings - useful when initial load fails
+   * Called from UI retry button
+   */
+  const retryLoadOfferings = useCallback(async (): Promise<void> => {
+    if (Platform.OS === 'web') return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await loadOfferings();
+      await loadCustomerInfo();
+    } catch (err) {
+      console.error('[useRevenueCat] Retry failed:', err);
+      setError('Unable to load subscription options. Please check your connection and try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadOfferings, loadCustomerInfo]);
+
   // Purchase a package
   const purchase = useCallback(async (pkg: PurchasesPackage): Promise<PurchaseResult> => {
     if (Platform.OS === 'web') {
@@ -209,6 +230,12 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       }
       
       return result;
+    } catch (err) {
+      // Catch any unexpected errors
+      console.error('[useRevenueCat] Purchase error (caught):', err);
+      const errorMsg = 'Purchase failed. Please try again.';
+      setError(errorMsg);
+      return { success: false, error: errorMsg };
     } finally {
       setIsLoading(false);
     }
