@@ -18,16 +18,18 @@ import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { useScriptStore } from '../../store/scriptStore';
 
-// Conditionally import speech recognition
+// Safely import speech recognition - it may not be available on all devices
 let ExpoSpeechRecognitionModule: any = null;
-let useSpeechRecognitionEvent: any = () => {};
+let useSpeechRecognitionEvent: (event: string, handler: (data: any) => void) => void = () => {};
+let speechRecognitionImported = false;
 
 try {
   const speechRecognition = require('expo-speech-recognition');
   ExpoSpeechRecognitionModule = speechRecognition.ExpoSpeechRecognitionModule;
   useSpeechRecognitionEvent = speechRecognition.useSpeechRecognitionEvent;
+  speechRecognitionImported = true;
 } catch (e) {
-  console.log('[Rehearsal] Speech recognition not available:', e);
+  console.log('[Rehearsal] Speech recognition module not available');
 }
 
 type RehearsalState = 'idle' | 'ai_speaking' | 'user_turn' | 'waiting' | 'finished';
