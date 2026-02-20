@@ -253,10 +253,11 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
     try {
       const result = await restorePurchases();
       
-      if (result.success && result.customerInfo) {
+      if (result.customerInfo) {
         setCustomerInfo(result.customerInfo);
-        return { ...result, restored: true };
-      } else if (result.error) {
+      }
+      
+      if (!result.success && result.error) {
         setError(result.error);
       }
       
