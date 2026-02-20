@@ -8,7 +8,7 @@ import os
 import uuid
 
 # Base URL from environment - ScriptMate app API
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://self-tape-lab.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://scriptmate-premium.preview.emergentagent.com').rstrip('/')
 
 # Test data prefix for cleanup
 TEST_PREFIX = "TEST_"

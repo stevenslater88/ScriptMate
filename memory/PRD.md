@@ -262,7 +262,7 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 - Expo Tunnel: Available via Expo CLI
 - Backend: FastAPI on port 8001
 - Database: MongoDB
-- Preview URL: https://self-tape-lab.preview.emergentagent.com
+- Preview URL: https://scriptmate-premium.preview.emergentagent.com
 
 ## Testing Notes
 
