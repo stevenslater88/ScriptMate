@@ -142,6 +142,12 @@ export default function DebugScreen() {
           <Text style={styles.clearButtonText}>Clear Debug Logs</Text>
         </TouchableOpacity>
 
+        {/* Test Crash Button */}
+        <TouchableOpacity style={styles.crashButton} onPress={handleTestCrash}>
+          <Ionicons name="bug-outline" size={20} color="#f59e0b" />
+          <Text style={styles.crashButtonText}>Generate Test Crash</Text>
+        </TouchableOpacity>
+
         <Text style={styles.footer}>Tap logo 5x on home screen to access this page</Text>
       </ScrollView>
     </SafeAreaView>
