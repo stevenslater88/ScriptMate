@@ -401,9 +401,11 @@ export default function RehearsalScreen() {
   // Track if speech is in progress to prevent multiple calls
   const isSpeakingRef = useRef(false);
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const advanceToNextLineRef = useRef<() => void>(() => {});
   const currentLineIndexRef = useRef(currentLineIndex);
-  const hasAdvancedRef = useRef(false);
+  // Track if we've already processed an advance for this speech cycle
+  const advanceProcessedRef = useRef(false);
+  // Track the line index we're currently speaking to prevent duplicate advances
+  const speakingLineIndexRef = useRef<number | null>(null);
 
   // Keep line index ref updated
   useEffect(() => {
