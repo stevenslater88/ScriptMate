@@ -78,9 +78,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "eas": {
-        "projectId": "scriptmate-app"
-      }
+      "eas": {}
     }
   }
 }
