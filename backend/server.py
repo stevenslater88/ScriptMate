@@ -133,11 +133,11 @@ SUBSCRIPTION_PLANS_BY_REGION = {
         "yearly": {
             "id": "premium_yearly_gbp",
             "name": "Premium Yearly",
-            "price": 47.99,
+            "price": 39.99,
             "currency": "GBP",
             "period": "year",
             "trial_days": 3,
-            "savings": "Save 33%",
+            "savings": "Save 44%",
             "features": [
                 "Everything in monthly",
                 "Best value",
