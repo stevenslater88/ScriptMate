@@ -153,6 +153,29 @@ export default function HomeScreen() {
           <Ionicons name="chevron-forward" size={20} color="#6b7280" />
         </TouchableOpacity>
 
+        {/* Actor Tools Row */}
+        <View style={styles.toolsRow}>
+          <TouchableOpacity
+            style={styles.toolCard}
+            onPress={() => router.push('/auditions')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="calendar" size={24} color="#f59e0b" />
+            <Text style={styles.toolCardTitle}>Auditions</Text>
+            <Text style={styles.toolCardSubtitle}>Track & analyze</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.toolCard}
+            onPress={() => router.push('/dashboard')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="stats-chart" size={24} color="#10b981" />
+            <Text style={styles.toolCardTitle}>Dashboard</Text>
+            <Text style={styles.toolCardSubtitle}>Your progress</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Quick Actions */}
         <View style={styles.quickActions}>
           <TouchableOpacity
