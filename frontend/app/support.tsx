@@ -23,6 +23,7 @@ import {
   FeatureFlags,
   DiagnosticsInfo,
 } from '../services/diagnosticsService';
+import { resetOnboarding } from '../components/OnboardingTutorial';
 import Purchases from 'react-native-purchases';
 
 const FAQ_ITEMS = [
