@@ -116,6 +116,7 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
    */
   const loadOfferings = useCallback(async (): Promise<void> => {
     try {
+      addBreadcrumb('Loading offerings', 'revenuecat', { action: 'load_offerings' });
       const fetchedOfferings = await getOfferings();
       setOfferings(fetchedOfferings);
       
@@ -127,9 +128,22 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       
       if (!hasPackages) {
         console.warn('[useRevenueCat] Production offering has no packages');
+        captureRevenueCatError(new Error('Production offering has no packages'), {
+          phase: 'load_offerings',
+          offeringId: PRODUCTION_OFFERING_ID,
+          availableOfferings: Object.keys(fetchedOfferings?.all || {}),
+        });
+      } else {
+        addBreadcrumb('Offerings loaded successfully', 'revenuecat', {
+          packageCount: productionOffer?.availablePackages?.length,
+        });
       }
     } catch (err) {
       console.error('[useRevenueCat] Failed to load offerings:', err);
+      captureRevenueCatError(err instanceof Error ? err : new Error(String(err)), {
+        phase: 'load_offerings',
+        offeringId: PRODUCTION_OFFERING_ID,
+      });
       setOfferingsReady(false);
       // Don't set error here - offerings may still load on retry
     }
