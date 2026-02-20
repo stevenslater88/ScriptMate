@@ -334,7 +334,7 @@ export default function DashboardScreen() {
           {/* Record Self-Tape */}
           <TouchableOpacity 
             style={styles.actionCard}
-            onPress={() => router.push('/selftape')}
+            onPress={() => router.push('/selftape/index')}
             data-testid="record-selftape-btn"
           >
             <View style={[styles.actionIcon, { backgroundColor: '#10b981' }]}>
