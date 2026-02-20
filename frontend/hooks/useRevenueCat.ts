@@ -20,6 +20,12 @@ import {
   PRODUCT_IDS,
   PurchaseResult,
 } from '../services/revenuecat';
+import {
+  captureRevenueCatError,
+  captureIAPError,
+  capturePaywallError,
+  addBreadcrumb,
+} from '../services/sentryService';
 
 // The offering identifier configured in RevenueCat dashboard
 const PRODUCTION_OFFERING_ID = 'production';
