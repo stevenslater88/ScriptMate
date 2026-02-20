@@ -402,10 +402,17 @@ export default function RehearsalScreen() {
   const isSpeakingRef = useRef(false);
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const advanceToNextLineRef = useRef<() => void>(() => {});
+  const currentLineIndexRef = useRef(currentLineIndex);
+  const hasAdvancedRef = useRef(false);
+
+  // Keep line index ref updated
+  useEffect(() => {
+    currentLineIndexRef.current = currentLineIndex;
+  }, [currentLineIndex]);
 
   // Speak a line using device TTS (with crash protection)
   const speakLine = useCallback(
-    async (text: string) => {
+    async (text: string, lineIndex: number) => {
       if (!text || isPaused) return;
       
       // Prevent multiple simultaneous speech calls
@@ -414,7 +421,9 @@ export default function RehearsalScreen() {
         return;
       }
 
+      console.log('[Rehearsal] Speaking line:', lineIndex, text.substring(0, 30));
       isSpeakingRef.current = true;
+      hasAdvancedRef.current = false;
       setSpeaking(true);
       setState('ai_speaking');
 
@@ -432,33 +441,44 @@ export default function RehearsalScreen() {
           pitch: voiceSettings.pitch,
           rate: voiceSettings.rate,
           onDone: () => {
+            console.log('[Rehearsal] Speech done for line:', lineIndex);
             isSpeakingRef.current = false;
             setSpeaking(false);
-            // Use timeout and ref to prevent circular dependency issues
-            speechTimeoutRef.current = setTimeout(() => {
-              advanceToNextLineRef.current();
-            }, 200);
+            // Only advance if we haven't already
+            if (!hasAdvancedRef.current) {
+              hasAdvancedRef.current = true;
+              speechTimeoutRef.current = setTimeout(() => {
+                advanceToNextLineRef.current();
+              }, 300);
+            }
           },
           onError: (error) => {
-            console.error('Speech error:', error);
+            console.error('[Rehearsal] Speech error:', error);
             isSpeakingRef.current = false;
             setSpeaking(false);
-            speechTimeoutRef.current = setTimeout(() => {
-              advanceToNextLineRef.current();
-            }, 200);
+            if (!hasAdvancedRef.current) {
+              hasAdvancedRef.current = true;
+              speechTimeoutRef.current = setTimeout(() => {
+                advanceToNextLineRef.current();
+              }, 300);
+            }
           },
           onStopped: () => {
+            console.log('[Rehearsal] Speech stopped');
             isSpeakingRef.current = false;
             setSpeaking(false);
           },
         });
       } catch (error) {
-        console.error('TTS error:', error);
+        console.error('[Rehearsal] TTS error:', error);
         isSpeakingRef.current = false;
         setSpeaking(false);
-        speechTimeoutRef.current = setTimeout(() => {
-          advanceToNextLineRef.current();
-        }, 200);
+        if (!hasAdvancedRef.current) {
+          hasAdvancedRef.current = true;
+          speechTimeoutRef.current = setTimeout(() => {
+            advanceToNextLineRef.current();
+          }, 300);
+        }
       }
     },
     [voiceType, isPaused, getVoiceSettings]
@@ -468,17 +488,23 @@ export default function RehearsalScreen() {
   const advanceToNextLine = useCallback(() => {
     if (isPaused) return;
 
-    const nextIndex = currentLineIndex + 1;
+    const nextIndex = currentLineIndexRef.current + 1;
+    console.log('[Rehearsal] Advancing to line:', nextIndex, 'of', lines.length);
+    
     if (nextIndex >= lines.length) {
+      console.log('[Rehearsal] Finished!');
       setState('finished');
       saveProgress(nextIndex);
       return;
     }
 
-    setCompletedLines((prev) => [...prev, currentLineIndex]);
+    setCompletedLines((prev) => [...prev, currentLineIndexRef.current]);
     setCurrentLineIndex(nextIndex);
+    currentLineIndexRef.current = nextIndex;
 
     const nextLine = lines[nextIndex];
+    console.log('[Rehearsal] Next line character:', nextLine?.character, 'User:', userCharacter);
+    
     if (nextLine?.character === userCharacter) {
       setState('user_turn');
       setLineStartTime(Date.now());
@@ -488,15 +514,17 @@ export default function RehearsalScreen() {
         setUserLineVisible(true);
       }
     } else if (!nextLine?.is_stage_direction) {
+      // AI line - speak it
       setTimeout(() => {
         if (!isPaused) {
-          speakLine(nextLine.text);
+          speakLine(nextLine.text, nextIndex);
         }
       }, 500);
     } else {
+      // Stage direction - skip
       setTimeout(() => advanceToNextLineRef.current(), 300);
     }
-  }, [currentLineIndex, lines, userCharacter, isPaused, mode, speakLine]);
+  }, [lines, userCharacter, isPaused, mode, speakLine]);
 
   // Keep ref updated
   useEffect(() => {
