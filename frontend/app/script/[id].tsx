@@ -313,6 +313,15 @@ export default function ScriptDetailScreen() {
 
       {/* Bottom Action Buttons */}
       <View style={styles.bottomBar}>
+        {/* Practice Mode Button */}
+        <TouchableOpacity
+          style={styles.practiceButton}
+          onPress={() => router.push(`/recall?scriptId=${id}&sceneIndex=0`)}
+        >
+          <Ionicons name="flash" size={18} color="#10b981" />
+          <Text style={styles.practiceButtonText}>Practice Mode</Text>
+        </TouchableOpacity>
+        
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={styles.selfTapeButton}
