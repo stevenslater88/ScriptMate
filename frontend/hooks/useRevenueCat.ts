@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
-import {
+import Purchases, {
   PurchasesOfferings,
   PurchasesPackage,
   CustomerInfo,
@@ -21,10 +21,14 @@ import {
   PurchaseResult,
 } from '../services/revenuecat';
 
+// The offering identifier configured in RevenueCat dashboard
+const PRODUCTION_OFFERING_ID = 'production';
+
 interface UseRevenueCatReturn {
   // State
   isConfigured: boolean;
   isLoading: boolean;
+  offeringsReady: boolean; // NEW: indicates if offerings loaded successfully
   offerings: PurchasesOfferings | null;
   currentOffering: PurchasesOffering | null;
   customerInfo: CustomerInfo | null;
@@ -40,6 +44,7 @@ interface UseRevenueCatReturn {
   purchase: (pkg: PurchasesPackage) => Promise<PurchaseResult>;
   restore: () => Promise<PurchaseResult>;
   refresh: () => Promise<void>;
+  retryLoadOfferings: () => Promise<void>; // NEW: retry mechanism
   presentPaywall: () => Promise<boolean>;
   presentPaywallIfNeeded: () => Promise<boolean>;
 }
