@@ -562,7 +562,10 @@ export default function RehearsalScreen() {
     }
   }, [lines, userCharacter, isPaused, mode, speakLine, saveProgress]);
 
-  // No need for advanceToNextLineRef - we call advanceToNextLine directly now
+  // Keep advanceToNextLine ref updated for use in speakLine callbacks
+  useEffect(() => {
+    advanceToNextLineRef.current = advanceToNextLine;
+  }, [advanceToNextLine]);
 
   // Start rehearsal
   const startRehearsal = () => {
