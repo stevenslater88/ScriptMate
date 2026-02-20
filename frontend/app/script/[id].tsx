@@ -27,7 +27,16 @@ const VOICE_OPTIONS = [
   { id: 'shimmer', name: 'Shimmer', description: 'Female, soft' },
 ];
 
-const MODE_OPTIONS = [
+interface ModeOption {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  navigable: boolean;
+  route?: string;
+}
+
+const MODE_OPTIONS: ModeOption[] = [
   { id: 'full_read', name: 'Full Read', icon: 'chatbubbles', description: 'Practice the complete scene with prompts', navigable: false },
   { id: 'recall', name: 'Recall', icon: 'flash', description: 'Test your memory with hidden lines', navigable: true, route: '/recall' },
   { id: 'character', name: 'Character', icon: 'person', description: 'Focus on your character lines only', navigable: false },
