@@ -569,11 +569,16 @@ export default function RehearsalScreen() {
       return;
     }
 
+    // Reset all state
     setCurrentLineIndex(0);
+    currentLineIndexRef.current = 0;
     setCompletedLines([]);
     setMissedLines([]);
     setLinePerformances([]);
     setState('idle');
+    speakingLineIndexRef.current = null;
+    advanceProcessedRef.current = false;
+    isSpeakingRef.current = false;
 
     const firstLine = lines[0];
     if (firstLine.character === userCharacter) {
@@ -581,7 +586,7 @@ export default function RehearsalScreen() {
       setLineStartTime(Date.now());
       setUserLineVisible(mode !== 'cue_only' && mode !== 'performance');
     } else if (!firstLine.is_stage_direction) {
-      speakLine(firstLine.text);
+      speakLine(firstLine.text, 0);
     } else {
       advanceToNextLine();
     }
