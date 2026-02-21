@@ -264,13 +264,23 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 
 ## Build Configuration (February 2026)
 
-### Dependencies Updated
-- `react-native-reanimated`: ~4.1.0 (upgraded from ~3.16.0 for SDK 54 compatibility)
-- `react-native-worklets`: ~0.5.1 (new, required by reanimated 4.x)
-- `expo-build-properties`: 1.0.10 (new, for granular native build control)
+### Dependencies Updated (Latest Fix - Session 10+)
+- `react-native-reanimated`: **4.1.6** (exactly as required by Expo SDK 54.0.33)
+- `react-native-worklets`: **0.5.1** (pinned with resolutions to prevent duplicate installs)
+- `expo-build-properties`: 1.0.10 (for granular native build control)
+
+**Root Cause of Previous Build Failures:**
+The previous agent upgraded `react-native-reanimated` to `^4.2.0` and `react-native-worklets` to `^0.7.0`, but **Expo SDK 54 specifically requires** `~4.1.1` and `0.5.1`. The version mismatch caused dependency resolution failures during EAS builds, including duplicate module installations.
+
+**Fix Applied:**
+1. Downgraded `react-native-reanimated` to `~4.1.1` (installs 4.1.6)
+2. Pinned `react-native-worklets` to `0.5.1` 
+3. Updated `resolutions` block to force correct versions across all transitive deps
+4. Cleaned yarn.lock and node_modules to remove stale entries
+5. `npx expo-doctor` now passes all 17 checks
 
 ### Build Settings
-- `newArchEnabled`: false (both app.json and expo-build-properties)
+- `newArchEnabled`: true (required for Reanimated 4.x)
 - Android: compileSdkVersion 35, targetSdkVersion 35, minSdkVersion 24
 - iOS: deploymentTarget 15.1
 
