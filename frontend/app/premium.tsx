@@ -444,6 +444,16 @@ export default function PremiumScreen() {
           )}
         </TouchableOpacity>
 
+        {/* Restore Purchases Button */}
+        <TouchableOpacity
+          style={styles.restorePurchasesButton}
+          onPress={handleRestore}
+          disabled={loading}
+          data-testid="restore-purchases-btn"
+        >
+          <Text style={styles.restorePurchasesText}>Restore Purchases</Text>
+        </TouchableOpacity>
+
         {/* Trial CTA */}
         {!user?.trial_used && (
           <TouchableOpacity
