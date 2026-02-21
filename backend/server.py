@@ -30,6 +30,226 @@ db = client[os.environ['DB_NAME']]
 
 # Get API key
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
+
+# Initialize ElevenLabs client
+eleven_client = None
+if ELEVENLABS_API_KEY:
+    eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+
+# Preset voices for Multi-Voice feature (ElevenLabs voice IDs)
+PRESET_VOICES = {
+    "rachel": {
+        "id": "21m00Tcm4TlvDq8ikWAM",
+        "name": "Rachel",
+        "accent": "American",
+        "gender": "Female",
+        "description": "Calm, young female voice"
+    },
+    "drew": {
+        "id": "29vD33N1CtxCmqQRPOHJ",
+        "name": "Drew",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Well-rounded, confident male voice"
+    },
+    "clyde": {
+        "id": "2EiwWnXFnvU5JabPnv8n",
+        "name": "Clyde",
+        "accent": "American",
+        "gender": "Male",
+        "description": "War veteran, deep gravelly voice"
+    },
+    "paul": {
+        "id": "5Q0t7uMcjvnagumLfvZi",
+        "name": "Paul",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Ground reporter, authoritative"
+    },
+    "domi": {
+        "id": "AZnzlk1XvdvUeBnXmlld",
+        "name": "Domi",
+        "accent": "American",
+        "gender": "Female",
+        "description": "Strong, confident female voice"
+    },
+    "dave": {
+        "id": "CYw3kZ02Hs0563khs1Fj",
+        "name": "Dave",
+        "accent": "British-Essex",
+        "gender": "Male",
+        "description": "Conversational British male"
+    },
+    "fin": {
+        "id": "D38z5RcWu1voky8WS1ja",
+        "name": "Fin",
+        "accent": "Irish",
+        "gender": "Male",
+        "description": "Sailor, older Irish male"
+    },
+    "sarah": {
+        "id": "EXAVITQu4vr4xnSDxMaL",
+        "name": "Sarah",
+        "accent": "American",
+        "gender": "Female",
+        "description": "Soft, expressive female"
+    },
+    "antoni": {
+        "id": "ErXwobaYiN019PkySvjV",
+        "name": "Antoni",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Well-rounded, crisp male"
+    },
+    "thomas": {
+        "id": "GBv7mTt0atIp3Br8iCZE",
+        "name": "Thomas",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Calm, mature male"
+    },
+    "charlie": {
+        "id": "IKne3meq5aSn9XLyUdCD",
+        "name": "Charlie",
+        "accent": "Australian",
+        "gender": "Male",
+        "description": "Casual Australian male"
+    },
+    "emily": {
+        "id": "LcfcDJNUP1GQjkzn1xUU",
+        "name": "Emily",
+        "accent": "American",
+        "gender": "Female",
+        "description": "Calm, warm female"
+    },
+    "elli": {
+        "id": "MF3mGyEYCl7XYWbV9V6O",
+        "name": "Elli",
+        "accent": "American",
+        "gender": "Female",
+        "description": "Emotional, expressive young female"
+    },
+    "callum": {
+        "id": "N2lVS1w4EtoT3dr4eOWO",
+        "name": "Callum",
+        "accent": "Transatlantic",
+        "gender": "Male",
+        "description": "Hoarse, intense male"
+    },
+    "patrick": {
+        "id": "ODq5zmih8GrVes37Dizd",
+        "name": "Patrick",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Shouty, intense male"
+    },
+    "harry": {
+        "id": "SOYHLrjzK2X1ezoPC6cr",
+        "name": "Harry",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Anxious, young male"
+    },
+    "liam": {
+        "id": "TX3LPaxmHKxFdv7VOQHJ",
+        "name": "Liam",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Articulate, confident male"
+    },
+    "dorothy": {
+        "id": "ThT5KcBeYPX3keUQqHPh",
+        "name": "Dorothy",
+        "accent": "British",
+        "gender": "Female",
+        "description": "Pleasant, British female"
+    },
+    "josh": {
+        "id": "TxGEqnHWrfWFTfGW9XjX",
+        "name": "Josh",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Deep, young American male"
+    },
+    "arnold": {
+        "id": "VR6AewLTigWG4xSOukaG",
+        "name": "Arnold",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Crisp, older male"
+    },
+    "charlotte": {
+        "id": "XB0fDUnXU5powFXDhCwa",
+        "name": "Charlotte",
+        "accent": "Swedish",
+        "gender": "Female",
+        "description": "Seductive, Swedish female"
+    },
+    "matilda": {
+        "id": "XrExE9yKIg1WjnnlVkGX",
+        "name": "Matilda",
+        "accent": "American",
+        "gender": "Female",
+        "description": "Warm, friendly female"
+    },
+    "james": {
+        "id": "ZQe5CZNOzWyzPSCn5a3c",
+        "name": "James",
+        "accent": "Australian",
+        "gender": "Male",
+        "description": "Deep, calm Australian male"
+    },
+    "joseph": {
+        "id": "Zlb1dXrM653N07WRdFW3",
+        "name": "Joseph",
+        "accent": "British",
+        "gender": "Male",
+        "description": "British, articulate male"
+    },
+    "jeremy": {
+        "id": "bVMeCyTHy58xNoL34h3p",
+        "name": "Jeremy",
+        "accent": "Irish-American",
+        "gender": "Male",
+        "description": "Irish-American, excited male"
+    },
+    "michael": {
+        "id": "flq6f7yk4E4fJM5XTYuZ",
+        "name": "Michael",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Deep, older male"
+    },
+    "ethan": {
+        "id": "g5CIjZEefAph4nQFvHAz",
+        "name": "Ethan",
+        "accent": "American",
+        "gender": "Male",
+        "description": "Bright, young male"
+    },
+    "george": {
+        "id": "JBFqnCBsd6RMkjVDRZzb",
+        "name": "George",
+        "accent": "British",
+        "gender": "Male",
+        "description": "Warm British male"
+    },
+    "freya": {
+        "id": "jsCqWAovK2LkecY7zXl4",
+        "name": "Freya",
+        "accent": "American",
+        "gender": "Female",
+        "description": "Confident, expressive female"
+    },
+    "gigi": {
+        "id": "jBpfuIE2acCO8z3wKNLl",
+        "name": "Gigi",
+        "accent": "American",
+        "gender": "Female",
+        "description": "Childish, animated female"
+    }
+}
 
 # Create the main app
 app = FastAPI()
