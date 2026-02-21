@@ -280,6 +280,20 @@ export default function ScriptDetailScreen() {
           </View>
         </View>
 
+        {/* Multi-Voice Assignment (Premium) */}
+        <View style={styles.section}>
+          <VoiceAssignment
+            scriptId={id!}
+            characters={currentScript.characters}
+            userCharacter={selectedCharacter}
+            isPremium={isPremium}
+            onUpgradePress={async () => {
+              trackUpgradeTriggered('script_detail_multivoice');
+              await presentPaywall();
+            }}
+          />
+        </View>
+
         {/* Preview Script */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
