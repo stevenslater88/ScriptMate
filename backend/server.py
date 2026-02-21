@@ -17,6 +17,8 @@ import PyPDF2
 import io
 from docx import Document
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from elevenlabs import ElevenLabs
+from elevenlabs.types import VoiceSettings
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
