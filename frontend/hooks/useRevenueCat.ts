@@ -127,25 +127,40 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       setOfferingsReady(hasPackages);
       
       if (!hasPackages) {
-        console.warn('[useRevenueCat] Production offering has no packages');
-        captureRevenueCatError(new Error('Production offering has no packages'), {
+        const errorMsg = `Production offering "${PRODUCTION_OFFERING_ID}" has no packages`;
+        console.warn('[useRevenueCat]', errorMsg);
+        console.error('[useRevenueCat] Available offerings:', Object.keys(fetchedOfferings?.all || {}));
+        captureRevenueCatError(new Error(errorMsg), {
           phase: 'load_offerings',
           offeringId: PRODUCTION_OFFERING_ID,
           availableOfferings: Object.keys(fetchedOfferings?.all || {}),
         });
+        setError('Premium is still syncing. Please try again in a minute.');
       } else {
+        setError(null);
         addBreadcrumb('Offerings loaded successfully', 'revenuecat', {
           packageCount: productionOffer?.availablePackages?.length,
+          offeringId: PRODUCTION_OFFERING_ID,
         });
       }
     } catch (err) {
-      console.error('[useRevenueCat] Failed to load offerings:', err);
+      const purchaseError = err as any;
+      const errorCode = purchaseError?.code || 'UNKNOWN';
+      const errorMessage = purchaseError?.message || String(err);
+      
+      console.error('[useRevenueCat] Failed to load offerings:', {
+        code: errorCode,
+        message: errorMessage,
+      });
+      
       captureRevenueCatError(err instanceof Error ? err : new Error(String(err)), {
         phase: 'load_offerings',
         offeringId: PRODUCTION_OFFERING_ID,
+        errorCode,
       });
+      
       setOfferingsReady(false);
-      // Don't set error here - offerings may still load on retry
+      setError('Premium is still syncing. Please try again in a minute.');
     }
   }, [getProductionOffering]);
 
