@@ -59,19 +59,70 @@ export default function VoiceAssignment({
 
   const voicesByGender = getVoicesByGender();
 
-  // Load saved assignments on mount
-  useEffect(() => {
-    const load = async () => {
-      const saved = await loadVoiceAssignments(scriptId);
-      const assignmentMap: Record<string, string> = {};
-      saved.forEach(a => {
-        assignmentMap[a.characterName] = a.voiceKey;
-      });
-      setAssignments(assignmentMap);
+  // Auto-assign voices to characters that don't have assignments
+  const autoAssignVoices = async () => {
+    const otherChars = characters.filter(c => c.name !== userCharacter);
+    const existingAssignments = await loadVoiceAssignments(scriptId);
+    const existingMap: Record<string, string> = {};
+    existingAssignments.forEach(a => {
+      existingMap[a.characterName] = a.voiceKey;
+    });
+
+    // Check if we need to auto-assign
+    const needsAssignment = otherChars.some(c => !existingMap[c.name]);
+    if (!needsAssignment && existingAssignments.length > 0) {
+      // All characters already have assignments
+      setAssignments(existingMap);
       setLoading(false);
-    };
-    load();
-  }, [scriptId]);
+      return;
+    }
+
+    // Get used voice keys to avoid duplicates
+    const usedVoices = new Set(Object.values(existingMap));
+    
+    // Alternate between male and female voices for variety
+    const allVoices = [...voicesByGender.female, ...voicesByGender.male];
+    let voiceIndex = 0;
+
+    const newAssignments: Record<string, string> = { ...existingMap };
+    
+    for (const char of otherChars) {
+      if (!newAssignments[char.name]) {
+        // Find next available voice that hasn't been used
+        let attempts = 0;
+        while (usedVoices.has(allVoices[voiceIndex % allVoices.length].key) && attempts < allVoices.length) {
+          voiceIndex++;
+          attempts++;
+        }
+        
+        const voice = allVoices[voiceIndex % allVoices.length];
+        newAssignments[char.name] = voice.key;
+        usedVoices.add(voice.key);
+        voiceIndex++;
+      }
+    }
+
+    setAssignments(newAssignments);
+
+    // Save the auto-assigned voices
+    const assignmentList: CharacterVoiceAssignment[] = Object.entries(newAssignments).map(
+      ([characterName, vKey]) => {
+        const v = getVoiceByKey(vKey);
+        return {
+          characterName,
+          voiceKey: vKey,
+          voiceId: v?.id || '',
+        };
+      }
+    );
+    await saveVoiceAssignments(scriptId, assignmentList);
+    setLoading(false);
+  };
+
+  // Load saved assignments on mount (and auto-assign if needed)
+  useEffect(() => {
+    autoAssignVoices();
+  }, [scriptId, userCharacter, characters]);
 
   // Cleanup audio on unmount
   useEffect(() => {
