@@ -204,7 +204,7 @@ export default function AuditionsScreen() {
           <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Audition Tracker</Text>
-        <TouchableOpacity onPress={handleShowStats} style={styles.statsButton}>
+        <TouchableOpacity onPress={handleShowStats} style={styles.statsButton} data-testid="stats-button">
           <Ionicons name="bar-chart" size={24} color="#6366f1" />
         </TouchableOpacity>
       </View>
