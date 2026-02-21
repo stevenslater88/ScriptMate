@@ -534,9 +534,10 @@ export default function RehearsalScreen() {
     setCurrentLineIndex(nextIndex);
     currentLineIndexRef.current = nextIndex;
     
-    // Reset speaking state for next line
+    // Reset speaking state for next line - IMPORTANT: clear before deciding to speak
     speakingLineIndexRef.current = null;
     advanceProcessedRef.current = false;
+    isSpeakingRef.current = false;
 
     const nextLine = lines[nextIndex];
     console.log('[Rehearsal] Next line character:', nextLine?.character, 'User:', userCharacter);
@@ -551,9 +552,15 @@ export default function RehearsalScreen() {
       }
     } else if (!nextLine?.is_stage_direction) {
       // AI line - speak it after a short delay
+      // Use a flag to prevent double-triggering
+      const lineToSpeak = nextIndex;
       setTimeout(() => {
-        if (!isPaused && currentLineIndexRef.current === nextIndex) {
-          speakLine(nextLine.text, nextIndex);
+        // Check that we haven't already started speaking this line
+        if (!isPaused && 
+            currentLineIndexRef.current === lineToSpeak && 
+            speakingLineIndexRef.current !== lineToSpeak &&
+            !isSpeakingRef.current) {
+          speakLine(nextLine.text, lineToSpeak);
         }
       }, 500);
     } else {
