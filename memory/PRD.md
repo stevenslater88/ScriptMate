@@ -290,6 +290,36 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 | P0: EAS Build Failure | FIXED | Downgraded react-native-reanimated to 4.1.6, pinned react-native-worklets to 0.5.1, expo-doctor passes 17/17 |
 | P1: Self-Tape routing error | FIXED | Changed `/selftape/index` to `/selftape` (expo-router syntax) |
 | P1: Audition Stats modal | FIXED | Added empty state UI when no stats, added data-testid |
+
+---
+
+## Feature 6: Teleprompter + Self-Tape Combo (NEW - Premium)
+
+### Status: Implementation Complete
+
+### Description
+Full-screen camera recording with an auto-scrolling script overlay. Allows actors to read their lines while recording themselves, perfect for self-tape auditions.
+
+### Features Implemented
+- [x] Full-screen camera view with script overlay
+- [x] Auto-scrolling teleprompter with adjustable speed (1x-5x)
+- [x] Play/Pause/Reset controls for the teleprompter
+- [x] Adjustable font size (16-36pt)
+- [x] Adjustable overlay opacity (50%-100%)
+- [x] Position options: Top, Middle, Bottom of screen
+- [x] Highlight user's lines in a different color
+- [x] 3-second countdown before recording
+- [x] Front/back camera toggle
+- [x] Recording duration display
+- [x] Post-record actions: Share, Save, Retake
+- [x] Settings modal for customization
+
+### Files Created/Modified
+- `frontend/app/selftape/teleprompter.tsx` - NEW teleprompter recording screen
+- `frontend/app/selftape/index.tsx` - Added "Teleprompter Mode" card with NEW badge
+
+### Premium Gating
+This is part of the Self-Tape Studio which is already a Premium feature.
 | P1: Self-Tape navigation | VERIFIED WORKING | Routes load correctly |
 | P1: Audition stats graph button | VERIFIED WORKING | Modal opens correctly |
 | P2: ESLint parsing errors | FIXED | Updated eslint.config.js |
