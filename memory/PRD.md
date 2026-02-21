@@ -301,7 +301,7 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 - Expo Tunnel: Available via Expo CLI
 - Backend: FastAPI on port 8001
 - Database: MongoDB
-- Preview URL: https://audition-hub-4.preview.emergentagent.com
+- Preview URL: https://recall-mode-lab.preview.emergentagent.com
 
 ## Testing Notes
 
