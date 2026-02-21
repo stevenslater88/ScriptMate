@@ -599,6 +599,27 @@ class TTSRequest(BaseModel):
     text: str
     voice: str = "alloy"
 
+class ElevenLabsTTSRequest(BaseModel):
+    """Request for ElevenLabs TTS generation"""
+    text: str
+    voice_id: str  # ElevenLabs voice ID or preset key
+    stability: float = 0.5
+    similarity_boost: float = 0.75
+    style: float = 0.0
+    use_speaker_boost: bool = True
+
+class CharacterVoiceAssignment(BaseModel):
+    """Voice assignment for a character in a script"""
+    character_name: str
+    voice_key: str  # Key from PRESET_VOICES (e.g., "rachel", "drew")
+    voice_id: str   # ElevenLabs voice ID
+
+class ScriptVoiceSettings(BaseModel):
+    """Voice settings for all characters in a script"""
+    script_id: str
+    character_voices: List[CharacterVoiceAssignment] = []
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 class AnalyzeScriptRequest(BaseModel):
     raw_text: str
 
