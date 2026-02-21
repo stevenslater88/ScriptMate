@@ -9,6 +9,38 @@ ScriptMate is a mobile app for actors to practice scripts, record professional s
 - **Monetization**: RevenueCat (scriptmate_premium entitlement)
 - **Crash Reporting**: Sentry
 - **Native Features**: expo-camera, expo-media-library, expo-sharing, expo-notifications
+- **TTS**: ElevenLabs (Multi-Voice feature) - client-side integration
+
+---
+
+## Feature 5: Multi-Voice Characters (NEW - Premium)
+
+### Status: Implementation Complete
+
+### Description
+Allows users to assign different AI voices to each character in their script for more immersive rehearsal sessions. Uses ElevenLabs TTS API with 26 preset voices across different accents and genders.
+
+### Features Implemented
+- [x] 26 preset voices (10 female, 16 male) with various accents
+- [x] Voice assignment UI in Script Detail screen
+- [x] Dropdown per character with voice selection
+- [x] Voice preview playback before selection
+- [x] Voice assignments saved per script (AsyncStorage)
+- [x] Client-side ElevenLabs integration (no server proxy needed)
+
+### Voice Options Include
+- **Female**: Rachel (American), Domi (American), Sarah (American), Dorothy (British), Charlotte (Swedish), etc.
+- **Male**: Drew (American), Clyde (American), Dave (British), Fin (Irish), Charlie (Australian), James (Australian), etc.
+
+### Premium Gating
+- **Free**: Cannot access Multi-Voice feature (shows lock icon)
+- **Premium**: Full access to all voices and assignments
+
+### Files Created/Modified
+- `frontend/services/elevenLabsService.ts` - ElevenLabs API client
+- `frontend/components/VoiceAssignment.tsx` - Voice picker UI component
+- `frontend/app/script/[id].tsx` - Added VoiceAssignment to script detail
+- `frontend/.env` - Added EXPO_PUBLIC_ELEVENLABS_API_KEY
 
 ---
 
