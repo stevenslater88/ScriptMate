@@ -512,6 +512,10 @@ const styles = StyleSheet.create({
   backLink: { padding: 12 },
   backLinkText: { fontSize: 14, color: '#6b7280' },
   
+  // Restore Purchases Button
+  restorePurchasesButton: { borderWidth: 1, borderColor: '#374151', borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginBottom: 12 },
+  restorePurchasesText: { fontSize: 15, fontWeight: '500', color: '#9ca3af' },
+  
   // Hero
   hero: { alignItems: 'center', paddingVertical: 24 },
   heroIcon: { width: 72, height: 72, borderRadius: 20, backgroundColor: 'rgba(245, 158, 11, 0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
