@@ -45,6 +45,21 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": false,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24
+          },
+          "ios": {
+            "newArchEnabled": false,
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
       "expo-router",
       "expo-speech-recognition",
       [
