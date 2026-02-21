@@ -288,11 +288,11 @@ export default function PremiumScreen() {
         </View>
         <View style={styles.errorContainer}>
           <View style={styles.errorIcon}>
-            <Ionicons name="cloud-offline-outline" size={48} color="#f59e0b" />
+            <Ionicons name="sync-outline" size={48} color="#f59e0b" />
           </View>
-          <Text style={styles.errorTitle}>Unable to Load Plans</Text>
+          <Text style={styles.errorTitle}>Premium is Still Syncing</Text>
           <Text style={styles.errorMessage}>
-            {error || 'Subscription options are temporarily unavailable. Please check your connection and try again.'}
+            Please try again in a minute. If this persists, check your internet connection.
           </Text>
           <TouchableOpacity 
             style={styles.retryButton} 
@@ -305,7 +305,7 @@ export default function PremiumScreen() {
             ) : (
               <>
                 <Ionicons name="refresh" size={20} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.retryButtonText}>Try Again</Text>
+                <Text style={styles.retryButtonText}>Retry</Text>
               </>
             )}
           </TouchableOpacity>
@@ -314,7 +314,7 @@ export default function PremiumScreen() {
             onPress={handleRestore}
             disabled={loading}
           >
-            <Text style={styles.secondaryButtonText}>Restore Previous Purchase</Text>
+            <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.backLink} onPress={() => router.back()}>
             <Text style={styles.backLinkText}>Go Back</Text>
