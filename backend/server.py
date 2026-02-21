@@ -1768,6 +1768,180 @@ async def update_user_stats(user_id: str, stats_update: Dict[str, Any]):
     
     return {"success": True}
 
+# ==================== ELEVENLABS TTS ROUTES (PREMIUM) ====================
+
+@api_router.get("/voices/presets")
+async def get_preset_voices():
+    """Get all available preset voices for Multi-Voice feature"""
+    voices_list = []
+    for key, voice in PRESET_VOICES.items():
+        voices_list.append({
+            "key": key,
+            "id": voice["id"],
+            "name": voice["name"],
+            "accent": voice["accent"],
+            "gender": voice["gender"],
+            "description": voice["description"]
+        })
+    
+    # Group by gender for easier UI selection
+    male_voices = [v for v in voices_list if v["gender"] == "Male"]
+    female_voices = [v for v in voices_list if v["gender"] == "Female"]
+    
+    return {
+        "voices": voices_list,
+        "grouped": {
+            "male": male_voices,
+            "female": female_voices
+        },
+        "total": len(voices_list)
+    }
+
+@api_router.post("/tts/elevenlabs/generate")
+async def generate_elevenlabs_tts(request: ElevenLabsTTSRequest):
+    """Generate TTS audio using ElevenLabs (Premium feature)"""
+    if not eleven_client:
+        raise HTTPException(status_code=503, detail="ElevenLabs service not configured")
+    
+    try:
+        # Resolve voice_id if a preset key was provided
+        voice_id = request.voice_id
+        if request.voice_id in PRESET_VOICES:
+            voice_id = PRESET_VOICES[request.voice_id]["id"]
+        
+        # Generate audio using ElevenLabs
+        voice_settings = VoiceSettings(
+            stability=request.stability,
+            similarity_boost=request.similarity_boost,
+            style=request.style,
+            use_speaker_boost=request.use_speaker_boost
+        )
+        
+        audio_generator = eleven_client.text_to_speech.convert(
+            text=request.text,
+            voice_id=voice_id,
+            model_id="eleven_multilingual_v2",
+            voice_settings=voice_settings
+        )
+        
+        # Collect audio data
+        audio_data = b""
+        for chunk in audio_generator:
+            audio_data += chunk
+        
+        # Convert to base64 for transfer
+        audio_b64 = base64.b64encode(audio_data).decode()
+        
+        return {
+            "audio_base64": audio_b64,
+            "audio_url": f"data:audio/mpeg;base64,{audio_b64}",
+            "text": request.text,
+            "voice_id": voice_id,
+            "format": "mp3"
+        }
+        
+    except Exception as e:
+        logger.error(f"ElevenLabs TTS error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
+
+@api_router.get("/scripts/{script_id}/voices")
+async def get_script_voice_settings(script_id: str):
+    """Get voice assignments for all characters in a script"""
+    settings = await db.script_voice_settings.find_one({"script_id": script_id})
+    if not settings:
+        # Return empty settings
+        return {
+            "script_id": script_id,
+            "character_voices": [],
+            "updated_at": None
+        }
+    
+    # Remove MongoDB _id
+    settings.pop("_id", None)
+    return settings
+
+@api_router.post("/scripts/{script_id}/voices")
+async def save_script_voice_settings(script_id: str, voice_settings: ScriptVoiceSettings):
+    """Save voice assignments for characters in a script"""
+    # Verify script exists
+    script = await db.scripts.find_one({"id": script_id})
+    if not script:
+        raise HTTPException(status_code=404, detail="Script not found")
+    
+    settings_dict = voice_settings.dict()
+    settings_dict["script_id"] = script_id
+    settings_dict["updated_at"] = datetime.utcnow()
+    
+    await db.script_voice_settings.update_one(
+        {"script_id": script_id},
+        {"$set": settings_dict},
+        upsert=True
+    )
+    
+    return {
+        "success": True,
+        "script_id": script_id,
+        "character_voices": settings_dict["character_voices"]
+    }
+
+@api_router.put("/scripts/{script_id}/voices/{character_name}")
+async def update_character_voice(script_id: str, character_name: str, voice_key: str):
+    """Update voice assignment for a single character"""
+    # Verify voice key exists
+    if voice_key not in PRESET_VOICES:
+        raise HTTPException(status_code=400, detail=f"Invalid voice key: {voice_key}")
+    
+    voice_info = PRESET_VOICES[voice_key]
+    
+    # Get existing settings
+    settings = await db.script_voice_settings.find_one({"script_id": script_id})
+    
+    if settings:
+        # Update existing character or add new
+        character_voices = settings.get("character_voices", [])
+        found = False
+        for cv in character_voices:
+            if cv["character_name"] == character_name:
+                cv["voice_key"] = voice_key
+                cv["voice_id"] = voice_info["id"]
+                found = True
+                break
+        
+        if not found:
+            character_voices.append({
+                "character_name": character_name,
+                "voice_key": voice_key,
+                "voice_id": voice_info["id"]
+            })
+        
+        await db.script_voice_settings.update_one(
+            {"script_id": script_id},
+            {"$set": {
+                "character_voices": character_voices,
+                "updated_at": datetime.utcnow()
+            }}
+        )
+    else:
+        # Create new settings
+        await db.script_voice_settings.insert_one({
+            "script_id": script_id,
+            "character_voices": [{
+                "character_name": character_name,
+                "voice_key": voice_key,
+                "voice_id": voice_info["id"]
+            }],
+            "updated_at": datetime.utcnow()
+        })
+    
+    return {
+        "success": True,
+        "character_name": character_name,
+        "voice_key": voice_key,
+        "voice_id": voice_info["id"],
+        "voice_name": voice_info["name"],
+        "voice_accent": voice_info["accent"]
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
