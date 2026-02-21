@@ -43,6 +43,6 @@ package-lock.json
 *.tsbuildinfo
 
 # Corrupted/binary files
-*[^a-zA-Z0-9._-]*
+# (removed overly broad pattern that was blocking source files)
 
 app-example
