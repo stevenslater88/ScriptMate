@@ -342,9 +342,9 @@ export default function PremiumScreen() {
           <View style={styles.heroIcon}>
             <Ionicons name="star" size={32} color="#f59e0b" />
           </View>
-          <Text style={styles.heroTitle}>Go Pro with ScriptMate</Text>
+          <Text style={styles.heroTitle}>ScriptMate Pro</Text>
           <Text style={styles.heroSubtitle}>
-            Unlock your full potential as an actor
+            Unlock Self Tape Studio + Pro Tools
           </Text>
         </View>
 
