@@ -239,9 +239,24 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 |-------|--------|-------|
 | P0: RevenueCat "Error 23" | FIXED | Refactored hook with safe offering fetch, added retry UI |
 | P0: AI cue loop in rehearsal | FIXED | Refactored TTS callback logic with refs |
+| P0: EAS Build Failure | FIXED | Upgraded react-native-reanimated to ~4.1.0, added react-native-worklets, expo-build-properties |
 | P1: Self-Tape navigation | VERIFIED WORKING | Routes load correctly |
 | P1: Audition stats graph button | VERIFIED WORKING | Modal opens correctly |
 | P2: ESLint parsing errors | FIXED | Updated eslint.config.js |
+
+---
+
+## Build Configuration (February 2026)
+
+### Dependencies Updated
+- `react-native-reanimated`: ~4.1.0 (upgraded from ~3.16.0 for SDK 54 compatibility)
+- `react-native-worklets`: ~0.5.1 (new, required by reanimated 4.x)
+- `expo-build-properties`: 1.0.10 (new, for granular native build control)
+
+### Build Settings
+- `newArchEnabled`: false (both app.json and expo-build-properties)
+- Android: compileSdkVersion 35, targetSdkVersion 35, minSdkVersion 24
+- iOS: deploymentTarget 15.1
 
 ---
 
