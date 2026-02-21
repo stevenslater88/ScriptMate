@@ -163,7 +163,8 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 #### P0 Build Fix - SDK 54 Compatibility (Latest Session - Feb 21, 2026)
 - **Root Cause 1**: Expo SDK 54 requires `react-native-reanimated ~4.1.x`, but codebase had `~3.16.0` (SDK 52 version)
 - **Root Cause 2**: Missing `babel.config.js` with required worklets plugin for Reanimated 4.x
-- **Root Cause 3**: Build system was overriding `react-native-worklets` version (injecting 0.7.x instead of 0.5.1)
+- **Root Cause 3**: Build system was overriding `react-native-worklets` version (injecting 0.7.x/0.5.2 instead of 0.5.1)
+- **Root Cause 4**: Build system deletes yarn.lock and uses npm, which ignores yarn's `resolutions` field
 - **Fixes Applied**:
   - Upgraded `react-native-reanimated` from `~3.16.0` to `~4.1.0`
   - Added `react-native-worklets` `0.5.1` (exact version pinned, required dependency for reanimated 4.x)
@@ -172,10 +173,13 @@ Future: "Backup & Sync (coming soon)" placeholder added.
     - Android: `newArchEnabled: false`, `compileSdkVersion: 35`, `targetSdkVersion: 35`, `minSdkVersion: 24`
     - iOS: `newArchEnabled: false`, `deploymentTarget: 15.1`
   - Added `react-native-worklets` and `react-native-reanimated` to `expo.install.exclude` to prevent version overrides
-  - Added `resolutions` block to pin `react-native-worklets` to `0.5.1`
+  - Added **`resolutions`** block (for yarn) to pin `react-native-worklets` to `0.5.1`
+  - Added **`overrides`** block (for npm) to pin `react-native-worklets` to `0.5.1`
+  - Updated `.npmrc` with `save-exact=true` and `legacy-peer-deps=true`
   - Regenerated `yarn.lock` from scratch for clean dependency resolution
   - Added `CORS_ORIGINS="*"` to backend/.env for production consistency
 - **Status**: Changes applied locally, awaiting deployment verification
+- **Note**: The EAS build environment is deleting lock files and using npm install, which may still resolve to wrong versions. The `overrides` field should help.
 
 #### Previous Build Configuration Fix
 - **P0 Build Configuration Fix - EAS Dependency Mismatch**: Fixed recurring build failures
