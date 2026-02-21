@@ -134,6 +134,31 @@ export default function SelfTapeHub() {
           <Ionicons name="add" size={24} color="#10b981" />
         </TouchableOpacity>
 
+        {/* Teleprompter Mode Card - NEW */}
+        <TouchableOpacity 
+          onPress={() => {
+            if (scripts.length === 0) {
+              Alert.alert('No Scripts', 'Upload a script first to use teleprompter mode.');
+              return;
+            }
+            // Go to first script's teleprompter
+            const firstScript = scripts[0];
+            router.push(`/selftape/teleprompter?scriptId=${firstScript.id}`);
+          }} 
+          style={styles.teleprompterCard}
+        >
+          <View style={styles.teleprompterIcon}>
+            <Ionicons name="tablet-portrait-outline" size={24} color="#8b5cf6" />
+          </View>
+          <View style={styles.teleprompterInfo}>
+            <Text style={styles.teleprompterTitle}>Teleprompter Mode</Text>
+            <Text style={styles.teleprompterSubtitle}>Full-screen camera with scrolling script overlay</Text>
+          </View>
+          <View style={styles.newBadge}>
+            <Text style={styles.newBadgeText}>NEW</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Library Button */}
         <TouchableOpacity onPress={handleViewLibrary} style={styles.libraryCard}>
           <View style={styles.libraryIcon}>
