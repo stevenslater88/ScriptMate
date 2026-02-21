@@ -14,7 +14,6 @@
     "install": {
       "exclude": [
         "react-native-gesture-handler",
-        "react-native-reanimated",
         "@types/react",
         "@react-native-community/slider"
       ]
