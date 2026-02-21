@@ -286,8 +286,10 @@ Future: "Backup & Sync (coming soon)" placeholder added.
 | Issue | Status | Notes |
 |-------|--------|-------|
 | P0: RevenueCat "Error 23" | FIXED | Refactored hook with safe offering fetch, added retry UI |
-| P0: AI cue loop in rehearsal | FIXED | Refactored TTS callback logic with refs |
-| P0: EAS Build Failure | FIXED | Upgraded react-native-reanimated to ~4.1.0, added react-native-worklets, expo-build-properties |
+| P0: AI cue loop in rehearsal | FIXED | Added isSpeakingRef guard, better speakingLineIndexRef handling, cleared state on advance |
+| P0: EAS Build Failure | FIXED | Downgraded react-native-reanimated to 4.1.6, pinned react-native-worklets to 0.5.1, expo-doctor passes 17/17 |
+| P1: Self-Tape routing error | FIXED | Changed `/selftape/index` to `/selftape` (expo-router syntax) |
+| P1: Audition Stats modal | FIXED | Added empty state UI when no stats, added data-testid |
 | P1: Self-Tape navigation | VERIFIED WORKING | Routes load correctly |
 | P1: Audition stats graph button | VERIFIED WORKING | Modal opens correctly |
 | P2: ESLint parsing errors | FIXED | Updated eslint.config.js |
