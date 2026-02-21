@@ -234,13 +234,20 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
 
     setIsLoading(true);
     setError(null);
+    
+    console.log('[useRevenueCat] Retrying to load offerings...');
+    addBreadcrumb('Retry load offerings', 'revenuecat', { action: 'retry' });
 
     try {
       await loadOfferings();
       await loadCustomerInfo();
     } catch (err) {
-      console.error('[useRevenueCat] Retry failed:', err);
-      setError('Unable to load subscription options. Please check your connection and try again.');
+      const purchaseError = err as any;
+      console.error('[useRevenueCat] Retry failed:', {
+        code: purchaseError?.code || 'UNKNOWN',
+        message: purchaseError?.message || String(err),
+      });
+      setError('Premium is still syncing. Please try again in a minute.');
     } finally {
       setIsLoading(false);
     }
