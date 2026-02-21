@@ -430,51 +430,61 @@ export default function AuditionsScreen() {
           <View style={styles.statsModalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Your Stats</Text>
-              <TouchableOpacity onPress={() => setShowStatsModal(false)}>
+              <TouchableOpacity onPress={() => setShowStatsModal(false)} data-testid="close-stats-modal">
                 <Ionicons name="close" size={28} color="#fff" />
               </TouchableOpacity>
             </View>
 
-            {stats && (
-              <View style={styles.statsGrid}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statBoxValue}>{stats.auditionsThisMonth}</Text>
-                  <Text style={styles.statBoxLabel}>This Month</Text>
+            {stats ? (
+              <>
+                <View style={styles.statsGrid}>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statBoxValue}>{stats.auditionsThisMonth}</Text>
+                    <Text style={styles.statBoxLabel}>This Month</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statBoxValue}>{stats.auditionsLastMonth}</Text>
+                    <Text style={styles.statBoxLabel}>Last Month</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={[styles.statBoxValue, { color: '#f59e0b' }]}>{stats.callbackRate}%</Text>
+                    <Text style={styles.statBoxLabel}>Callback Rate</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={[styles.statBoxValue, { color: '#10b981' }]}>{stats.bookingRate}%</Text>
+                    <Text style={styles.statBoxLabel}>Booking Rate</Text>
+                  </View>
                 </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statBoxValue}>{stats.auditionsLastMonth}</Text>
-                  <Text style={styles.statBoxLabel}>Last Month</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Text style={[styles.statBoxValue, { color: '#f59e0b' }]}>{stats.callbackRate}%</Text>
-                  <Text style={styles.statBoxLabel}>Callback Rate</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Text style={[styles.statBoxValue, { color: '#10b981' }]}>{stats.bookingRate}%</Text>
-                  <Text style={styles.statBoxLabel}>Booking Rate</Text>
-                </View>
-              </View>
-            )}
 
-            {stats && (
-              <View style={[styles.momentumCard, stats.momentum === 'rising' ? styles.momentumRising : stats.momentum === 'declining' ? styles.momentumDeclining : styles.momentumSteady]}>
-                <Ionicons
-                  name={stats.momentum === 'rising' ? 'trending-up' : stats.momentum === 'declining' ? 'trending-down' : 'remove'}
-                  size={24}
-                  color={stats.momentum === 'rising' ? '#10b981' : stats.momentum === 'declining' ? '#ef4444' : '#6b7280'}
-                />
-                <View style={styles.momentumInfo}>
-                  <Text style={styles.momentumTitle}>
-                    {stats.momentum === 'rising' ? 'Momentum Rising!' : stats.momentum === 'declining' ? 'Keep Pushing!' : 'Steady Progress'}
-                  </Text>
-                  <Text style={styles.momentumSubtitle}>
-                    {stats.momentum === 'rising'
-                      ? "You're auditioning more than last month!"
-                      : stats.momentum === 'declining'
-                      ? 'Your audition pace has slowed down'
-                      : 'Consistent effort pays off'}
-                  </Text>
+                <View style={[styles.momentumCard, stats.momentum === 'rising' ? styles.momentumRising : stats.momentum === 'declining' ? styles.momentumDeclining : styles.momentumSteady]}>
+                  <Ionicons
+                    name={stats.momentum === 'rising' ? 'trending-up' : stats.momentum === 'declining' ? 'trending-down' : 'remove'}
+                    size={24}
+                    color={stats.momentum === 'rising' ? '#10b981' : stats.momentum === 'declining' ? '#ef4444' : '#6b7280'}
+                  />
+                  <View style={styles.momentumInfo}>
+                    <Text style={styles.momentumTitle}>
+                      {stats.momentum === 'rising' ? 'Momentum Rising!' : stats.momentum === 'declining' ? 'Keep Pushing!' : 'Steady Progress'}
+                    </Text>
+                    <Text style={styles.momentumSubtitle}>
+                      {stats.momentum === 'rising'
+                        ? "You're auditioning more than last month!"
+                        : stats.momentum === 'declining'
+                        ? 'Your audition pace has slowed down'
+                        : 'Consistent effort pays off'}
+                    </Text>
+                  </View>
                 </View>
+              </>
+            ) : (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="analytics-outline" size={48} color="#6b7280" />
+                <Text style={{ color: '#9ca3af', fontSize: 16, marginTop: 12 }}>
+                  No stats yet
+                </Text>
+                <Text style={{ color: '#6b7280', fontSize: 14, marginTop: 4 }}>
+                  Add some auditions to see your stats
+                </Text>
               </View>
             )}
           </View>
