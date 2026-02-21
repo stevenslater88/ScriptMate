@@ -17,6 +17,7 @@ import { useScriptStore, Script, Character } from '../../store/scriptStore';
 import { getSettings, saveSettings } from '../../services/syncService';
 import useRevenueCat from '../../hooks/useRevenueCat';
 import { trackUpgradeTriggered } from '../../services/analyticsService';
+import VoiceAssignment from '../../components/VoiceAssignment';
 
 const VOICE_OPTIONS = [
   { id: 'alloy', name: 'Alloy', description: 'Neutral, balanced' },
