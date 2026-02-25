@@ -325,45 +325,57 @@ This is part of the Self-Tape Studio which is already a Premium feature.
 
 ## Feature 7: Dialect Coach (NEW - Premium)
 
-### Status: Implementation Complete
+### Status: Implementation Complete (v2 - Redesigned UI)
 
 ### Description
-An AI-powered pronunciation coach that analyzes user's spoken accent against a target dialect. Uses OpenAI Whisper for speech-to-text and GPT for pronunciation analysis.
+An AI-powered pronunciation coach with a cinematic, dark UI featuring purple/blue gradient glows. The feature has 3 distinct screens following UX best practices.
 
-### Features Implemented
-- [x] 6 accent profiles: British RP, American General, Australian, Irish, Scottish, Southern American
-- [x] Audio recording for pronunciation
-- [x] AI analysis using Whisper + GPT-4o
-- [x] Pronunciation score (0-100%)
-- [x] Pace assessment (too slow / too fast / good)
-- [x] Problem word identification with tips
-- [x] 15 sample practice lines from famous movies/theatre
-- [x] Practice history tracking with improvement stats
-- [x] Instant retry and rescore
-- [x] Clean, minimal UI
+### 3-Screen Flow
 
-### Key Accent Features Analyzed
-- Rhotic vs Non-rhotic R sounds
-- Vowel lengths and shifts
-- T pronunciation (flapped, clear, glottal)
-- Intonation patterns
-- Speech pace (WPM)
+**Screen 1 - Record:**
+- Dark cinematic background with gradient
+- Swipeable accent cards (American, British RP, Irish, Australian, Scottish, Southern US)
+- Large glowing microphone button with pulse animation
+- Animated waveform bars that react during recording
+- Sample dialogue line with shuffle button
+- Premium CTA for free users
 
-### Files Created/Modified
-- `backend/server.py` - Added ACCENT_PROFILES config, Whisper STT client, dialect analysis endpoints
-- `frontend/services/dialectCoachService.ts` - API client for dialect features
-- `frontend/app/dialect-coach.tsx` - Main Dialect Coach screen
-- `frontend/app/dashboard.tsx` - Added Dialect Coach card with NEW badge
+**Screen 2 - Feedback:**
+- Circular accuracy score ring (0-100%) with glow animation
+- Pace assessment badge (Good rhythm / A bit slow / A bit fast)
+- Color-highlighted text: Green = correct, Orange = needs work
+- Tips section with bulb icons and specific word feedback
+- "Try Again" and "Next Line" action buttons
 
-### API Endpoints
-- `GET /api/dialect/accents` - List available accents
-- `GET /api/dialect/accents/{id}` - Get accent details
-- `POST /api/dialect/analyze` - Analyze pronunciation (multipart with audio)
-- `GET /api/dialect/history/{user_id}` - Get practice history
-- `GET /api/dialect/sample-lines` - Get sample practice lines
+**Screen 3 - Progress:**
+- Daily practice streak with flame icon and 7-day dots
+- Stats grid: Best Score, Average, Improvement, Total Sessions
+- Accent progress bars for each accent
+- Motivational message
+- "Start Practice" CTA button
+
+### Visual Style
+- Dark background (#0a0a0f)
+- Purple/blue gradient glows (#8b5cf6, #6366f1)
+- Large, accessible buttons
+- Subtle animations (glow pulse, waveform, score counter)
+- Clean, minimal design with one main action per screen
+
+### AI Analysis Includes
+- Pronunciation accuracy (0-100%)
+- Rhythm/pace assessment
+- Problem word identification
+- Specific improvement tips
+- Highlighted text feedback
+
+### Files
+- `frontend/app/dialect-coach.tsx` - Complete 3-screen UI with animations
+- `frontend/services/dialectCoachService.ts` - API client
+- `backend/server.py` - Whisper STT + GPT-4o analysis endpoints
 
 ### Premium Gating
-- Free users see lock icon and are prompted to upgrade when selecting an accent
+- Free users see preview of Screen 1 with lock badges
+- Recording and analysis requires Premium subscription
 | P1: Self-Tape navigation | VERIFIED WORKING | Routes load correctly |
 | P1: Audition stats graph button | VERIFIED WORKING | Modal opens correctly |
 | P2: ESLint parsing errors | FIXED | Updated eslint.config.js |
