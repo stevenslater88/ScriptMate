@@ -2152,6 +2152,229 @@ async def update_character_voice(script_id: str, character_name: str, voice_key:
         "voice_accent": voice_info["accent"]
     }
 
+# ==================== DIALECT COACH ROUTES (PREMIUM) ====================
+
+@api_router.get("/dialect/accents")
+async def get_available_accents():
+    """Get all available accent profiles for Dialect Coach"""
+    accents = []
+    for accent_id, profile in ACCENT_PROFILES.items():
+        accents.append({
+            "id": profile["id"],
+            "name": profile["name"],
+            "description": profile["description"],
+            "region": profile["region"],
+            "key_features": profile["key_features"]
+        })
+    return {"accents": accents, "total": len(accents)}
+
+@api_router.get("/dialect/accents/{accent_id}")
+async def get_accent_profile(accent_id: str):
+    """Get detailed information about a specific accent"""
+    if accent_id not in ACCENT_PROFILES:
+        raise HTTPException(status_code=404, detail="Accent not found")
+    return ACCENT_PROFILES[accent_id]
+
+@api_router.post("/dialect/analyze")
+async def analyze_dialect(
+    audio: UploadFile = File(...),
+    expected_text: str = Form(...),
+    accent_id: str = Form(...),
+    user_id: str = Form(...)
+):
+    """
+    Analyze user's pronunciation against a target accent.
+    Returns pronunciation score, pace assessment, problem words, and tips.
+    """
+    if not stt_client:
+        raise HTTPException(status_code=503, detail="Speech-to-text service not configured")
+    
+    if accent_id not in ACCENT_PROFILES:
+        raise HTTPException(status_code=400, detail="Invalid accent ID")
+    
+    accent_profile = ACCENT_PROFILES[accent_id]
+    
+    try:
+        # Read audio file
+        audio_content = await audio.read()
+        audio_duration = len(audio_content) / 32000  # Rough estimate for 16kHz audio
+        
+        # Save to temp file for Whisper
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+            temp_file.write(audio_content)
+            temp_path = temp_file.name
+        
+        try:
+            # Transcribe with Whisper
+            with open(temp_path, "rb") as audio_file:
+                transcription = await stt_client.transcribe(
+                    file=audio_file,
+                    model="whisper-1",
+                    response_format="verbose_json",
+                    language="en",
+                    temperature=0.0
+                )
+            
+            transcribed_text = transcription.text.strip()
+            
+            # Calculate audio duration from transcription if available
+            if hasattr(transcription, 'duration'):
+                audio_duration = transcription.duration
+            
+            # Calculate words per minute
+            word_count = len(transcribed_text.split())
+            wpm = int((word_count / audio_duration) * 60) if audio_duration > 0 else 0
+            
+            # Use GPT to analyze pronunciation
+            chat = LlmChat(api_key=EMERGENT_LLM_KEY)
+            
+            analysis_prompt = f"""You are a dialect coach specializing in {accent_profile['name']} ({accent_profile['description']}).
+
+EXPECTED TEXT: "{expected_text}"
+USER'S TRANSCRIBED SPEECH: "{transcribed_text}"
+TARGET ACCENT: {accent_profile['name']}
+SPEAKING PACE: {wpm} words per minute
+
+Key features of {accent_profile['name']}:
+{chr(10).join('- ' + f for f in accent_profile['key_features'])}
+
+Analyze the user's pronunciation and provide feedback. Return a JSON object with:
+{{
+    "pronunciation_score": <0-100 score based on how close they are to the target accent and correct pronunciation>,
+    "pace_assessment": "<'too_slow' if below 110 wpm, 'too_fast' if above 160 wpm, 'good' otherwise>",
+    "problem_words": [
+        {{
+            "word": "<word that needs work>",
+            "expected_pronunciation": "<how it should sound in {accent_profile['name']}>",
+            "user_pronunciation": "<what the user likely said>",
+            "tip": "<specific, actionable tip to improve this word>",
+            "severity": "<'minor', 'moderate', or 'significant'>"
+        }}
+    ],
+    "tips": ["<2-3 general tips for improving their {accent_profile['name']} accent>"],
+    "overall_feedback": "<1-2 sentences of encouraging, constructive feedback>"
+}}
+
+Be constructive and encouraging. Focus on the most important improvements first.
+If the transcription matches the expected text well, give a high score.
+Return ONLY valid JSON, no other text."""
+
+            response = await chat.send_message(
+                UserMessage(text=analysis_prompt),
+                model="gpt-4o"
+            )
+            
+            # Parse GPT response
+            try:
+                # Clean the response - remove markdown code blocks if present
+                response_text = response.text.strip()
+                if response_text.startswith("```"):
+                    response_text = response_text.split("```")[1]
+                    if response_text.startswith("json"):
+                        response_text = response_text[4:]
+                response_text = response_text.strip()
+                
+                analysis = json.loads(response_text)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse GPT response: {response.text}")
+                # Provide fallback analysis
+                analysis = {
+                    "pronunciation_score": 70,
+                    "pace_assessment": "good" if 110 <= wpm <= 160 else ("too_slow" if wpm < 110 else "too_fast"),
+                    "problem_words": [],
+                    "tips": ["Keep practicing with this accent!", "Listen to native speakers and mimic their patterns."],
+                    "overall_feedback": "Good effort! Keep practicing to improve your accent."
+                }
+            
+            # Build result
+            result = DialectAnalysisResult(
+                user_id=user_id,
+                accent_id=accent_id,
+                accent_name=accent_profile["name"],
+                expected_text=expected_text,
+                transcribed_text=transcribed_text,
+                pronunciation_score=min(100, max(0, analysis.get("pronunciation_score", 70))),
+                pace_assessment=analysis.get("pace_assessment", "good"),
+                pace_wpm=wpm,
+                problem_words=[ProblemWord(**pw) for pw in analysis.get("problem_words", [])[:5]],
+                tips=analysis.get("tips", [])[:3],
+                overall_feedback=analysis.get("overall_feedback", "Keep practicing!"),
+                audio_duration_seconds=audio_duration
+            )
+            
+            # Store attempt for tracking
+            attempt = DialectAttempt(
+                user_id=user_id,
+                accent_id=accent_id,
+                expected_text=expected_text,
+                pronunciation_score=result.pronunciation_score,
+                pace_assessment=result.pace_assessment,
+                problem_word_count=len(result.problem_words)
+            )
+            await db.dialect_attempts.insert_one(attempt.dict())
+            
+            return result.dict()
+            
+        finally:
+            # Cleanup temp file
+            import os
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+                
+    except Exception as e:
+        logger.error(f"Dialect analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+@api_router.get("/dialect/history/{user_id}")
+async def get_dialect_history(user_id: str, accent_id: Optional[str] = None, limit: int = 20):
+    """Get user's recent dialect practice attempts for tracking improvement"""
+    query = {"user_id": user_id}
+    if accent_id:
+        query["accent_id"] = accent_id
+    
+    attempts = await db.dialect_attempts.find(
+        query,
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(limit)
+    
+    # Calculate improvement stats
+    if len(attempts) >= 2:
+        recent_avg = sum(a["pronunciation_score"] for a in attempts[:5]) / min(5, len(attempts))
+        older_avg = sum(a["pronunciation_score"] for a in attempts[-5:]) / min(5, len(attempts))
+        improvement = recent_avg - older_avg
+    else:
+        improvement = 0
+    
+    return {
+        "attempts": attempts,
+        "total": len(attempts),
+        "improvement": round(improvement, 1),
+        "best_score": max((a["pronunciation_score"] for a in attempts), default=0),
+        "average_score": round(sum(a["pronunciation_score"] for a in attempts) / len(attempts), 1) if attempts else 0
+    }
+
+@api_router.get("/dialect/sample-lines")
+async def get_sample_lines(accent_id: Optional[str] = None):
+    """Get sample dialogue lines for practice"""
+    sample_lines = [
+        {"text": "To be, or not to be, that is the question.", "source": "Hamlet", "difficulty": "medium"},
+        {"text": "All the world's a stage, and all the men and women merely players.", "source": "As You Like It", "difficulty": "medium"},
+        {"text": "The rain in Spain stays mainly in the plain.", "source": "My Fair Lady", "difficulty": "easy"},
+        {"text": "How kind of you to let me come.", "source": "The Importance of Being Earnest", "difficulty": "easy"},
+        {"text": "I could have been a contender. I could have been somebody.", "source": "On the Waterfront", "difficulty": "medium"},
+        {"text": "Here's looking at you, kid.", "source": "Casablanca", "difficulty": "easy"},
+        {"text": "After all, tomorrow is another day.", "source": "Gone with the Wind", "difficulty": "easy"},
+        {"text": "You talkin' to me? Well I'm the only one here.", "source": "Taxi Driver", "difficulty": "hard"},
+        {"text": "I'll be back.", "source": "The Terminator", "difficulty": "easy"},
+        {"text": "May the Force be with you.", "source": "Star Wars", "difficulty": "easy"},
+        {"text": "Elementary, my dear Watson.", "source": "Sherlock Holmes", "difficulty": "easy"},
+        {"text": "There's no place like home.", "source": "The Wizard of Oz", "difficulty": "easy"},
+        {"text": "Frankly, my dear, I don't give a damn.", "source": "Gone with the Wind", "difficulty": "medium"},
+        {"text": "You can't handle the truth!", "source": "A Few Good Men", "difficulty": "medium"},
+        {"text": "Life is like a box of chocolates. You never know what you're gonna get.", "source": "Forrest Gump", "difficulty": "hard"},
+    ]
+    return {"lines": sample_lines}
+
 # Include the router in the main app
 app.include_router(api_router)
 
