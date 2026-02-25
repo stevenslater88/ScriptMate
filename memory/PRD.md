@@ -428,6 +428,47 @@ The previous agent upgraded `react-native-reanimated` to `^4.2.0` and `react-nat
 
 ---
 
+## Feature 8: Acting Coach Mode (NEW - Premium)
+
+### Status: Implementation Complete & Tested
+
+### Description
+AI-powered acting coach that analyzes emotion, performance style, and energy choices for any scene, returning detailed coaching feedback. Two-screen flow with a dark cinematic UI.
+
+### Screen 1 - ActingCoachScreen
+- Scene Overview Card with genre badge, title, context, shuffle button (12 scenes)
+- Emotion Selector: 6 large buttons with glow animation (Neutral, Angry, Emotional, Confident, Nervous, Vulnerable)
+- Performance Style Selector: Natural TV, Dramatic, Film Subtle, Social Media
+- Energy Slider: 1-10 range with Calm/Balanced/Intense feedback text
+- Free Tip card (dynamic per emotion) for non-premium users
+- "Coach My Performance" CTA (premium) / "Unlock Acting Coach" (free)
+
+### Screen 2 - FeedbackScreen
+- Animated performance score (0-10) with color coding
+- Score label badge (e.g., "Strong Choice!", "Great Instinct!")
+- What Went Well section with bullet points
+- Improvement Tips (2-3 numbered cards)
+- Example Delivery with quote styling
+- Director's Note section
+- Try Again / Back to Dashboard actions
+
+### API Endpoints
+- `GET /api/acting-coach/scenes` - Returns 12 practice scenes
+- `POST /api/acting-coach/analyze` - AI analysis via GPT-4o
+- `GET /api/acting-coach/history/{user_id}` - Practice history
+
+### Files
+- `frontend/app/acting-coach.tsx` - Main coach screen
+- `frontend/app/acting-feedback.tsx` - Feedback results screen
+- `frontend/services/actingCoachService.ts` - API client
+- `backend/server.py` - Acting Coach endpoints added
+
+### Premium Gating
+- Free: See preview tips per emotion, locked CTA
+- Premium: Full AI analysis with detailed coaching feedback
+
+---
+
 ## Backlog / Future Tasks
 
 ### P1 (High Priority)
