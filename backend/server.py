@@ -15,8 +15,10 @@ import base64
 import httpx
 import PyPDF2
 import io
+import tempfile
 from docx import Document
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.openai import OpenAISpeechToText
 from elevenlabs import ElevenLabs
 from elevenlabs.types import VoiceSettings
 
