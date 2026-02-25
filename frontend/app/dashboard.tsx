@@ -487,6 +487,8 @@ const styles = StyleSheet.create({
   actionIcon: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   actionTitle: { fontSize: 15, fontWeight: '600', color: '#fff' },
   actionSubtitle: { fontSize: 12, color: '#6b7280', marginTop: 3 },
+  newFeatureBadge: { backgroundColor: '#8b5cf6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  newFeatureText: { fontSize: 10, fontWeight: '700', color: '#fff' },
   
   // Premium Card
   premiumCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(245, 158, 11, 0.06)', borderRadius: 14, padding: 16, marginTop: 20, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.15)' },
