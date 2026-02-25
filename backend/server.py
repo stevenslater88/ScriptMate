@@ -2375,6 +2375,122 @@ async def get_sample_lines(accent_id: Optional[str] = None):
     ]
     return {"lines": sample_lines}
 
+# ==================== ACTING COACH ROUTES (PREMIUM) ====================
+
+class ActingCoachRequest(BaseModel):
+    scene_title: str = Field(..., min_length=1)
+    scene_context: str = Field(default="")
+    emotion: str = Field(...)
+    style: str = Field(...)
+    energy: int = Field(..., ge=1, le=10)
+    user_id: str = Field(default="anonymous")
+
+@api_router.post("/acting-coach/analyze")
+async def analyze_acting_performance(request: ActingCoachRequest):
+    """AI-powered acting coach that analyzes emotion, style, and energy choices."""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    energy_label = "Low" if request.energy <= 3 else ("Medium" if request.energy <= 6 else "High")
+
+    prompt = f"""You are a supportive, expert acting coach helping a beginner actor prepare for a scene.
+
+SCENE: "{request.scene_title}"
+{f'CONTEXT: {request.scene_context}' if request.scene_context else ''}
+CHOSEN EMOTION: {request.emotion}
+PERFORMANCE STYLE: {request.style}
+ENERGY LEVEL: {request.energy}/10 ({energy_label})
+
+Based on these choices, provide detailed, encouraging coaching feedback. Return a JSON object with:
+{{
+    "performance_score": <1-10 score, be encouraging - minimum 5 for any valid combination>,
+    "score_label": "<short encouraging label like 'Great Instinct!' or 'Strong Choice!' or 'Solid Foundation'>",
+    "what_works": [
+        "<specific praise about their emotion choice for this scene>",
+        "<specific praise about style + energy combination>"
+    ],
+    "improvement_tips": [
+        "<actionable tip about deepening the emotion>",
+        "<actionable tip about the performance style>",
+        "<actionable tip about energy calibration>"
+    ],
+    "example_delivery": "<A 1-2 sentence example of how to deliver a key moment with these settings. Be specific and vivid.>",
+    "director_note": "<A brief, warm 'director note' - as if a supportive director is giving guidance on set>"
+}}
+
+IMPORTANT:
+- Be warm, supportive, and beginner-friendly
+- Never be discouraging
+- Give specific, actionable advice they can use immediately
+- The example delivery should feel like a real acting direction
+- Return ONLY valid JSON, no other text."""
+
+    try:
+        chat = LlmChat(api_key=EMERGENT_LLM_KEY)
+        response = await chat.send_message(
+            model="gpt-4o",
+            message=UserMessage(text=prompt),
+            temperature=0.7,
+        )
+
+        response_text = response.text.strip()
+        if response_text.startswith("```"):
+            response_text = response_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+        result = json.loads(response_text)
+
+        # Store attempt
+        attempt = {
+            "id": str(uuid.uuid4()),
+            "user_id": request.user_id,
+            "scene_title": request.scene_title,
+            "emotion": request.emotion,
+            "style": request.style,
+            "energy": request.energy,
+            "score": result.get("performance_score", 7),
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        await db.acting_coach_attempts.insert_one(attempt)
+
+        return {
+            "success": True,
+            "analysis": result,
+        }
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Failed to parse AI response")
+    except Exception as e:
+        logging.error(f"Acting coach analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/acting-coach/history/{user_id}")
+async def get_acting_coach_history(user_id: str, limit: int = 20):
+    """Get user's acting coach history."""
+    attempts = await db.acting_coach_attempts.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("created_at", -1).limit(limit).to_list(length=limit)
+    return {"attempts": attempts, "total": len(attempts)}
+
+SCENE_LIBRARY = [
+    {"title": "The Breakup", "context": "You're ending a long relationship. Your partner doesn't see it coming.", "genre": "Drama"},
+    {"title": "The Job Interview", "context": "You desperately need this job but must stay composed and confident.", "genre": "Drama"},
+    {"title": "The Confession", "context": "You're admitting a secret you've kept for years to your best friend.", "genre": "Drama"},
+    {"title": "The Victory Speech", "context": "You just won an award you never expected. The crowd is watching.", "genre": "Drama"},
+    {"title": "The Goodbye", "context": "Saying farewell at the airport. You may never see them again.", "genre": "Drama"},
+    {"title": "The Confrontation", "context": "Facing someone who betrayed your trust. They don't know you know.", "genre": "Thriller"},
+    {"title": "The Proposal", "context": "You're about to ask the most important question of your life.", "genre": "Romance"},
+    {"title": "The Bad News", "context": "You have to deliver devastating news to someone you love.", "genre": "Drama"},
+    {"title": "The Audition", "context": "Meta: you're auditioning for the role of a lifetime. This is your moment.", "genre": "Drama"},
+    {"title": "The Apology", "context": "Making amends for something terrible you did. You're not sure you'll be forgiven.", "genre": "Drama"},
+    {"title": "The Stand-Up", "context": "First time on stage at an open mic. The crowd is tough.", "genre": "Comedy"},
+    {"title": "The Rescue", "context": "Someone you care about is in danger. Time is running out.", "genre": "Action"},
+]
+
+@api_router.get("/acting-coach/scenes")
+async def get_acting_coach_scenes():
+    """Get the scene library for acting coach practice."""
+    return {"scenes": SCENE_LIBRARY}
+
 # Include the router in the main app
 app.include_router(api_router)
 
