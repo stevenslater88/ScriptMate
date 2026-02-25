@@ -2430,11 +2430,10 @@ IMPORTANT:
             api_key=EMERGENT_LLM_KEY,
             session_id=f"acting-coach-{uuid.uuid4()}",
             system_message="You are a supportive, expert acting coach helping beginner actors improve their craft. Always return valid JSON."
-        )
+        ).with_model("openai", "gpt-4o")
+
         response = await chat.send_message(
-            model="gpt-4o",
-            message=UserMessage(text=prompt),
-            temperature=0.7,
+            UserMessage(text=prompt),
         )
 
         response_text = response.text.strip()
