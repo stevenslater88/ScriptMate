@@ -253,6 +253,161 @@ PRESET_VOICES = {
     }
 }
 
+# ==================== DIALECT COACH CONFIGURATION ====================
+
+# Supported accents with pronunciation guides
+ACCENT_PROFILES = {
+    "british_rp": {
+        "id": "british_rp",
+        "name": "British RP",
+        "description": "Received Pronunciation - Standard British English",
+        "region": "United Kingdom",
+        "key_features": [
+            "Non-rhotic (silent R after vowels)",
+            "Long vowels (bath, grass, dance)",
+            "Clear 'T' pronunciation",
+            "Distinct vowel sounds"
+        ],
+        "common_tips": [
+            "Drop the R at the end of words like 'car', 'water'",
+            "Use 'ah' sound in words like 'bath', 'grass', 'dance'",
+            "Pronounce T clearly, don't tap it",
+            "Make vowels longer and more distinct"
+        ],
+        "example_words": {
+            "water": "WAW-tuh (not WAH-ter)",
+            "butter": "BUH-tuh (not BUH-ter)",
+            "bath": "BAHTH (long A)",
+            "can't": "CAHNT (not KANT)"
+        }
+    },
+    "american_general": {
+        "id": "american_general",
+        "name": "American General",
+        "description": "General American - Standard US English",
+        "region": "United States",
+        "key_features": [
+            "Rhotic (R is always pronounced)",
+            "Flat vowels",
+            "Flapped T (sounds like D)",
+            "Reduced vowels in unstressed syllables"
+        ],
+        "common_tips": [
+            "Always pronounce the R sound",
+            "Use flapped T between vowels (water = wah-der)",
+            "Keep vowels relatively flat",
+            "Reduce unstressed vowels to 'uh'"
+        ],
+        "example_words": {
+            "water": "WAH-der (flapped T)",
+            "butter": "BUH-der",
+            "tomato": "tuh-MAY-toh",
+            "schedule": "SKED-jool"
+        }
+    },
+    "australian": {
+        "id": "australian",
+        "name": "Australian",
+        "description": "General Australian English",
+        "region": "Australia",
+        "key_features": [
+            "Rising intonation at end of statements",
+            "Vowel shifts (day sounds like 'die')",
+            "Non-rhotic like British",
+            "Distinctive 'i' sound"
+        ],
+        "common_tips": [
+            "Raise pitch at the end of sentences",
+            "Shift 'ay' sounds towards 'eye'",
+            "Drop R at end of words",
+            "Shorten words where possible"
+        ],
+        "example_words": {
+            "day": "DAI (like 'die')",
+            "mate": "MAIT",
+            "no": "NAU",
+            "today": "tuh-DAI"
+        }
+    },
+    "irish": {
+        "id": "irish",
+        "name": "Irish",
+        "description": "Standard Irish English",
+        "region": "Ireland",
+        "key_features": [
+            "Soft, musical intonation",
+            "TH often becomes T or D",
+            "Strong R sounds",
+            "Distinctive vowel patterns"
+        ],
+        "common_tips": [
+            "Keep a lilting, musical quality",
+            "Pronounce TH as T or D ('three' = 'tree')",
+            "Roll or tap your Rs",
+            "Make vowels more open"
+        ],
+        "example_words": {
+            "three": "TREE",
+            "think": "TINK",
+            "thirty": "TIRTY",
+            "film": "FILL-um"
+        }
+    },
+    "scottish": {
+        "id": "scottish",
+        "name": "Scottish",
+        "description": "Standard Scottish English",
+        "region": "Scotland",
+        "key_features": [
+            "Rolled Rs",
+            "Distinct vowel sounds",
+            "Glottal stops",
+            "WH pronounced with breath"
+        ],
+        "common_tips": [
+            "Roll your Rs strongly",
+            "Use glottal stops for T sounds",
+            "Pronounce WH with a breath ('which' vs 'witch')",
+            "Keep vowels short and clipped"
+        ],
+        "example_words": {
+            "water": "WAH-ter (rolled R)",
+            "butter": "BUH-ter",
+            "right": "RRRIGHT (rolled)",
+            "loch": "LOKH (guttural)"
+        }
+    },
+    "southern_american": {
+        "id": "southern_american",
+        "name": "Southern American",
+        "description": "Southern US English",
+        "region": "Southern United States",
+        "key_features": [
+            "Drawled vowels",
+            "Monophthongization (eye becomes ah)",
+            "Distinctive 'y'all'",
+            "Slower speech pace"
+        ],
+        "common_tips": [
+            "Stretch out vowel sounds",
+            "Turn 'I' into 'AH' in some words",
+            "Speak at a relaxed pace",
+            "Add a slight twang"
+        ],
+        "example_words": {
+            "I": "AH",
+            "time": "TAHM",
+            "nice": "NAHS",
+            "right": "RAHT"
+        }
+    }
+}
+
+# Initialize Whisper STT client
+stt_client = None
+if EMERGENT_LLM_KEY:
+    stt_client = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
+
 # Create the main app
 app = FastAPI()
 
