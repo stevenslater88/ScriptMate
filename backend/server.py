@@ -2426,7 +2426,11 @@ IMPORTANT:
 - Return ONLY valid JSON, no other text."""
 
     try:
-        chat = LlmChat(api_key=EMERGENT_LLM_KEY)
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"acting-coach-{uuid.uuid4()}",
+            system_message="You are a supportive, expert acting coach helping beginner actors improve their craft. Always return valid JSON."
+        )
         response = await chat.send_message(
             model="gpt-4o",
             message=UserMessage(text=prompt),
