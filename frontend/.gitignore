@@ -46,3 +46,8 @@ package-lock.json
 # (removed overly broad pattern that was blocking source files)
 
 app-example
+
+# Android signing credentials
+*.keystore
+*.jks
+credentials.json
