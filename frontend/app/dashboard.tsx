@@ -360,7 +360,7 @@ export default function DashboardScreen() {
             <Ionicons name="chevron-forward" size={20} color="#4b5563" />
           </TouchableOpacity>
           
-          {/* Dialect Coach - NEW */}
+          {/* Dialect Coach */}
           <TouchableOpacity 
             style={[styles.actionCard, styles.actionCardWide]}
             onPress={() => router.push('/dialect-coach')}
@@ -372,6 +372,22 @@ export default function DashboardScreen() {
             <View style={styles.actionCardContent}>
               <Text style={styles.actionTitle}>Dialect Coach</Text>
               <Text style={styles.actionSubtitle}>Master accents with AI feedback</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#4b5563" />
+          </TouchableOpacity>
+
+          {/* Acting Coach - NEW */}
+          <TouchableOpacity 
+            style={[styles.actionCard, styles.actionCardWide]}
+            onPress={() => router.push('/acting-coach')}
+            data-testid="acting-coach-btn"
+          >
+            <View style={[styles.actionIcon, { backgroundColor: '#6366f1' }]}>
+              <Ionicons name="sparkles" size={26} color="#fff" />
+            </View>
+            <View style={styles.actionCardContent}>
+              <Text style={styles.actionTitle}>Acting Coach</Text>
+              <Text style={styles.actionSubtitle}>AI performance coaching</Text>
             </View>
             <View style={styles.newFeatureBadge}>
               <Text style={styles.newFeatureText}>NEW</Text>
