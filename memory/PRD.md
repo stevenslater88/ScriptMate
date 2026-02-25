@@ -431,7 +431,7 @@ The previous agent upgraded `react-native-reanimated` to `^4.2.0` and `react-nat
 - Expo Tunnel: Available via Expo CLI
 - Backend: FastAPI on port 8001
 - Database: MongoDB
-- Preview URL: https://scriptmate-pro.preview.emergentagent.com
+- Preview URL: https://self-tape-studio.preview.emergentagent.com
 
 ## Testing Notes
 
