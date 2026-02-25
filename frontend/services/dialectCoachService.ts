@@ -6,8 +6,7 @@
 import Constants from 'expo-constants';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || 
-                process.env.EXPO_PUBLIC_BACKEND_URL || 
-                'https://self-tape-studio.preview.emergentagent.com';
+                process.env.EXPO_PUBLIC_BACKEND_URL;
 
 export interface AccentProfile {
   id: string;
