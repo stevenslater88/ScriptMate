@@ -320,6 +320,50 @@ Full-screen camera recording with an auto-scrolling script overlay. Allows actor
 
 ### Premium Gating
 This is part of the Self-Tape Studio which is already a Premium feature.
+
+---
+
+## Feature 7: Dialect Coach (NEW - Premium)
+
+### Status: Implementation Complete
+
+### Description
+An AI-powered pronunciation coach that analyzes user's spoken accent against a target dialect. Uses OpenAI Whisper for speech-to-text and GPT for pronunciation analysis.
+
+### Features Implemented
+- [x] 6 accent profiles: British RP, American General, Australian, Irish, Scottish, Southern American
+- [x] Audio recording for pronunciation
+- [x] AI analysis using Whisper + GPT-4o
+- [x] Pronunciation score (0-100%)
+- [x] Pace assessment (too slow / too fast / good)
+- [x] Problem word identification with tips
+- [x] 15 sample practice lines from famous movies/theatre
+- [x] Practice history tracking with improvement stats
+- [x] Instant retry and rescore
+- [x] Clean, minimal UI
+
+### Key Accent Features Analyzed
+- Rhotic vs Non-rhotic R sounds
+- Vowel lengths and shifts
+- T pronunciation (flapped, clear, glottal)
+- Intonation patterns
+- Speech pace (WPM)
+
+### Files Created/Modified
+- `backend/server.py` - Added ACCENT_PROFILES config, Whisper STT client, dialect analysis endpoints
+- `frontend/services/dialectCoachService.ts` - API client for dialect features
+- `frontend/app/dialect-coach.tsx` - Main Dialect Coach screen
+- `frontend/app/dashboard.tsx` - Added Dialect Coach card with NEW badge
+
+### API Endpoints
+- `GET /api/dialect/accents` - List available accents
+- `GET /api/dialect/accents/{id}` - Get accent details
+- `POST /api/dialect/analyze` - Analyze pronunciation (multipart with audio)
+- `GET /api/dialect/history/{user_id}` - Get practice history
+- `GET /api/dialect/sample-lines` - Get sample practice lines
+
+### Premium Gating
+- Free users see lock icon and are prompted to upgrade when selecting an accent
 | P1: Self-Tape navigation | VERIFIED WORKING | Routes load correctly |
 | P1: Audition stats graph button | VERIFIED WORKING | Modal opens correctly |
 | P2: ESLint parsing errors | FIXED | Updated eslint.config.js |
