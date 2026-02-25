@@ -1125,8 +1125,23 @@ async def upload_script(
 
 @api_router.get("/scripts", response_model=List[Script])
 async def get_scripts(user_id: str = "default"):
-    """Get all scripts for a user"""
-    scripts = await db.scripts.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
+    """Get all scripts for a user - optimized with projection to exclude large fields"""
+    # Exclude raw_text from list view for performance (can be fetched in detail view)
+    projection = {
+        "_id": 0,
+        "id": 1,
+        "user_id": 1,
+        "title": 1,
+        "characters": 1,
+        "scenes": 1,
+        "lines": 1,
+        "selected_character": 1,
+        "created_at": 1,
+        "last_rehearsed": 1,
+        "training_mode": 1,
+        "mastery_level": 1,
+    }
+    scripts = await db.scripts.find({"user_id": user_id}, projection).sort("created_at", -1).to_list(100)
     return [Script(**s) for s in scripts]
 
 @api_router.get("/scripts/{script_id}", response_model=Script)
