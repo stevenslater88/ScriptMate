@@ -2436,7 +2436,7 @@ IMPORTANT:
             UserMessage(text=prompt),
         )
 
-        response_text = response.text.strip()
+        response_text = response.strip()
         if response_text.startswith("```"):
             response_text = response_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
 
