@@ -780,6 +780,44 @@ class ScriptVoiceSettings(BaseModel):
 class AnalyzeScriptRequest(BaseModel):
     raw_text: str
 
+# ==================== DIALECT COACH MODELS ====================
+
+class ProblemWord(BaseModel):
+    """A word that was mispronounced"""
+    word: str
+    expected_pronunciation: str
+    user_pronunciation: str
+    tip: str
+    severity: str  # "minor", "moderate", "significant"
+
+class DialectAnalysisResult(BaseModel):
+    """Result of dialect/pronunciation analysis"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    accent_id: str
+    accent_name: str
+    expected_text: str
+    transcribed_text: str
+    pronunciation_score: int  # 0-100
+    pace_assessment: str  # "too_slow", "too_fast", "good"
+    pace_wpm: int  # Words per minute
+    problem_words: List[ProblemWord] = []
+    tips: List[str] = []
+    overall_feedback: str
+    audio_duration_seconds: float
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class DialectAttempt(BaseModel):
+    """A user's dialect practice attempt stored for tracking"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    accent_id: str
+    expected_text: str
+    pronunciation_score: int
+    pace_assessment: str
+    problem_word_count: int
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
 # ==================== HELPER FUNCTIONS ====================
 
 def get_tier_limits(tier: str) -> Dict:
