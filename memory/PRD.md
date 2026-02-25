@@ -406,6 +406,18 @@ The previous agent upgraded `react-native-reanimated` to `^4.2.0` and `react-nat
 
 ---
 
+## Deployment Fix (February 2026 - Latest)
+
+### P0 Build Blocker Resolved
+- **Issue**: EAS build failing with `Unable to resolve module expo-linear-gradient`
+- **Root Cause**: The Dialect Coach UI (`dialect-coach.tsx`) imports `LinearGradient` from `expo-linear-gradient`, but the package was never installed
+- **Fix Applied**:
+  1. Installed `expo-linear-gradient@15.0.8` via `yarn add expo-linear-gradient`
+  2. Removed hardcoded fallback URL in `dialectCoachService.ts` (deployment agent finding)
+- **Status**: FIXED - compilation passes, ready for deployment
+
+---
+
 ## Backlog / Future Tasks
 
 ### P1 (High Priority)
