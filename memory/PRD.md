@@ -406,7 +406,7 @@ The previous agent upgraded `react-native-reanimated` to `^4.2.0` and `react-nat
 
 ---
 
-## Deployment Fix (February 2026 - Latest)
+## Deployment Fixes (February 2026 - Latest)
 
 ### P0 Build Blocker Resolved
 - **Issue**: EAS build failing with `Unable to resolve module expo-linear-gradient`
@@ -414,7 +414,17 @@ The previous agent upgraded `react-native-reanimated` to `^4.2.0` and `react-nat
 - **Fix Applied**:
   1. Installed `expo-linear-gradient@15.0.8` via `yarn add expo-linear-gradient`
   2. Removed hardcoded fallback URL in `dialectCoachService.ts` (deployment agent finding)
-- **Status**: FIXED - compilation passes, ready for deployment
+- **Status**: FIXED
+
+### P1 Android Upload Key Configured
+- **Issue**: Google Play rejecting AAB — signed with wrong upload key
+- **Expected SHA1**: `9A:EB:B5:E1:78:9E:AB:D6:B0:06:AE:84:D2:CD:7E:BE:F0:BC:06:58`
+- **Fix Applied**:
+  1. User provided correct `upload-keystore.jks` (alias: `upload`, password: `Slater123`)
+  2. Created `credentials.json` pointing to the local keystore
+  3. Updated `eas.json` production profile with `"credentialsSource": "local"` for Android
+  4. Added `*.keystore`, `*.jks`, `credentials.json` to `.gitignore` for security
+- **Status**: FIXED — next EAS production build will sign AAB with the correct key
 
 ---
 
