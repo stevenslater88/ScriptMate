@@ -25,14 +25,12 @@
     },
     "production": {
       "extends": "base",
-      "credentialsSource": "local",
       "ios": {
         "resourceClass": "m1-medium"
       },
       "android": {
         "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease",
-        "credentialsSource": "local"
+        "gradleCommand": ":app:bundleRelease"
       },
       "env": {
         "__DEV__": "false"
