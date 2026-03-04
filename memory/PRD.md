@@ -467,11 +467,45 @@ AI-powered acting coach that analyzes emotion, performance style, and energy cho
 - Free: See preview tips per emotion, locked CTA
 - Premium: Full AI analysis with detailed coaching feedback
 
+
+## Feature 9: Smart Script Parser V2 (NEW - Client-Side)
+
+### Status: Implementation Complete & Tested (March 2026)
+
+### Description
+On-device, heuristic-based screenplay parser that automates the process of setting up scripts for reader mode. Parses raw script text to identify CHARACTER, DIALOGUE, ACTION, PARENTHETICAL, and HEADING elements without any AI/server calls.
+
+### Features Implemented
+- [x] Client-side parser with heuristic detection (ALL CAPS = character, parentheses = parenthetical, etc.)
+- [x] Character name detection with confidence scoring
+- [x] Multi-line dialogue attribution
+- [x] Scene heading detection (INT./EXT.)
+- [x] 3-step UI wizard:
+  - Step 1: Detected Characters - display character list with line counts, select "My Character"
+  - Step 2: Preview & Fix - color-coded preview with tap-to-reclassify and scene headings toggle
+  - Step 3: Assign Lines - auto-assign ME/READER/ACTION based on character selection
+- [x] Low confidence warning with fallback to manual assignment
+- [x] Save & Start flow creates script in backend and sets user_character
+- [x] Parser preferences saved to AsyncStorage
+
+### Files
+- `frontend/services/smartScriptParser.ts` - Core parser logic with 5 built-in tests
+- `frontend/app/script-parser.tsx` - 3-step wizard UI
+- `frontend/app/upload.tsx` - Entry point with "Smart Parse V2" button
+
+### Testing
+- All 19 tests passed (10 backend API, 9 frontend UI/parser logic)
+- Test report: `/app/test_reports/iteration_4.json`
+
+---
+
 ---
 
 ## Backlog / Future Tasks
 
 ### P1 (High Priority)
+- [ ] Script UI Redesign — conversation-style/chat-bubble layout
+- [ ] Visual Graph for Audition Tracker stats modal
 - [ ] Overall progress summary (aggregate across all scenes)
 - [ ] Director Mode: Manual framing scoring with feedback
 - [ ] "Casting Ready" badge for score >85
