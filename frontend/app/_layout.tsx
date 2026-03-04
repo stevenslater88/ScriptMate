@@ -157,6 +157,7 @@ export default function RootLayout() {
           <Stack.Screen name="auditions" />
           <Stack.Screen name="recall" />
           <Stack.Screen name="selftape" />
+          <Stack.Screen name="script-parser" />
           <Stack.Screen name="acting-coach" />
           <Stack.Screen name="acting-feedback" />
           <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal' }} />

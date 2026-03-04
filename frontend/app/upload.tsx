@@ -266,21 +266,42 @@ Then I guess this is goodbye.`;
                 </Text>
               </View>
 
-              {/* Submit Button */}
-              <TouchableOpacity
-                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={handleSubmit}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="sparkles" size={20} color="#fff" />
-                    <Text style={styles.submitButtonText}>Parse Script with AI</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              {/* Submit Buttons */}
+              <View style={styles.parseOptions}>
+                <TouchableOpacity
+                  style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                  onPress={handleSubmit}
+                  disabled={loading}
+                  testID="parse-ai-btn"
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="sparkles" size={20} color="#fff" />
+                      <Text style={styles.submitButtonText}>Parse with AI</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.smartParseButton, (!title.trim() || !scriptText.trim()) && styles.submitButtonDisabled]}
+                  onPress={() => {
+                    if (!title.trim() || !scriptText.trim()) {
+                      Alert.alert('Error', 'Enter a title and paste script text first');
+                      return;
+                    }
+                    router.push({
+                      pathname: '/script-parser',
+                      params: { title: title.trim(), rawText: scriptText.trim() },
+                    });
+                  }}
+                  disabled={!title.trim() || !scriptText.trim()}
+                  testID="parse-smart-btn"
+                >
+                  <Ionicons name="flash" size={20} color="#fff" />
+                  <Text style={styles.submitButtonText}>Smart Parse V2</Text>
+                </TouchableOpacity>
+              </View>
             </>
           ) : (
             <>
@@ -447,6 +468,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#6366f1',
     paddingVertical: 16,
     borderRadius: 12,
+    gap: 10,
+    flex: 1,
+  },
+  smartParseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#7c3aed',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 10,
+    flex: 1,
+  },
+  parseOptions: {
+    flexDirection: 'row',
     gap: 10,
   },
   submitButtonDisabled: {

@@ -494,7 +494,7 @@ AI-powered acting coach that analyzes emotion, performance style, and energy cho
 - Expo Tunnel: Available via Expo CLI
 - Backend: FastAPI on port 8001
 - Database: MongoDB
-- Preview URL: https://self-tape-studio.preview.emergentagent.com
+- Preview URL: https://line-assigner.preview.emergentagent.com
 
 ## Testing Notes
 
