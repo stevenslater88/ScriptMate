@@ -30,7 +30,8 @@
       },
       "android": {
         "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease"
+        "gradleCommand": ":app:bundleRelease",
+        "credentialsSource": "local"
       },
       "env": {
         "__DEV__": "false"
