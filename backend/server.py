@@ -2846,6 +2846,7 @@ async def get_shared_tape(share_id: str, password: Optional[str] = None):
         "duration": tape.get("duration", 0),
         "created_at": tape["created_at"],
         "views": current_views,
+        "watermark": "Recorded with ScriptM8 \u00b7 AI Training Studio for Actors",
     }
 
 @api_router.get("/tapes/user/{user_id}")

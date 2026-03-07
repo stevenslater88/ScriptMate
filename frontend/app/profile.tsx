@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,17 +7,24 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useScriptStore } from '../store/scriptStore';
+import { isWatermarkEnabled, setWatermarkEnabled } from '../services/watermarkService';
 
 export default function ProfileScreen() {
   const { user, isAuthenticated, signOut, syncData, deviceId } = useAuth();
   const { isPremium } = useScriptStore();
   const [syncing, setSyncing] = useState(false);
+  const [watermarkOn, setWatermarkOn] = useState(true);
+
+  useEffect(() => {
+    isWatermarkEnabled().then(setWatermarkOn);
+  }, []);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -60,18 +67,58 @@ export default function ProfileScreen() {
           <View style={styles.placeholder} />
         </View>
         
-        <View style={styles.signInPrompt}>
-          <Ionicons name="person-circle-outline" size={80} color="#4a4a5e" />
-          <Text style={styles.signInTitle}>Not Signed In</Text>
-          <Text style={styles.signInSubtitle}>
-            Sign in to sync your scripts, notes, and progress across all your devices.
-          </Text>
-          <TouchableOpacity 
-            style={styles.signInButton}
-            onPress={() => router.push('/signin')}
-          >
-            <Text style={styles.signInButtonText}>Sign In</Text>
-          </TouchableOpacity>
+        <View style={{ flex: 1, justifyContent: 'space-between' }}>
+          <View style={styles.signInPromptFixed}>
+            <Ionicons name="person-circle-outline" size={64} color="#4a4a5e" />
+            <Text style={styles.signInTitle}>Not Signed In</Text>
+            <Text style={styles.signInSubtitle}>
+              Sign in to sync your scripts, notes, and progress across all your devices.
+            </Text>
+            <TouchableOpacity 
+              style={styles.signInButton}
+              onPress={() => router.push('/signin')}
+            >
+              <Text style={styles.signInButtonText}>Sign In</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Watermark Settings - pinned to bottom */}
+          <View style={styles.watermarkBottom}>
+          <View style={styles.watermarkCard}>
+            <View style={styles.watermarkInfo}>
+              <Ionicons name="water" size={22} color="#6366f1" />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.watermarkTitle}>ScriptM8 Watermark</Text>
+                <Text style={styles.watermarkSub}>
+                  Appears on exported self tapes, demo reels, and casting share pages
+                </Text>
+              </View>
+            </View>
+            <View style={styles.watermarkToggle}>
+              <Switch
+                value={watermarkOn}
+                onValueChange={(val) => {
+                  if (!val) {
+                    Alert.alert(
+                      'ScriptM8 Pro',
+                      'Remove watermark is available with ScriptM8 Pro.',
+                      [
+                        { text: 'Maybe Later', style: 'cancel' },
+                        { text: 'Unlock Pro', onPress: () => router.push('/premium') },
+                      ]
+                    );
+                    return;
+                  }
+                  setWatermarkOn(val);
+                  setWatermarkEnabled(val);
+                }}
+                trackColor={{ false: '#374151', true: '#6366f1' }}
+                thumbColor="#fff"
+              />
+              <Text style={styles.proLabel}>Pro</Text>
+            </View>
+          </View>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -150,6 +197,47 @@ export default function ProfileScreen() {
               <Text style={styles.deviceId}>ID: {deviceId.slice(0, 20)}...</Text>
             </View>
             <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+          </View>
+        </View>
+
+        {/* Watermark Settings */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Media Settings</Text>
+          <View style={styles.watermarkCard}>
+            <View style={styles.watermarkInfo}>
+              <Ionicons name="water" size={22} color="#6366f1" />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.watermarkTitle}>ScriptM8 Watermark</Text>
+                <Text style={styles.watermarkSub}>
+                  Appears on exported self tapes, demo reels, and casting share pages
+                </Text>
+              </View>
+            </View>
+            <View style={styles.watermarkToggle}>
+              <Switch
+                value={watermarkOn}
+                onValueChange={(val) => {
+                  if (!val && !isPremium) {
+                    Alert.alert(
+                      'ScriptM8 Pro',
+                      'Remove watermark is available with ScriptM8 Pro.',
+                      [
+                        { text: 'Maybe Later', style: 'cancel' },
+                        { text: 'Unlock Pro', onPress: () => router.push('/premium') },
+                      ]
+                    );
+                    return;
+                  }
+                  setWatermarkOn(val);
+                  setWatermarkEnabled(val);
+                }}
+                trackColor={{ false: '#374151', true: '#6366f1' }}
+                thumbColor="#fff"
+              />
+              {!isPremium && (
+                <Text style={styles.proLabel}>Pro</Text>
+              )}
+            </View>
           </View>
         </View>
 
@@ -240,10 +328,19 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   signInPrompt: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
+    paddingTop: 60,
+  },
+  signInPromptFixed: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  watermarkBottom: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   signInTitle: {
     fontSize: 24,
@@ -415,5 +512,42 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     color: '#ef4444',
+  },
+  watermarkCard: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+  },
+  watermarkInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  watermarkTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  watermarkSub: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  watermarkToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  proLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#f59e0b',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
   },
 });

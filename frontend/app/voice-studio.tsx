@@ -17,6 +17,7 @@ import {
   VoiceTake, saveTake, getTakes, updateTake, deleteTake,
   DemoReel, saveReel, getReels, deleteReel,
 } from '../services/voiceStudioStorage';
+import { WATERMARK_TEXT, WATERMARK_SUBTEXT } from '../services/watermarkService';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
   Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
@@ -650,6 +651,7 @@ export default function VoiceStudioScreen() {
                     <Text style={styles.reelMeta}>
                       {formatDuration(reel.duration)} · {reel.takeIds.length} takes · {new Date(reel.createdAt).toLocaleDateString()}
                     </Text>
+                    <Text style={styles.reelWatermark}>{WATERMARK_TEXT}</Text>
                   </View>
                 </View>
                 <View style={styles.reelActions}>
@@ -979,6 +981,7 @@ const styles = StyleSheet.create({
   reelHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   reelName: { fontSize: 16, fontWeight: '600', color: '#fff' },
   reelMeta: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  reelWatermark: { fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 4, letterSpacing: 0.3 },
   reelActions: { flexDirection: 'row', gap: 8 },
   reelActionBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
