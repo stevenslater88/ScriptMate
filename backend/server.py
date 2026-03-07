@@ -2923,7 +2923,7 @@ video{{width:100%;height:100%;object-fit:contain;background:#000}}
   </div>
 </div>
 <footer class="promo">
-  <div class="promo-line">Self tape recorded with ScriptM8</div>
+  <div class="promo-line">Recorded with ScriptM8</div>
   <div class="promo-sub">AI Training Studio for Actors</div>
   <a href="https://scriptm8.app" class="promo-btn" target="_blank" rel="noopener">Try ScriptM8</a>
 </footer>
