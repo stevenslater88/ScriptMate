@@ -28,6 +28,12 @@ const VOICE_OPTIONS = [
   { id: 'shimmer', name: 'Shimmer', description: 'Female, soft' },
 ];
 
+const READER_STYLES = [
+  { id: 'neutral', name: 'Neutral', icon: 'person', color: '#6366f1', speed: 1.0, description: 'Calm, even delivery' },
+  { id: 'emotional', name: 'Emotional', icon: 'heart', color: '#ec4899', speed: 0.9, description: 'Expressive, feeling-driven' },
+  { id: 'aggressive', name: 'Intense', icon: 'flame', color: '#ef4444', speed: 1.1, description: 'High energy, forceful' },
+];
+
 interface ModeOption {
   id: string;
   name: string;
@@ -48,7 +54,8 @@ const MODE_OPTIONS: ModeOption[] = [
 ];
 
 export default function ScriptDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id: string; autoStart?: string }>();
+  const autoStart = useLocalSearchParams<{ autoStart?: string }>().autoStart === 'true';
   const { currentScript, fetchScript, updateScript, createRehearsal, loading, isPremium: isPremiumFromStore } = useScriptStore();
   const { isPremium: isPremiumFromRevenueCat, presentPaywall } = useRevenueCat();
   const isPremium = isPremiumFromStore || isPremiumFromRevenueCat;
@@ -56,10 +63,12 @@ export default function ScriptDetailScreen() {
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
   const [selectedVoice, setSelectedVoice] = useState('alloy');
   const [selectedMode, setSelectedMode] = useState('full_read');
+  const [selectedReaderStyle, setSelectedReaderStyle] = useState('neutral');
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
   const [showSettings, setShowSettings] = useState(false);
   const [starting, setStarting] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [autoStartTriggered, setAutoStartTriggered] = useState(false);
 
   const handleSelfTape = async () => {
     if (!isPremium) {
@@ -100,6 +109,22 @@ export default function ScriptDetailScreen() {
       }
     }
   }, [currentScript]);
+
+  // Auto-start rehearsal when coming from Quick Rehearse
+  useEffect(() => {
+    if (autoStart && currentScript && selectedCharacter && !autoStartTriggered && settingsLoaded) {
+      setAutoStartTriggered(true);
+      handleStartRehearsal();
+    }
+  }, [autoStart, currentScript, selectedCharacter, settingsLoaded]);
+
+  const handleReaderStyleChange = (styleId: string) => {
+    setSelectedReaderStyle(styleId);
+    const style = READER_STYLES.find(s => s.id === styleId);
+    if (style) {
+      setVoiceSpeed(style.speed);
+    }
+  };
 
   const handleCharacterSelect = async (characterName: string) => {
     setSelectedCharacter(characterName);
@@ -298,6 +323,62 @@ export default function ScriptDetailScreen() {
                 </TouchableOpacity>
               );
             })}
+          </View>
+        </View>
+
+        {/* AI Reader Style */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>AI Reader Style</Text>
+          <Text style={styles.sectionSubtitle}>How other characters sound</Text>
+          <View style={styles.readerStyleRow}>
+            {READER_STYLES.map((style) => (
+              <TouchableOpacity
+                key={style.id}
+                style={[
+                  styles.readerStyleCard,
+                  selectedReaderStyle === style.id && { borderColor: style.color },
+                ]}
+                onPress={() => handleReaderStyleChange(style.id)}
+                testID={`reader-style-${style.id}`}
+              >
+                <Ionicons
+                  name={style.icon as any}
+                  size={24}
+                  color={selectedReaderStyle === style.id ? style.color : '#6b7280'}
+                />
+                <Text style={[
+                  styles.readerStyleName,
+                  selectedReaderStyle === style.id && { color: style.color },
+                ]}>
+                  {style.name}
+                </Text>
+                <Text style={styles.readerStyleDesc}>{style.description}</Text>
+                {selectedReaderStyle === style.id && (
+                  <Ionicons name="checkmark-circle" size={16} color={style.color} style={{ marginTop: 4 }} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Pacing Control */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Pacing</Text>
+          <View style={styles.pacingRow}>
+            <Text style={styles.pacingLabel}>Slow</Text>
+            <Slider
+              style={{ flex: 1, height: 40 }}
+              minimumValue={0.5}
+              maximumValue={1.5}
+              step={0.1}
+              value={voiceSpeed}
+              onValueChange={setVoiceSpeed}
+              minimumTrackTintColor="#6366f1"
+              maximumTrackTintColor="#2a2a3e"
+              thumbTintColor="#6366f1"
+            />
+            <Text style={styles.pacingLabel}>Fast</Text>
+            <Text style={styles.pacingValue}>{voiceSpeed.toFixed(1)}x</Text>
           </View>
         </View>
 
@@ -618,6 +699,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 2,
+    marginBottom: 4,
+  },
   directorNotesButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -730,6 +817,55 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
     marginTop: 2,
+  },
+  // Reader Style
+  readerStyleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  readerStyleCard: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#2a2a3e',
+  },
+  readerStyleName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#9ca3af',
+    marginTop: 6,
+  },
+  readerStyleDesc: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  // Pacing
+  pacingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+    gap: 8,
+  },
+  pacingLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  pacingValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6366f1',
+    minWidth: 36,
+    textAlign: 'right',
   },
   previewContainer: {
     backgroundColor: '#1a1a2e',

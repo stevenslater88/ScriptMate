@@ -181,7 +181,7 @@ export default function HomeScreen() {
             style={[styles.quickActionBtn, styles.quickRehearseBtn]}
             onPress={() => {
               if (recentScript) {
-                router.push(`/script/${recentScript.id}`);
+                router.push(`/script/${recentScript.id}?autoStart=true`);
               } else {
                 router.push('/scripts');
               }
@@ -192,7 +192,7 @@ export default function HomeScreen() {
             <Ionicons name="flash" size={32} color="#fff" />
             <Text style={styles.quickActionTitle}>Quick Rehearse</Text>
             <Text style={styles.quickActionSub}>
-              {recentScript ? 'Resume last script' : 'Select a script'}
+              {recentScript ? recentScript.title : 'Select a script'}
             </Text>
           </TouchableOpacity>
 
@@ -217,44 +217,19 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Daily Actor Drill — Featured */}
-        <TouchableOpacity
-          style={styles.drillCard}
-          onPress={() => router.push('/daily-drill')}
-          activeOpacity={0.8}
-          testID="daily-drill-btn"
-        >
-          <View style={styles.drillIcon}>
-            <Ionicons name="flame" size={28} color="#f59e0b" />
-          </View>
-          <View style={styles.drillContent}>
-            <Text style={styles.drillTitle}>Daily Actor Drill</Text>
-            <Text style={styles.drillSubtitle}>
-              {streak?.today_completed ? 'Completed today!' : 'New challenge ready'}
-            </Text>
-          </View>
-          {streak?.today_completed ? (
-            <Ionicons name="checkmark-circle" size={24} color="#10b981" />
-          ) : (
-            <View style={styles.xpBadge}>
-              <Text style={styles.xpText}>+25 XP</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* Training Section */}
+        {/* TRAIN Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Training</Text>
-          <View style={styles.tileRow}>
+          <Text style={styles.sectionTitle}>Train</Text>
+          <View style={styles.tileGrid}>
             <TouchableOpacity
               style={styles.tile}
               onPress={() => router.push('/acting-coach')}
               activeOpacity={0.8}
               testID="acting-coach-tile"
             >
-              <Ionicons name="school" size={28} color="#8b5cf6" />
+              <Ionicons name="school" size={26} color="#8b5cf6" />
               <Text style={styles.tileTitle}>Acting Coach</Text>
-              <Text style={styles.tileDesc}>AI scene feedback</Text>
+              <Text style={styles.tileDesc}>AI feedback</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.tile}
@@ -262,51 +237,80 @@ export default function HomeScreen() {
               activeOpacity={0.8}
               testID="dialect-coach-tile"
             >
-              <Ionicons name="mic" size={28} color="#ec4899" />
+              <Ionicons name="mic" size={26} color="#ec4899" />
               <Text style={styles.tileTitle}>Dialect Coach</Text>
               <Text style={styles.tileDesc}>Accent training</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.tile}
+              onPress={() => router.push('/daily-drill')}
+              activeOpacity={0.8}
+              testID="daily-drill-tile"
+            >
+              <View style={styles.tileIconRow}>
+                <Ionicons name="flame" size={26} color="#f59e0b" />
+                {!streak?.today_completed && (
+                  <View style={styles.tileBadge}>
+                    <Text style={styles.tileBadgeText}>NEW</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.tileTitle}>Daily Drill</Text>
+              <Text style={styles.tileDesc}>
+                {streak?.today_completed ? 'Done today' : '+25 XP'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Rehearsal Section */}
+        {/* REHEARSE Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Rehearsal</Text>
-          <View style={styles.tileRow}>
+          <Text style={styles.sectionTitle}>Rehearse</Text>
+          <View style={styles.tileGrid}>
             <TouchableOpacity
               style={styles.tile}
               onPress={() => router.push('/scripts')}
               activeOpacity={0.8}
               testID="practice-scene-tile"
             >
-              <Ionicons name="chatbubbles" size={28} color="#10b981" />
+              <Ionicons name="chatbubbles" size={26} color="#10b981" />
               <Text style={styles.tileTitle}>Practice Scene</Text>
-              <Text style={styles.tileDesc}>Run with AI partner</Text>
+              <Text style={styles.tileDesc}>AI scene partner</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.tile}
+              onPress={() => router.push('/scripts')}
+              activeOpacity={0.8}
+              testID="my-scripts-tile"
+            >
+              <Ionicons name="library" size={26} color="#6366f1" />
+              <Text style={styles.tileTitle}>My Scripts</Text>
+              <Text style={styles.tileDesc}>{scripts.length} saved</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.tile}
               onPress={() => router.push('/upload')}
               activeOpacity={0.8}
-              testID="scripts-tile"
+              testID="upload-script-tile"
             >
-              <Ionicons name="document-text" size={28} color="#3b82f6" />
-              <Text style={styles.tileTitle}>Scripts</Text>
-              <Text style={styles.tileDesc}>Upload & parse</Text>
+              <Ionicons name="cloud-upload" size={26} color="#3b82f6" />
+              <Text style={styles.tileTitle}>Upload Script</Text>
+              <Text style={styles.tileDesc}>PDF, DOCX, TXT</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Recording Section */}
+        {/* RECORD Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recording</Text>
-          <View style={styles.tileRow}>
+          <Text style={styles.sectionTitle}>Record</Text>
+          <View style={styles.tileGrid}>
             <TouchableOpacity
               style={styles.tile}
               onPress={() => router.push('/selftape')}
               activeOpacity={0.8}
               testID="selftape-studio-tile"
             >
-              <Ionicons name="videocam" size={28} color="#ef4444" />
+              <Ionicons name="videocam" size={26} color="#ef4444" />
               <Text style={styles.tileTitle}>Self Tape Studio</Text>
               <Text style={styles.tileDesc}>Record auditions</Text>
             </TouchableOpacity>
@@ -316,16 +320,26 @@ export default function HomeScreen() {
               activeOpacity={0.8}
               testID="voice-studio-tile"
             >
-              <Ionicons name="mic-circle" size={28} color="#6366f1" />
+              <Ionicons name="mic-circle" size={26} color="#6366f1" />
               <Text style={styles.tileTitle}>Voice Studio</Text>
-              <Text style={styles.tileDesc}>Voice-over recording</Text>
+              <Text style={styles.tileDesc}>Voice-over tools</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.tile}
+              onPress={() => router.push('/voice-studio')}
+              activeOpacity={0.8}
+              testID="demo-reel-tile"
+            >
+              <Ionicons name="albums" size={26} color="#10b981" />
+              <Text style={styles.tileTitle}>Demo Reel</Text>
+              <Text style={styles.tileDesc}>Build your reel</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Tools Section */}
+        {/* CAREER Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tools</Text>
+          <Text style={styles.sectionTitle}>Career</Text>
           <View style={styles.tileRow}>
             <TouchableOpacity
               style={styles.tile}
@@ -333,19 +347,19 @@ export default function HomeScreen() {
               activeOpacity={0.8}
               testID="audition-tracker-tile"
             >
-              <Ionicons name="calendar" size={28} color="#f59e0b" />
+              <Ionicons name="calendar" size={26} color="#f59e0b" />
               <Text style={styles.tileTitle}>Audition Tracker</Text>
               <Text style={styles.tileDesc}>Track submissions</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.tile}
-              onPress={() => router.push('/scripts')}
+              onPress={() => router.push('/dashboard')}
               activeOpacity={0.8}
-              testID="my-scripts-tile"
+              testID="dashboard-tile"
             >
-              <Ionicons name="library" size={28} color="#6366f1" />
-              <Text style={styles.tileTitle}>My Scripts</Text>
-              <Text style={styles.tileDesc}>{scripts.length} saved</Text>
+              <Ionicons name="stats-chart" size={26} color="#10b981" />
+              <Text style={styles.tileTitle}>Dashboard</Text>
+              <Text style={styles.tileDesc}>Your progress</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -417,10 +431,14 @@ const styles = StyleSheet.create({
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: '#fff', marginBottom: 12 },
   tileRow: { flexDirection: 'row', gap: 12 },
+  tileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: {
-    flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, padding: 16,
+    flex: 1, minWidth: '30%', backgroundColor: '#1a1a2e', borderRadius: 14, padding: 14,
     borderWidth: 1, borderColor: '#2a2a3e', alignItems: 'center',
   },
-  tileTitle: { fontSize: 14, fontWeight: '600', color: '#fff', marginTop: 10, textAlign: 'center' },
-  tileDesc: { fontSize: 11, color: '#6b7280', marginTop: 3, textAlign: 'center' },
+  tileIconRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tileBadge: { backgroundColor: '#f59e0b', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  tileBadgeText: { fontSize: 9, fontWeight: '700', color: '#000' },
+  tileTitle: { fontSize: 13, fontWeight: '600', color: '#fff', marginTop: 8, textAlign: 'center' },
+  tileDesc: { fontSize: 11, color: '#6b7280', marginTop: 2, textAlign: 'center' },
 });

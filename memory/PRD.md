@@ -565,6 +565,34 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 
 ---
 
+## Phase A+B: Home Screen Redesign + Quick Rehearse Enhancement (March 2026)
+
+### Status: Complete & Tested
+
+### Phase A — Home Screen Layout
+- Reorganized into actor workflow sections: **Train → Rehearse → Record → Career**
+- Train: Acting Coach, Dialect Coach, Daily Drill (3-col grid)
+- Rehearse: Practice Scene, My Scripts, Upload Script (3-col grid)
+- Record: Self Tape Studio, Voice Studio, Demo Reel (3-col grid)
+- Career: Audition Tracker, Dashboard (2-col)
+- Daily Drill tile shows "NEW" badge when not completed
+
+### Phase B — Quick Rehearse Enhancement
+- Quick Rehearse passes `?autoStart=true` to script detail for instant rehearsal
+- AI Reader Style selector: Neutral (1.0x), Emotional (0.9x), Intense (1.1x)
+- Pacing slider (0.5x–1.5x) with auto-adjust when reader style changes
+- Auto-start logic: if character already selected, rehearsal begins immediately
+
+### Files Changed
+- `frontend/app/index.tsx` — Complete home screen rewrite
+- `frontend/app/script/[id].tsx` — Reader styles, pacing, autoStart
+
+### Testing
+- All backend + frontend tests passed (100%)
+
+---
+
+
 ---
 
 ## Backlog / Future Tasks
