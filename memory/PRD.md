@@ -502,6 +502,8 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 ### Latest Test Report
 - **Phase C + D**: 20/20 backend tests passed (`/app/test_reports/iteration_8.json`, March 2026)
 - **Phase E (Voice Studio)**: 15/15 backend + frontend tests passed (`/app/test_reports/iteration_9.json`, March 2026)
+- **Phase F (Audition Tracker)**: 16/16 frontend tests passed (`/app/test_reports/iteration_10.json`, March 2026)
+- **Watermark System**: 15/15 backend + frontend tests passed (`/app/test_reports/iteration_11.json`, March 2026)
 
 ---
 
