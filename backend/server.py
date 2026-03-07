@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
-from fastapi.responses import Response
+from fastapi.responses import Response, HTMLResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -2815,7 +2815,7 @@ async def create_share_link(request: CreateShareLinkRequest):
 
 @api_router.get("/tapes/share/{share_id}")
 async def get_shared_tape(share_id: str, password: Optional[str] = None):
-    """Get a shared tape for viewing."""
+    """Get a shared tape for viewing (JSON API)."""
     tape = await db.shared_tapes.find_one({"share_id": share_id}, {"_id": 0})
     if not tape:
         raise HTTPException(status_code=404, detail="Tape not found or link expired")
@@ -2848,6 +2848,87 @@ async def get_shared_tape(share_id: str, password: Optional[str] = None):
         "views": current_views,
         "watermark": "Recorded with ScriptM8 \u00b7 AI Training Studio for Actors",
     }
+
+
+@api_router.get("/tape/{actor_slug}/{share_id}", response_class=HTMLResponse)
+async def casting_share_page(actor_slug: str, share_id: str, password: Optional[str] = None):
+    """Public casting share page — served as HTML for browser viewing."""
+    tape = await db.shared_tapes.find_one({"share_id": share_id}, {"_id": 0})
+    if not tape:
+        return HTMLResponse(content="<html><body style='background:#0a0a0f;color:#6b7280;display:flex;justify-content:center;align-items:center;height:100vh;font-family:system-ui'><p>This casting link has expired or doesn't exist.</p></body></html>", status_code=404)
+
+    if tape.get("password") and tape.get("password") != password:
+        return HTMLResponse(content=f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{tape['actor_name']} — Self Tape</title>
+<style>*{{margin:0;padding:0;box-sizing:border-box}}body{{background:#0a0a0f;color:#fff;font-family:system-ui,-apple-system,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh}}.card{{text-align:center;padding:40px}}.card h2{{font-size:18px;margin-bottom:8px}}.card p{{color:#6b7280;font-size:14px;margin-bottom:24px}}form{{display:flex;gap:8px;justify-content:center}}input{{background:#1a1a2e;border:1px solid #2a2a3e;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;outline:none}}input:focus{{border-color:#6366f1}}button{{background:#6366f1;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:14px;cursor:pointer}}button:hover{{background:#5558e6}}</style>
+</head><body><div class="card"><h2>Password Required</h2><p>This self tape is password protected.</p><form method="get"><input name="password" type="password" placeholder="Enter password"><button type="submit">View</button></form></div></body></html>""")
+
+    await db.shared_tapes.update_one({"share_id": share_id}, {"$inc": {"views": 1}})
+    views = tape.get("views", 0) + 1
+
+    actor = tape["actor_name"]
+    role = tape.get("role_name", "")
+    project = tape.get("project_name", "")
+    duration = tape.get("duration", 0)
+    created = tape.get("created_at", "")[:10]
+    video_uri = tape.get("video_uri", "")
+    dur_str = f"{duration // 60}:{duration % 60:02d}" if duration else ""
+
+    subtitle_parts = [p for p in [role, project] if p]
+    subtitle = " — ".join(subtitle_parts) if subtitle_parts else ""
+
+    return HTMLResponse(content=f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{actor}{(' — ' + role) if role else ''} | Self Tape</title>
+<meta name="description" content="Self tape audition by {actor}{(' for ' + role) if role else ''}">
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#0a0a0f;color:#e5e7eb;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column}}
+.page{{flex:1;display:flex;flex-direction:column;align-items:center;padding:24px 16px 0}}
+.player-wrap{{width:100%;max-width:640px;aspect-ratio:9/16;background:#111;border-radius:12px;overflow:hidden;position:relative}}
+@media(min-width:768px){{.player-wrap{{aspect-ratio:16/9}}}}
+video{{width:100%;height:100%;object-fit:contain;background:#000}}
+.info{{max-width:640px;width:100%;margin-top:20px}}
+.actor-name{{font-size:20px;font-weight:700;color:#fff}}
+.subtitle{{font-size:14px;color:#9ca3af;margin-top:4px}}
+.meta-row{{display:flex;gap:16px;margin-top:12px;flex-wrap:wrap}}
+.meta-item{{font-size:12px;color:#6b7280}}
+.promo{{width:100%;border-top:1px solid #1a1a2e;margin-top:auto;padding:32px 16px 24px;text-align:center}}
+.promo-line{{font-size:11px;color:#4b5563;letter-spacing:0.3px}}
+.promo-sub{{font-size:10px;color:#374151;margin-top:3px}}
+.promo-btn{{display:inline-block;margin-top:12px;font-size:11px;color:#6b7280;text-decoration:none;padding:6px 16px;border:1px solid #2a2a3e;border-radius:20px;transition:all 0.2s}}
+.promo-btn:hover{{color:#a5b4fc;border-color:#6366f1}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="player-wrap">
+    <video controls playsinline preload="metadata" poster="">
+      <source src="{video_uri}">
+      Your browser does not support video playback.
+    </video>
+  </div>
+  <div class="info">
+    <div class="actor-name">{actor}</div>
+    {"<div class='subtitle'>" + subtitle + "</div>" if subtitle else ""}
+    <div class="meta-row">
+      {f'<span class="meta-item">{dur_str}</span>' if dur_str else ''}
+      {f'<span class="meta-item">{created}</span>' if created else ''}
+      <span class="meta-item">{views} view{'s' if views != 1 else ''}</span>
+    </div>
+  </div>
+</div>
+<footer class="promo">
+  <div class="promo-line">Self tape recorded with ScriptM8</div>
+  <div class="promo-sub">AI Training Studio for Actors</div>
+  <a href="https://scriptm8.app" class="promo-btn" target="_blank" rel="noopener">Try ScriptM8</a>
+</footer>
+</body>
+</html>""")
 
 @api_router.get("/tapes/user/{user_id}")
 async def get_user_shared_tapes(user_id: str):
