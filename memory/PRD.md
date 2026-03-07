@@ -518,6 +518,23 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 ---
 
 
+## Feature 11: Part 6 — Homepage Simplification & Production API Verification (March 2026)
+
+### Status: Complete & Tested
+
+### Changes
+1. **Training Modes removed from home screen** — Full Read, Cue Only, Performance, Loop no longer on dashboard
+2. **Training Modes moved to script detail** — 6 modes now available inside script/practice workflow: Full Read, Cue Only, Recall, Character, Performance (Premium), Loop (Premium)
+3. **Premium locking** — Performance and Loop show lock icons and redirect to paywall for non-premium users
+4. **Production API verified** — All endpoints confirmed working: script CRUD, acting coach, dialect coach, health check
+5. **Production URL confirmed** — `https://line-assigner.preview.emergentagent.com` set in both `eas.json` (env) and `app.json` (extra fallback)
+
+### Testing
+- 21/21 tests passed (iteration_6.json)
+
+---
+
+
 ---
 
 ## Backlog / Future Tasks
