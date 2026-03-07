@@ -601,12 +601,8 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 
 ## Backlog / Future Tasks
 
-### P0 (Next Session)
-- [ ] Audition Tracker Enhancement — Project, Role, Date submitted, Status (Submitted/Callback/Booked)
-
 ### P1 (High Priority)
 - [ ] Script UI Redesign — conversation-style/chat-bubble layout
-- [ ] Visual Graph for Audition Tracker stats modal
 - [ ] Multiple AI reader styles (neutral, emotional, aggressive)
 
 ### P2 (Medium Priority)
@@ -701,6 +697,34 @@ Professional voice-over recording studio with multi-take management, audio editi
 
 ### Testing
 - 15/15 backend + frontend tests passed (iteration_9.json)
+
+---
+
+## Phase F: Audition Tracker Enhancement (March 2026)
+
+### Status: Complete & Tested
+
+### Description
+Transformed the basic audition tracker into a full career management dashboard with enhanced fields, new status types, monthly analytics graph, quick status changes, and self-tape attachment support.
+
+### Features
+- [x] Career Dashboard: Stat cards (Submitted, Callbacks, Bookings, Conversion %)
+- [x] Rates Row: Callback Rate, Booking Rate, Momentum indicator (rising/steady/declining)
+- [x] Monthly Auditions Graph: 6-month bar chart with submitted vs booked breakdown
+- [x] New statuses: Pinned, Rejected (migrated old "passed" to "rejected")
+- [x] New fields: Casting Company/Studio, Submission Type (Self Tape/In Person/Voice/Other)
+- [x] Quick status change: Tap status icons on cards to update directly
+- [x] Self-tape attachment support (linked_tape_id)
+- [x] Enhanced search across projects, roles, and casting companies
+- [x] Collapsible dashboard (toggle via header icon)
+- [x] 5 status filter chips: All, Submitted, Callback, Pinned, Booked, Rejected
+
+### Files
+- `frontend/app/auditions.tsx` — Enhanced audition tracker screen with dashboard
+- `frontend/services/auditionService.ts` — Updated service with new types and monthly stats
+
+### Testing
+- 16/16 frontend tests passed (iteration_10.json)
 
 ---
 
