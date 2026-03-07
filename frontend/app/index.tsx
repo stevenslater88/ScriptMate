@@ -7,7 +7,6 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,338 +21,258 @@ import axios from 'axios';
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
                     Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
 export default function HomeScreen() {
-  const { scripts, fetchScripts, loading, initializeUser, user, isPremium, limits } = useScriptStore();
+  const { scripts, fetchScripts, initializeUser, isPremium } = useScriptStore();
   const [refreshing, setRefreshing] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [streak, setStreak] = useState<any>(null);
 
-  // Hidden debug screen - tap logo 5x
   const logoTapCount = useRef(0);
   const logoTapTimer = useRef<NodeJS.Timeout | null>(null);
-
   const handleLogoTap = () => {
     logoTapCount.current += 1;
     if (logoTapTimer.current) clearTimeout(logoTapTimer.current);
-    if (logoTapCount.current >= 5) {
-      logoTapCount.current = 0;
-      router.push('/debug');
-    } else {
-      logoTapTimer.current = setTimeout(() => { logoTapCount.current = 0; }, 2000);
-    }
+    if (logoTapCount.current >= 5) { logoTapCount.current = 0; router.push('/debug'); }
+    else { logoTapTimer.current = setTimeout(() => { logoTapCount.current = 0; }, 2000); }
   };
 
   useEffect(() => {
-    const checkOnboarding = async () => {
-      const showOnboarding = await shouldShowOnboarding();
-      if (showOnboarding) {
-        router.replace('/onboarding');
-      } else {
-        setCheckingOnboarding(false);
-      }
-    };
-    checkOnboarding();
+    (async () => {
+      if (await shouldShowOnboarding()) router.replace('/onboarding');
+      else setCheckingOnboarding(false);
+    })();
   }, []);
 
   const initialize = useCallback(async () => {
     await initializeUser();
     await fetchScripts();
     try {
-      const deviceId = await AsyncStorage.getItem('device_id');
-      if (deviceId && BACKEND_URL) {
-        const res = await axios.get(`${BACKEND_URL}/api/streak/${deviceId}`, { timeout: 10000 });
-        setStreak(res.data);
-      }
-    } catch (e) { /* streak is non-critical */ }
+      const id = await AsyncStorage.getItem('device_id');
+      if (id && BACKEND_URL) { const r = await axios.get(`${BACKEND_URL}/api/streak/${id}`, { timeout: 10000 }); setStreak(r.data); }
+    } catch (_) {}
   }, [initializeUser, fetchScripts]);
 
-  useEffect(() => {
-    if (!checkingOnboarding) initialize();
-  }, [initialize, checkingOnboarding]);
+  useEffect(() => { if (!checkingOnboarding) initialize(); }, [initialize, checkingOnboarding]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await initialize();
-    setRefreshing(false);
-  };
+  const onRefresh = async () => { setRefreshing(true); await initialize(); setRefreshing(false); };
 
   if (checkingOnboarding) {
-    return (
-      <SafeAreaView style={s.container}>
-        <View style={s.loadingWrap}>
-          <ActivityIndicator size="large" color="#6366f1" />
-        </View>
-      </SafeAreaView>
-    );
+    return <SafeAreaView style={st.bg}><View style={st.center}><ActivityIndicator size="large" color="#6366f1" /></View></SafeAreaView>;
   }
 
-  const recentScript = scripts.length > 0 ? scripts[0] : null;
+  const recent = scripts.length > 0 ? scripts[0] : null;
 
   return (
-    <SafeAreaView style={s.container}>
-      <ScrollView
-        style={s.scroll}
-        contentContainerStyle={s.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}
-      >
-        {/* ── Header ── */}
-        <View style={s.header}>
-          <TouchableOpacity style={s.logoWrap} onPress={handleLogoTap} activeOpacity={0.8}>
-            <View style={s.logoIcon}>
-              <Ionicons name="mic" size={20} color="#fff" />
-            </View>
-            <Text style={s.logoText}>ScriptM8</Text>
+    <SafeAreaView style={st.bg}>
+      <ScrollView style={st.flex} contentContainerStyle={st.pad} showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}>
+
+        {/* Header */}
+        <View style={st.hdr}>
+          <TouchableOpacity style={st.logo} onPress={handleLogoTap} activeOpacity={0.8}>
+            <View style={st.logoIc}><Ionicons name="mic" size={18} color="#fff" /></View>
+            <Text style={st.logoTx}>ScriptM8</Text>
           </TouchableOpacity>
-          <View style={s.headerRight}>
-            {streak && streak.current_streak > 0 && (
-              <TouchableOpacity style={s.streakPill} onPress={() => router.push('/daily-drill')} data-testid="streak-pill">
+          <View style={st.hdrR}>
+            {streak?.current_streak > 0 && (
+              <TouchableOpacity style={st.streakPill} onPress={() => router.push('/daily-drill')} data-testid="streak-pill">
                 <Ionicons name="flame" size={14} color="#f59e0b" />
-                <Text style={s.streakNum}>{streak.current_streak}</Text>
+                <Text style={st.streakN}>{streak.current_streak}</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={s.headerBtn} onPress={safeHandler(() => router.push('/stats'), 'Stats')} data-testid="header-stats-btn">
-              <Ionicons name="stats-chart" size={20} color="#9ca3af" />
+            <TouchableOpacity style={st.hdrBtn} onPress={safeHandler(() => router.push('/stats'), 'Stats')} data-testid="header-stats-btn">
+              <Ionicons name="stats-chart" size={18} color="#9ca3af" />
             </TouchableOpacity>
-            <TouchableOpacity style={s.headerBtn} onPress={safeHandler(() => router.push('/profile'), 'Profile')} data-testid="header-profile-btn">
-              <Ionicons name="person-circle" size={22} color="#9ca3af" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ── Premium CTA ── */}
-        {!isPremium && (
-          <TouchableOpacity style={s.premiumCard} onPress={() => router.push('/paywall')} activeOpacity={0.85} data-testid="premium-banner">
-            <View style={s.premiumGlow} />
-            <View style={s.premiumInner}>
-              <View style={s.premiumLeft}>
-                <Text style={s.premiumLabel}>PRO</Text>
-                <Text style={s.premiumTitle}>Unlock Full Studio</Text>
-                <Text style={s.premiumSub}>Unlimited scripts, 6 AI voices, all coaching tools</Text>
-              </View>
-              <View style={s.premiumArrow}>
-                <Ionicons name="arrow-forward" size={18} color="#000" />
-              </View>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {isPremium && (
-          <TouchableOpacity style={s.proBadge} onPress={() => router.push('/premium')} data-testid="premium-active-badge">
-            <Ionicons name="star" size={13} color="#f59e0b" />
-            <Text style={s.proBadgeText}>Premium Active</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* ── Primary Actions ── */}
-        <View style={s.heroRow}>
-          <TouchableOpacity
-            style={[s.heroCard, { backgroundColor: '#6366f1' }]}
-            onPress={() => recentScript ? router.push(`/script/${recentScript.id}?autoStart=true`) : router.push('/scripts')}
-            activeOpacity={0.85}
-            data-testid="quick-rehearse-btn"
-          >
-            <View style={s.heroIconWrap}>
-              <Ionicons name="flash" size={28} color="#fff" />
-            </View>
-            <Text style={s.heroTitle}>Quick Rehearse</Text>
-            <Text style={s.heroSub} numberOfLines={1}>
-              {recentScript ? recentScript.title : 'Pick a script'}
-            </Text>
-          </TouchableOpacity>
-
-          <View style={s.heroCol}>
-            <TouchableOpacity
-              style={[s.heroHalf, { backgroundColor: '#ef4444' }]}
-              onPress={() => router.push('/selftape')}
-              activeOpacity={0.85}
-              data-testid="quick-selftape-btn"
-            >
-              <Ionicons name="videocam" size={22} color="#fff" />
-              <Text style={s.heroHalfTitle}>Self Tape</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[s.heroHalf, { backgroundColor: '#10b981' }]}
-              onPress={() => router.push('/script-parser')}
-              activeOpacity={0.85}
-              data-testid="new-script-btn"
-            >
-              <Ionicons name="add-circle" size={22} color="#fff" />
-              <Text style={s.heroHalfTitle}>New Script</Text>
+            <TouchableOpacity style={st.hdrBtn} onPress={safeHandler(() => router.push('/profile'), 'Profile')} data-testid="header-profile-btn">
+              <Ionicons name="person-circle" size={20} color="#9ca3af" />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── Daily Drill ── */}
-        {(!streak?.today_completed) && (
-          <TouchableOpacity style={s.drillBanner} onPress={() => router.push('/daily-drill')} activeOpacity={0.85} data-testid="daily-drill-banner">
-            <View style={s.drillLeft}>
-              <View style={s.drillIcon}>
-                <Ionicons name="flame" size={20} color="#f59e0b" />
+        {/* Premium */}
+        {!isPremium ? (
+          <TouchableOpacity style={st.pro} onPress={() => router.push('/paywall')} activeOpacity={0.85} data-testid="premium-banner">
+            <View style={st.proGlow} />
+            <View style={st.proRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={st.proTag}>PRO</Text>
+                <Text style={st.proH}>Unlock Full Studio</Text>
+                <Text style={st.proSub}>Unlimited scripts, AI voices, all tools</Text>
               </View>
-              <View>
-                <Text style={s.drillTitle}>Daily Drill</Text>
-                <Text style={s.drillSub}>Complete today's challenge</Text>
-              </View>
+              <View style={st.proArr}><Ionicons name="arrow-forward" size={16} color="#000" /></View>
             </View>
-            <View style={s.drillXp}>
-              <Text style={s.drillXpText}>+25 XP</Text>
-            </View>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={st.proBadge} onPress={() => router.push('/premium')} data-testid="premium-active-badge">
+            <Ionicons name="star" size={12} color="#f59e0b" /><Text style={st.proBadgeTx}>Premium</Text>
           </TouchableOpacity>
         )}
 
-        {/* ── Coaching ── */}
-        <Text style={s.sectionLabel}>Coaching</Text>
-        <View style={s.coachRow}>
-          <CoachCard
-            icon="school"
-            color="#8b5cf6"
-            title="Acting Coach"
-            sub="AI scene feedback"
-            route="/acting-coach"
-            testId="acting-coach-tile"
-          />
-          <CoachCard
-            icon="mic"
-            color="#ec4899"
-            title="Dialect Coach"
-            sub="Accent training"
-            route="/dialect-coach"
-            testId="dialect-coach-tile"
-          />
-          <CoachCard
-            icon="bulb"
-            color="#f59e0b"
-            title="Recall"
-            sub="Line memory"
-            route="/recall"
-            testId="recall-tile"
-          />
+        {/* ─── QUICK REHEARSE — hero ─── */}
+        <TouchableOpacity
+          style={st.hero}
+          onPress={() => recent ? router.push(`/script/${recent.id}?autoStart=true`) : router.push('/scripts')}
+          activeOpacity={0.85}
+          data-testid="quick-rehearse-btn"
+        >
+          <View style={st.heroTop}>
+            <View style={st.heroIc}><Ionicons name="flash" size={26} color="#fff" /></View>
+            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.4)" />
+          </View>
+          <Text style={st.heroH}>Quick Rehearse</Text>
+          <Text style={st.heroSub} numberOfLines={1}>{recent ? recent.title : 'Select a script to begin'}</Text>
+        </TouchableOpacity>
+
+        {/* ─── 4-TOOL GRID — Acting Coach, Dialect Coach, Self Tape, New Script ─── */}
+        <View style={st.grid4}>
+          <ToolCard icon="school"     color="#8b5cf6" label="Acting Coach"  route="/acting-coach"   testId="acting-coach-btn" />
+          <ToolCard icon="mic"        color="#ec4899" label="Dialect Coach" route="/dialect-coach"   testId="dialect-coach-btn" />
+          <ToolCard icon="videocam"   color="#ef4444" label="Self Tape"     route="/selftape"        testId="selftape-btn" />
+          <ToolCard icon="add-circle" color="#10b981" label="New Script"    route="/script-parser"   testId="new-script-btn" />
         </View>
 
-        {/* ── Library ── */}
-        <Text style={s.sectionLabel}>Library</Text>
-        <ListRow icon="library" color="#6366f1" title="My Scripts" badge={scripts.length > 0 ? `${scripts.length}` : undefined} route="/scripts" testId="my-scripts-row" />
-        <ListRow icon="cloud-upload" color="#3b82f6" title="Upload Script" sub="PDF, DOCX, TXT" route="/upload" testId="upload-script-row" />
-        <ListRow icon="mic-circle" color="#6366f1" title="Voice Studio" sub="Record & build demo reels" route="/voice-studio" testId="voice-studio-row" />
+        {/* ─── RECALL + MY SCRIPTS row ─── */}
+        <View style={st.dualRow}>
+          <TouchableOpacity style={st.dualCard} onPress={() => router.push('/recall')} activeOpacity={0.85} data-testid="recall-btn">
+            <View style={[st.dualIc, { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
+              <Ionicons name="bulb" size={22} color="#f59e0b" />
+            </View>
+            <Text style={st.dualH}>Recall</Text>
+            <Text style={st.dualSub}>Line memory</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={st.dualCard} onPress={() => router.push('/scripts')} activeOpacity={0.85} data-testid="my-scripts-btn">
+            <View style={[st.dualIc, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
+              <Ionicons name="library" size={22} color="#6366f1" />
+            </View>
+            <Text style={st.dualH}>My Scripts</Text>
+            <Text style={st.dualSub}>{scripts.length} saved</Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* ── Career ── */}
-        <Text style={s.sectionLabel}>Career</Text>
-        <ListRow icon="calendar" color="#f59e0b" title="Auditions" sub="Track submissions" route="/auditions" testId="auditions-row" />
-        <ListRow icon="stats-chart" color="#10b981" title="Dashboard" sub="Progress & stats" route="/dashboard" testId="dashboard-row" />
+        {/* ─── DAILY DRILL ─── */}
+        {!streak?.today_completed && (
+          <TouchableOpacity style={st.drill} onPress={() => router.push('/daily-drill')} activeOpacity={0.85} data-testid="daily-drill-banner">
+            <View style={st.drillL}>
+              <View style={st.drillIc}><Ionicons name="flame" size={18} color="#f59e0b" /></View>
+              <View><Text style={st.drillH}>Daily Drill</Text><Text style={st.drillS}>Today's challenge</Text></View>
+            </View>
+            <View style={st.drillXp}><Text style={st.drillXpTx}>+25 XP</Text></View>
+          </TouchableOpacity>
+        )}
 
-        <View style={{ height: 32 }} />
+        {/* ─── MORE TOOLS ─── */}
+        <Text style={st.secLabel}>More</Text>
+        <NavRow icon="cloud-upload" color="#3b82f6" title="Upload Script"    sub="PDF, DOCX, TXT"          route="/upload"       testId="upload-row" />
+        <NavRow icon="mic-circle"   color="#6366f1" title="Voice Studio"     sub="Record & build demo reels" route="/voice-studio" testId="voice-studio-row" />
+        <NavRow icon="calendar"     color="#f59e0b" title="Auditions"        sub="Track your submissions"   route="/auditions"    testId="auditions-row" />
+        <NavRow icon="bar-chart"    color="#10b981" title="Dashboard"        sub="Progress & stats"         route="/dashboard"    testId="dashboard-row" />
+        <NavRow icon="help-circle"  color="#6b7280" title="Support"          route="/support"               testId="support-row" />
+
+        <View style={{ height: 36 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-/* ── Sub-components ── */
-
-function CoachCard({ icon, color, title, sub, route, testId }: {
-  icon: keyof typeof Ionicons.glyphMap; color: string; title: string; sub: string; route: string; testId: string;
+/* ── Tool Card (2x2 grid) ── */
+function ToolCard({ icon, color, label, route, testId }: {
+  icon: keyof typeof Ionicons.glyphMap; color: string; label: string; route: string; testId: string;
 }) {
   return (
-    <TouchableOpacity style={s.coachCard} onPress={() => router.push(route as any)} activeOpacity={0.85} data-testid={testId}>
-      <View style={[s.coachIcon, { backgroundColor: color + '18' }]}>
-        <Ionicons name={icon} size={22} color={color} />
+    <TouchableOpacity style={st.toolCard} onPress={() => router.push(route as any)} activeOpacity={0.85} data-testid={testId}>
+      <View style={[st.toolIc, { backgroundColor: color + '15' }]}>
+        <Ionicons name={icon} size={24} color={color} />
       </View>
-      <Text style={s.coachTitle}>{title}</Text>
-      <Text style={s.coachSub}>{sub}</Text>
+      <Text style={st.toolLabel}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
-function ListRow({ icon, color, title, sub, badge, route, testId }: {
-  icon: keyof typeof Ionicons.glyphMap; color: string; title: string; sub?: string; badge?: string; route: string; testId: string;
+/* ── Nav Row (compact list item) ── */
+function NavRow({ icon, color, title, sub, route, testId }: {
+  icon: keyof typeof Ionicons.glyphMap; color: string; title: string; sub?: string; route: string; testId: string;
 }) {
   return (
-    <TouchableOpacity style={s.listRow} onPress={() => router.push(route as any)} activeOpacity={0.8} data-testid={testId}>
-      <View style={[s.listIcon, { backgroundColor: color + '18' }]}>
-        <Ionicons name={icon} size={20} color={color} />
+    <TouchableOpacity style={st.navRow} onPress={() => router.push(route as any)} activeOpacity={0.8} data-testid={testId}>
+      <View style={[st.navIc, { backgroundColor: color + '15' }]}>
+        <Ionicons name={icon} size={18} color={color} />
       </View>
-      <View style={s.listContent}>
-        <Text style={s.listTitle}>{title}</Text>
-        {sub && <Text style={s.listSub}>{sub}</Text>}
+      <View style={st.navTx}>
+        <Text style={st.navH}>{title}</Text>
+        {sub ? <Text style={st.navSub}>{sub}</Text> : null}
       </View>
-      {badge && (
-        <View style={s.listBadge}>
-          <Text style={s.listBadgeText}>{badge}</Text>
-        </View>
-      )}
-      <Ionicons name="chevron-forward" size={16} color="#4b5563" />
+      <Ionicons name="chevron-forward" size={14} color="#4b5563" />
     </TouchableOpacity>
   );
 }
 
 /* ── Styles ── */
+const CARD_BG = '#12121e';
+const BORDER = '#1c1c2e';
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#09090f' },
-  loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
+const st = StyleSheet.create({
+  bg: { flex: 1, backgroundColor: '#08080e' },
+  flex: { flex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  pad: { paddingHorizontal: 18, paddingBottom: 44 },
 
   // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, paddingBottom: 20 },
-  logoWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  logoIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#6366f1', alignItems: 'center', justifyContent: 'center' },
-  logoText: { fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#161622', alignItems: 'center', justifyContent: 'center' },
-  streakPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(245,158,11,0.12)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
-  streakNum: { fontSize: 13, fontWeight: '700', color: '#f59e0b' },
+  hdr: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, paddingBottom: 18 },
+  logo: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  logoIc: { width: 32, height: 32, borderRadius: 9, backgroundColor: '#6366f1', alignItems: 'center', justifyContent: 'center' },
+  logoTx: { fontSize: 24, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
+  hdrR: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  hdrBtn: { width: 34, height: 34, borderRadius: 9, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' },
+  streakPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 12 },
+  streakN: { fontSize: 12, fontWeight: '700', color: '#f59e0b' },
 
   // Premium
-  premiumCard: { borderRadius: 16, overflow: 'hidden', marginBottom: 20, backgroundColor: '#f59e0b' },
-  premiumGlow: { position: 'absolute', top: -40, right: -40, width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.15)' },
-  premiumInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18 },
-  premiumLeft: { flex: 1 },
-  premiumLabel: { fontSize: 11, fontWeight: '800', color: '#000', backgroundColor: 'rgba(0,0,0,0.12)', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginBottom: 6, letterSpacing: 1 },
-  premiumTitle: { fontSize: 18, fontWeight: '800', color: '#000' },
-  premiumSub: { fontSize: 12, color: 'rgba(0,0,0,0.6)', marginTop: 3 },
-  premiumArrow: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.1)', alignItems: 'center', justifyContent: 'center' },
-  proBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, marginBottom: 16 },
-  proBadgeText: { fontSize: 12, fontWeight: '700', color: '#f59e0b' },
+  pro: { borderRadius: 14, overflow: 'hidden', marginBottom: 18, backgroundColor: '#f59e0b' },
+  proGlow: { position: 'absolute', top: -30, right: -30, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.12)' },
+  proRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+  proTag: { fontSize: 10, fontWeight: '800', color: '#000', backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, marginBottom: 5, letterSpacing: 1 },
+  proH: { fontSize: 17, fontWeight: '800', color: '#000' },
+  proSub: { fontSize: 11, color: 'rgba(0,0,0,0.55)', marginTop: 2 },
+  proArr: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.08)', alignItems: 'center', justifyContent: 'center' },
+  proBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, marginBottom: 14 },
+  proBadgeTx: { fontSize: 11, fontWeight: '700', color: '#f59e0b' },
 
-  // Hero
-  heroRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  heroCard: { flex: 1, borderRadius: 18, padding: 20, justifyContent: 'flex-end', minHeight: 160 },
-  heroIconWrap: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  heroTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
-  heroSub: { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 3 },
-  heroCol: { flex: 1, gap: 12 },
-  heroHalf: { flex: 1, borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  heroHalfTitle: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  // Hero — Quick Rehearse
+  hero: { backgroundColor: '#6366f1', borderRadius: 20, padding: 22, marginBottom: 14 },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  heroIc: { width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  heroH: { fontSize: 22, fontWeight: '800', color: '#fff' },
+  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
+
+  // 4-tool grid
+  grid4: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
+  toolCard: { width: '48%', flexGrow: 1, backgroundColor: CARD_BG, borderRadius: 16, padding: 18, alignItems: 'center', borderWidth: 1, borderColor: BORDER },
+  toolIc: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  toolLabel: { fontSize: 13, fontWeight: '700', color: '#fff', textAlign: 'center' },
+
+  // Dual row — Recall + My Scripts
+  dualRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  dualCard: { flex: 1, backgroundColor: CARD_BG, borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: BORDER },
+  dualIc: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  dualH: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  dualSub: { fontSize: 11, color: '#6b7280', marginTop: 2 },
 
   // Daily Drill
-  drillBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#161622', borderRadius: 14, padding: 14, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(245,158,11,0.15)' },
-  drillLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  drillIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.12)', alignItems: 'center', justifyContent: 'center' },
-  drillTitle: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  drillSub: { fontSize: 12, color: '#6b7280', marginTop: 1 },
-  drillXp: { backgroundColor: 'rgba(245,158,11,0.12)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
-  drillXpText: { fontSize: 12, fontWeight: '700', color: '#f59e0b' },
+  drill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: CARD_BG, borderRadius: 14, padding: 13, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(245,158,11,0.12)' },
+  drillL: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  drillIc: { width: 38, height: 38, borderRadius: 11, backgroundColor: 'rgba(245,158,11,0.1)', alignItems: 'center', justifyContent: 'center' },
+  drillH: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  drillS: { fontSize: 11, color: '#6b7280', marginTop: 1 },
+  drillXp: { backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
+  drillXpTx: { fontSize: 11, fontWeight: '700', color: '#f59e0b' },
 
-  // Section
-  sectionLabel: { fontSize: 14, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, marginTop: 8 },
+  // Section label
+  secLabel: { fontSize: 12, fontWeight: '700', color: '#4b5563', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 10, marginTop: 4 },
 
-  // Coach cards
-  coachRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  coachCard: { flex: 1, backgroundColor: '#161622', borderRadius: 16, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#1e1e30' },
-  coachIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  coachTitle: { fontSize: 13, fontWeight: '700', color: '#fff', textAlign: 'center' },
-  coachSub: { fontSize: 11, color: '#6b7280', marginTop: 2, textAlign: 'center' },
-
-  // List rows
-  listRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#161622', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#1e1e30' },
-  listIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  listContent: { flex: 1, marginLeft: 12 },
-  listTitle: { fontSize: 15, fontWeight: '600', color: '#fff' },
-  listSub: { fontSize: 12, color: '#6b7280', marginTop: 1 },
-  listBadge: { backgroundColor: 'rgba(99,102,241,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginRight: 8 },
-  listBadgeText: { fontSize: 11, fontWeight: '700', color: '#6366f1' },
+  // Nav rows
+  navRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD_BG, borderRadius: 12, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: BORDER },
+  navIc: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  navTx: { flex: 1, marginLeft: 10 },
+  navH: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  navSub: { fontSize: 11, color: '#6b7280', marginTop: 1 },
 });
