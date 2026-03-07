@@ -657,6 +657,37 @@ Full application crash safety audit and fix to prevent runtime crashes and ensur
 
 ---
 
+## Homepage Redesign (March 2026)
+
+### Status: Complete
+
+### Changes
+- Replaced old tile-grid dashboard in `app/index.tsx` with modern cinematic homepage
+- New layout: Premium CTA → Hero actions (Quick Rehearse, Self Tape, New Script) → Daily Drill → Coaching (Acting Coach, Dialect Coach, Recall) → Library (My Scripts, Upload, Voice Studio) → Career (Auditions, Dashboard)
+- Preserved: onboarding check, premium state, streak fetch, debug tap, script store integration, safe area handling
+- Added `data-testid` on all interactive elements
+
+### Routes Wired
+| Button | Route |
+|--------|-------|
+| Quick Rehearse | `/script/[id]?autoStart=true` or `/scripts` |
+| Self Tape | `/selftape` |
+| New Script | `/script-parser` |
+| Daily Drill | `/daily-drill` |
+| Acting Coach | `/acting-coach` |
+| Dialect Coach | `/dialect-coach` |
+| Recall | `/recall` |
+| My Scripts | `/scripts` |
+| Upload Script | `/upload` |
+| Voice Studio | `/voice-studio` |
+| Auditions | `/auditions` |
+| Dashboard | `/dashboard` |
+| Stats | `/stats` |
+| Profile | `/profile` |
+| Premium | `/paywall` or `/premium` |
+
+---
+
 ## Backlog / Future Tasks
 
 ### P1 (High Priority)

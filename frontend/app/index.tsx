@@ -7,7 +7,7 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
-  Alert,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,34 +22,29 @@ import axios from 'axios';
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
                     Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
 
+const { width: SCREEN_W } = Dimensions.get('window');
+
 export default function HomeScreen() {
   const { scripts, fetchScripts, loading, initializeUser, user, isPremium, limits } = useScriptStore();
   const [refreshing, setRefreshing] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [streak, setStreak] = useState<any>(null);
-  
+
   // Hidden debug screen - tap logo 5x
   const logoTapCount = useRef(0);
   const logoTapTimer = useRef<NodeJS.Timeout | null>(null);
-  
+
   const handleLogoTap = () => {
     logoTapCount.current += 1;
-    
-    if (logoTapTimer.current) {
-      clearTimeout(logoTapTimer.current);
-    }
-    
+    if (logoTapTimer.current) clearTimeout(logoTapTimer.current);
     if (logoTapCount.current >= 5) {
       logoTapCount.current = 0;
       router.push('/debug');
     } else {
-      logoTapTimer.current = setTimeout(() => {
-        logoTapCount.current = 0;
-      }, 2000);
+      logoTapTimer.current = setTimeout(() => { logoTapCount.current = 0; }, 2000);
     }
   };
 
-  // Check if onboarding should be shown on first launch
   useEffect(() => {
     const checkOnboarding = async () => {
       const showOnboarding = await shouldShowOnboarding();
@@ -65,7 +60,6 @@ export default function HomeScreen() {
   const initialize = useCallback(async () => {
     await initializeUser();
     await fetchScripts();
-    // Fetch streak
     try {
       const deviceId = await AsyncStorage.getItem('device_id');
       if (deviceId && BACKEND_URL) {
@@ -76,22 +70,19 @@ export default function HomeScreen() {
   }, [initializeUser, fetchScripts]);
 
   useEffect(() => {
-    if (!checkingOnboarding) {
-      initialize();
-    }
+    if (!checkingOnboarding) initialize();
   }, [initialize, checkingOnboarding]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchScripts();
+    await initialize();
     setRefreshing(false);
   };
 
-  // Show loading while checking onboarding status
   if (checkingOnboarding) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
+      <SafeAreaView style={s.container}>
+        <View style={s.loadingWrap}>
           <ActivityIndicator size="large" color="#6366f1" />
         </View>
       </SafeAreaView>
@@ -101,344 +92,268 @@ export default function HomeScreen() {
   const recentScript = scripts.length > 0 ? scripts[0] : null;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={s.container}>
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#6366f1"
-          />
-        }
+        style={s.scroll}
+        contentContainerStyle={s.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <TouchableOpacity style={styles.logoContainer} onPress={handleLogoTap} activeOpacity={0.8}>
-              <Ionicons name="mic" size={32} color="#6366f1" />
-              <Text style={styles.logoText}>ScriptM8</Text>
-            </TouchableOpacity>
-            <View style={styles.headerButtons}>
-              <TouchableOpacity 
-                style={styles.headerButton}
-                onPress={safeHandler(() => router.push('/stats'), 'Navigate to Stats')}
-              >
-                <Ionicons name="stats-chart" size={24} color="#6b7280" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.headerButton}
-                onPress={safeHandler(() => router.push('/support'), 'Navigate to Support')}
-              >
-                <Ionicons name="help-circle-outline" size={24} color="#6b7280" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.headerButton}
-                onPress={safeHandler(() => router.push('/profile'), 'Navigate to Profile')}
-              >
-                <Ionicons name="person-circle-outline" size={26} color="#6b7280" />
-              </TouchableOpacity>
+        {/* ── Header ── */}
+        <View style={s.header}>
+          <TouchableOpacity style={s.logoWrap} onPress={handleLogoTap} activeOpacity={0.8}>
+            <View style={s.logoIcon}>
+              <Ionicons name="mic" size={20} color="#fff" />
             </View>
+            <Text style={s.logoText}>ScriptM8</Text>
+          </TouchableOpacity>
+          <View style={s.headerRight}>
+            {streak && streak.current_streak > 0 && (
+              <TouchableOpacity style={s.streakPill} onPress={() => router.push('/daily-drill')} data-testid="streak-pill">
+                <Ionicons name="flame" size={14} color="#f59e0b" />
+                <Text style={s.streakNum}>{streak.current_streak}</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={s.headerBtn} onPress={safeHandler(() => router.push('/stats'), 'Stats')} data-testid="header-stats-btn">
+              <Ionicons name="stats-chart" size={20} color="#9ca3af" />
+            </TouchableOpacity>
+            <TouchableOpacity style={s.headerBtn} onPress={safeHandler(() => router.push('/profile'), 'Profile')} data-testid="header-profile-btn">
+              <Ionicons name="person-circle" size={22} color="#9ca3af" />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.tagline}>AI Training Studio for Actors</Text>
         </View>
 
-        {/* Premium Banner */}
+        {/* ── Premium CTA ── */}
         {!isPremium && (
-          <TouchableOpacity 
-            style={styles.premiumBanner}
-            onPress={() => router.push('/paywall')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.premiumBannerContent}>
-              <Ionicons name="star" size={24} color="#f59e0b" />
-              <View style={styles.premiumBannerText}>
-                <Text style={styles.premiumBannerTitle}>Unlock Premium</Text>
-                <Text style={styles.premiumBannerSubtitle}>
-                  Unlimited scripts, 6 AI voices, all modes
-                </Text>
+          <TouchableOpacity style={s.premiumCard} onPress={() => router.push('/paywall')} activeOpacity={0.85} data-testid="premium-banner">
+            <View style={s.premiumGlow} />
+            <View style={s.premiumInner}>
+              <View style={s.premiumLeft}>
+                <Text style={s.premiumLabel}>PRO</Text>
+                <Text style={s.premiumTitle}>Unlock Full Studio</Text>
+                <Text style={s.premiumSub}>Unlimited scripts, 6 AI voices, all coaching tools</Text>
+              </View>
+              <View style={s.premiumArrow}>
+                <Ionicons name="arrow-forward" size={18} color="#000" />
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#f59e0b" />
           </TouchableOpacity>
         )}
 
-        {/* Premium Status Badge */}
         {isPremium && (
-          <TouchableOpacity 
-            style={styles.premiumStatusBadge}
-            onPress={() => router.push('/premium')}
-          >
-            <Ionicons name="star" size={16} color="#f59e0b" />
-            <Text style={styles.premiumStatusText}>Premium Active</Text>
+          <TouchableOpacity style={s.proBadge} onPress={() => router.push('/premium')} data-testid="premium-active-badge">
+            <Ionicons name="star" size={13} color="#f59e0b" />
+            <Text style={s.proBadgeText}>Premium Active</Text>
           </TouchableOpacity>
         )}
 
-        {/* Quick Actions — Top Priority */}
-        <View style={styles.quickActionsRow}>
+        {/* ── Primary Actions ── */}
+        <View style={s.heroRow}>
           <TouchableOpacity
-            style={[styles.quickActionBtn, styles.quickRehearseBtn]}
-            onPress={() => {
-              if (recentScript) {
-                router.push(`/script/${recentScript.id}?autoStart=true`);
-              } else {
-                router.push('/scripts');
-              }
-            }}
-            activeOpacity={0.8}
-            testID="quick-rehearse-btn"
+            style={[s.heroCard, { backgroundColor: '#6366f1' }]}
+            onPress={() => recentScript ? router.push(`/script/${recentScript.id}?autoStart=true`) : router.push('/scripts')}
+            activeOpacity={0.85}
+            data-testid="quick-rehearse-btn"
           >
-            <Ionicons name="flash" size={32} color="#fff" />
-            <Text style={styles.quickActionTitle}>Quick Rehearse</Text>
-            <Text style={styles.quickActionSub}>
-              {recentScript ? recentScript.title : 'Select a script'}
+            <View style={s.heroIconWrap}>
+              <Ionicons name="flash" size={28} color="#fff" />
+            </View>
+            <Text style={s.heroTitle}>Quick Rehearse</Text>
+            <Text style={s.heroSub} numberOfLines={1}>
+              {recentScript ? recentScript.title : 'Pick a script'}
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.quickActionBtn, styles.quickSelfTapeBtn]}
-            onPress={() => router.push('/selftape')}
-            activeOpacity={0.8}
-            testID="quick-selftape-btn"
-          >
-            <Ionicons name="videocam" size={32} color="#fff" />
-            <Text style={styles.quickActionTitle}>Quick Self Tape</Text>
-            <Text style={styles.quickActionSub}>Start recording now</Text>
-          </TouchableOpacity>
+          <View style={s.heroCol}>
+            <TouchableOpacity
+              style={[s.heroHalf, { backgroundColor: '#ef4444' }]}
+              onPress={() => router.push('/selftape')}
+              activeOpacity={0.85}
+              data-testid="quick-selftape-btn"
+            >
+              <Ionicons name="videocam" size={22} color="#fff" />
+              <Text style={s.heroHalfTitle}>Self Tape</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[s.heroHalf, { backgroundColor: '#10b981' }]}
+              onPress={() => router.push('/script-parser')}
+              activeOpacity={0.85}
+              data-testid="new-script-btn"
+            >
+              <Ionicons name="add-circle" size={22} color="#fff" />
+              <Text style={s.heroHalfTitle}>New Script</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Streak Banner */}
-        {streak && streak.current_streak > 0 && (
-          <View style={styles.streakRow}>
-            <Ionicons name="flame" size={20} color="#f59e0b" />
-            <Text style={styles.streakText}>{streak.current_streak} day streak</Text>
-            <Text style={styles.streakXp}>{streak.total_xp} XP</Text>
-          </View>
+        {/* ── Daily Drill ── */}
+        {(!streak?.today_completed) && (
+          <TouchableOpacity style={s.drillBanner} onPress={() => router.push('/daily-drill')} activeOpacity={0.85} data-testid="daily-drill-banner">
+            <View style={s.drillLeft}>
+              <View style={s.drillIcon}>
+                <Ionicons name="flame" size={20} color="#f59e0b" />
+              </View>
+              <View>
+                <Text style={s.drillTitle}>Daily Drill</Text>
+                <Text style={s.drillSub}>Complete today's challenge</Text>
+              </View>
+            </View>
+            <View style={s.drillXp}>
+              <Text style={s.drillXpText}>+25 XP</Text>
+            </View>
+          </TouchableOpacity>
         )}
 
-        {/* TRAIN Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Train</Text>
-          <View style={styles.tileGrid}>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/acting-coach')}
-              activeOpacity={0.8}
-              testID="acting-coach-tile"
-            >
-              <Ionicons name="school" size={26} color="#8b5cf6" />
-              <Text style={styles.tileTitle}>Acting Coach</Text>
-              <Text style={styles.tileDesc}>AI feedback</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/dialect-coach')}
-              activeOpacity={0.8}
-              testID="dialect-coach-tile"
-            >
-              <Ionicons name="mic" size={26} color="#ec4899" />
-              <Text style={styles.tileTitle}>Dialect Coach</Text>
-              <Text style={styles.tileDesc}>Accent training</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/daily-drill')}
-              activeOpacity={0.8}
-              testID="daily-drill-tile"
-            >
-              <View style={styles.tileIconRow}>
-                <Ionicons name="flame" size={26} color="#f59e0b" />
-                {!streak?.today_completed && (
-                  <View style={styles.tileBadge}>
-                    <Text style={styles.tileBadgeText}>NEW</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.tileTitle}>Daily Drill</Text>
-              <Text style={styles.tileDesc}>
-                {streak?.today_completed ? 'Done today' : '+25 XP'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        {/* ── Coaching ── */}
+        <Text style={s.sectionLabel}>Coaching</Text>
+        <View style={s.coachRow}>
+          <CoachCard
+            icon="school"
+            color="#8b5cf6"
+            title="Acting Coach"
+            sub="AI scene feedback"
+            route="/acting-coach"
+            testId="acting-coach-tile"
+          />
+          <CoachCard
+            icon="mic"
+            color="#ec4899"
+            title="Dialect Coach"
+            sub="Accent training"
+            route="/dialect-coach"
+            testId="dialect-coach-tile"
+          />
+          <CoachCard
+            icon="bulb"
+            color="#f59e0b"
+            title="Recall"
+            sub="Line memory"
+            route="/recall"
+            testId="recall-tile"
+          />
         </View>
 
-        {/* REHEARSE Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Rehearse</Text>
-          <View style={styles.tileGrid}>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/scripts')}
-              activeOpacity={0.8}
-              testID="practice-scene-tile"
-            >
-              <Ionicons name="chatbubbles" size={26} color="#10b981" />
-              <Text style={styles.tileTitle}>Practice Scene</Text>
-              <Text style={styles.tileDesc}>AI scene partner</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/scripts')}
-              activeOpacity={0.8}
-              testID="my-scripts-tile"
-            >
-              <Ionicons name="library" size={26} color="#6366f1" />
-              <Text style={styles.tileTitle}>My Scripts</Text>
-              <Text style={styles.tileDesc}>{scripts.length} saved</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/upload')}
-              activeOpacity={0.8}
-              testID="upload-script-tile"
-            >
-              <Ionicons name="cloud-upload" size={26} color="#3b82f6" />
-              <Text style={styles.tileTitle}>Upload Script</Text>
-              <Text style={styles.tileDesc}>PDF, DOCX, TXT</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        {/* ── Library ── */}
+        <Text style={s.sectionLabel}>Library</Text>
+        <ListRow icon="library" color="#6366f1" title="My Scripts" badge={scripts.length > 0 ? `${scripts.length}` : undefined} route="/scripts" testId="my-scripts-row" />
+        <ListRow icon="cloud-upload" color="#3b82f6" title="Upload Script" sub="PDF, DOCX, TXT" route="/upload" testId="upload-script-row" />
+        <ListRow icon="mic-circle" color="#6366f1" title="Voice Studio" sub="Record & build demo reels" route="/voice-studio" testId="voice-studio-row" />
 
-        {/* RECORD Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Record</Text>
-          <View style={styles.tileGrid}>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/selftape')}
-              activeOpacity={0.8}
-              testID="selftape-studio-tile"
-            >
-              <Ionicons name="videocam" size={26} color="#ef4444" />
-              <Text style={styles.tileTitle}>Self Tape Studio</Text>
-              <Text style={styles.tileDesc}>Record auditions</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/voice-studio')}
-              activeOpacity={0.8}
-              testID="voice-studio-tile"
-            >
-              <Ionicons name="mic-circle" size={26} color="#6366f1" />
-              <Text style={styles.tileTitle}>Voice Studio</Text>
-              <Text style={styles.tileDesc}>Voice-over tools</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/voice-studio')}
-              activeOpacity={0.8}
-              testID="demo-reel-tile"
-            >
-              <Ionicons name="albums" size={26} color="#10b981" />
-              <Text style={styles.tileTitle}>Demo Reel</Text>
-              <Text style={styles.tileDesc}>Build your reel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        {/* ── Career ── */}
+        <Text style={s.sectionLabel}>Career</Text>
+        <ListRow icon="calendar" color="#f59e0b" title="Auditions" sub="Track submissions" route="/auditions" testId="auditions-row" />
+        <ListRow icon="stats-chart" color="#10b981" title="Dashboard" sub="Progress & stats" route="/dashboard" testId="dashboard-row" />
 
-        {/* CAREER Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Career</Text>
-          <View style={styles.tileRow}>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/auditions')}
-              activeOpacity={0.8}
-              testID="audition-tracker-tile"
-            >
-              <Ionicons name="calendar" size={26} color="#f59e0b" />
-              <Text style={styles.tileTitle}>Audition Tracker</Text>
-              <Text style={styles.tileDesc}>Track submissions</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tile}
-              onPress={() => router.push('/dashboard')}
-              activeOpacity={0.8}
-              testID="dashboard-tile"
-            >
-              <Ionicons name="stats-chart" size={26} color="#10b981" />
-              <Text style={styles.tileTitle}>Dashboard</Text>
-              <Text style={styles.tileDesc}>Your progress</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={{ height: 20 }} />
+        <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0f' },
-  scrollView: { flex: 1 },
+/* ── Sub-components ── */
+
+function CoachCard({ icon, color, title, sub, route, testId }: {
+  icon: keyof typeof Ionicons.glyphMap; color: string; title: string; sub: string; route: string; testId: string;
+}) {
+  return (
+    <TouchableOpacity style={s.coachCard} onPress={() => router.push(route as any)} activeOpacity={0.85} data-testid={testId}>
+      <View style={[s.coachIcon, { backgroundColor: color + '18' }]}>
+        <Ionicons name={icon} size={22} color={color} />
+      </View>
+      <Text style={s.coachTitle}>{title}</Text>
+      <Text style={s.coachSub}>{sub}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function ListRow({ icon, color, title, sub, badge, route, testId }: {
+  icon: keyof typeof Ionicons.glyphMap; color: string; title: string; sub?: string; badge?: string; route: string; testId: string;
+}) {
+  return (
+    <TouchableOpacity style={s.listRow} onPress={() => router.push(route as any)} activeOpacity={0.8} data-testid={testId}>
+      <View style={[s.listIcon, { backgroundColor: color + '18' }]}>
+        <Ionicons name={icon} size={20} color={color} />
+      </View>
+      <View style={s.listContent}>
+        <Text style={s.listTitle}>{title}</Text>
+        {sub && <Text style={s.listSub}>{sub}</Text>}
+      </View>
+      {badge && (
+        <View style={s.listBadge}>
+          <Text style={s.listBadgeText}>{badge}</Text>
+        </View>
+      )}
+      <Ionicons name="chevron-forward" size={16} color="#4b5563" />
+    </TouchableOpacity>
+  );
+}
+
+/* ── Styles ── */
+
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#09090f' },
+  loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
-  header: { paddingTop: 20, paddingBottom: 24, alignItems: 'center' },
-  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 },
-  headerButtons: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  headerButton: { padding: 8 },
-  logoContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  logoText: { fontSize: 32, fontWeight: '700', color: '#fff' },
-  tagline: { fontSize: 16, color: '#6b7280', marginTop: 8 },
-  premiumBanner: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)',
-    borderRadius: 12, padding: 14, marginBottom: 20,
-  },
-  premiumBannerContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  premiumBannerText: { marginLeft: 12, flex: 1 },
-  premiumBannerTitle: { fontSize: 16, fontWeight: '600', color: '#f59e0b' },
-  premiumBannerSubtitle: { fontSize: 13, color: '#9ca3af', marginTop: 2 },
-  premiumStatusBadge: {
-    flexDirection: 'row', alignItems: 'center', alignSelf: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, marginBottom: 16, gap: 6,
-  },
-  premiumStatusText: { color: '#f59e0b', fontSize: 13, fontWeight: '600' },
-  // Quick Actions
-  quickActionsRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  quickActionBtn: {
-    flex: 1, borderRadius: 16, padding: 24, alignItems: 'center', justifyContent: 'center', minHeight: 140,
-  },
-  quickRehearseBtn: { backgroundColor: '#6366f1' },
-  quickSelfTapeBtn: { backgroundColor: '#ef4444' },
-  quickActionTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginTop: 10 },
-  quickActionSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4, textAlign: 'center' },
-  // Streak
-  streakRow: {
-    flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 8,
-    backgroundColor: 'rgba(245, 158, 11, 0.1)', paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20, marginBottom: 20,
-  },
-  streakText: { fontSize: 14, fontWeight: '600', color: '#f59e0b' },
-  streakXp: { fontSize: 12, color: '#9ca3af', marginLeft: 4 },
+
+  // Header
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, paddingBottom: 20 },
+  logoWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  logoIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#6366f1', alignItems: 'center', justifyContent: 'center' },
+  logoText: { fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#161622', alignItems: 'center', justifyContent: 'center' },
+  streakPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(245,158,11,0.12)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
+  streakNum: { fontSize: 13, fontWeight: '700', color: '#f59e0b' },
+
+  // Premium
+  premiumCard: { borderRadius: 16, overflow: 'hidden', marginBottom: 20, backgroundColor: '#f59e0b' },
+  premiumGlow: { position: 'absolute', top: -40, right: -40, width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.15)' },
+  premiumInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18 },
+  premiumLeft: { flex: 1 },
+  premiumLabel: { fontSize: 11, fontWeight: '800', color: '#000', backgroundColor: 'rgba(0,0,0,0.12)', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginBottom: 6, letterSpacing: 1 },
+  premiumTitle: { fontSize: 18, fontWeight: '800', color: '#000' },
+  premiumSub: { fontSize: 12, color: 'rgba(0,0,0,0.6)', marginTop: 3 },
+  premiumArrow: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.1)', alignItems: 'center', justifyContent: 'center' },
+  proBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, marginBottom: 16 },
+  proBadgeText: { fontSize: 12, fontWeight: '700', color: '#f59e0b' },
+
+  // Hero
+  heroRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  heroCard: { flex: 1, borderRadius: 18, padding: 20, justifyContent: 'flex-end', minHeight: 160 },
+  heroIconWrap: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  heroTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  heroSub: { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 3 },
+  heroCol: { flex: 1, gap: 12 },
+  heroHalf: { flex: 1, borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroHalfTitle: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
   // Daily Drill
-  drillCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a2e', borderRadius: 14,
-    padding: 16, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.2)',
-  },
-  drillIcon: {
-    width: 48, height: 48, borderRadius: 12, backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  drillContent: { flex: 1, marginLeft: 14 },
-  drillTitle: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  drillSubtitle: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
-  xpBadge: { backgroundColor: 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  xpText: { fontSize: 12, fontWeight: '600', color: '#f59e0b' },
-  // Sections
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#fff', marginBottom: 12 },
-  tileRow: { flexDirection: 'row', gap: 12 },
-  tileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile: {
-    flex: 1, minWidth: '30%', backgroundColor: '#1a1a2e', borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: '#2a2a3e', alignItems: 'center',
-  },
-  tileIconRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  tileBadge: { backgroundColor: '#f59e0b', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
-  tileBadgeText: { fontSize: 9, fontWeight: '700', color: '#000' },
-  tileTitle: { fontSize: 13, fontWeight: '600', color: '#fff', marginTop: 8, textAlign: 'center' },
-  tileDesc: { fontSize: 11, color: '#6b7280', marginTop: 2, textAlign: 'center' },
+  drillBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#161622', borderRadius: 14, padding: 14, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(245,158,11,0.15)' },
+  drillLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  drillIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.12)', alignItems: 'center', justifyContent: 'center' },
+  drillTitle: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  drillSub: { fontSize: 12, color: '#6b7280', marginTop: 1 },
+  drillXp: { backgroundColor: 'rgba(245,158,11,0.12)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  drillXpText: { fontSize: 12, fontWeight: '700', color: '#f59e0b' },
+
+  // Section
+  sectionLabel: { fontSize: 14, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, marginTop: 8 },
+
+  // Coach cards
+  coachRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
+  coachCard: { flex: 1, backgroundColor: '#161622', borderRadius: 16, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#1e1e30' },
+  coachIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  coachTitle: { fontSize: 13, fontWeight: '700', color: '#fff', textAlign: 'center' },
+  coachSub: { fontSize: 11, color: '#6b7280', marginTop: 2, textAlign: 'center' },
+
+  // List rows
+  listRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#161622', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#1e1e30' },
+  listIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  listContent: { flex: 1, marginLeft: 12 },
+  listTitle: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  listSub: { fontSize: 12, color: '#6b7280', marginTop: 1 },
+  listBadge: { backgroundColor: 'rgba(99,102,241,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginRight: 8 },
+  listBadgeText: { fontSize: 11, fontWeight: '700', color: '#6366f1' },
 });
