@@ -1,7 +1,7 @@
-# ScriptMate - Product Requirements Document
+# ScriptM8 - Product Requirements Document
 
 ## Overview
-ScriptMate is a mobile app for actors to practice scripts, record professional self-tape auditions, and track their audition journey. The app features AI-powered line reading, gamified memorization, and comprehensive actor tools.
+ScriptM8 is a mobile AI Training Studio for actors to practice scripts, record professional self-tape auditions, and track their audition journey. The app features AI-powered coaching, line reading, gamified memorization, and comprehensive actor tools.
 
 ## Tech Stack
 - **Frontend**: Expo (React Native) with TypeScript
@@ -10,6 +10,8 @@ ScriptMate is a mobile app for actors to practice scripts, record professional s
 - **Crash Reporting**: Sentry
 - **Native Features**: expo-camera, expo-media-library, expo-sharing, expo-notifications
 - **TTS**: ElevenLabs (Multi-Voice feature) - client-side integration
+- **EAS Project**: @stevenslater88/scriptmate (ID: a2f8beb4-8c5b-4fea-8650-ea7986c2e78c)
+- **Production API**: https://line-assigner.preview.emergentagent.com
 
 ---
 
@@ -498,6 +500,23 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 - Test report: `/app/test_reports/iteration_4.json`
 
 ---
+
+## Feature 10: ScriptM8 5-Part Production Update (March 2026)
+
+### Status: Complete & Tested
+
+### Changes
+1. **Branding**: Replaced all "ScriptMate" → "ScriptM8" across ~20 files (UI text, app.json, legal pages, services, permissions)
+2. **Network Error Fix**: Production API URL (`EXPO_PUBLIC_BACKEND_URL`) set in `eas.json` env + `app.json` extra field as fallback via Constants. All files use `Constants.expoConfig?.extra` fallback.
+3. **Infinite Loading Fix**: All axios calls now have `timeout: 15000ms` (API) / `30000ms` (uploads). Loading states always resolve to success or error.
+4. **Home Screen Layout**: Restructured to prioritize AI coaching (Acting Coach, Dialect Coach, Practice Scene, Record Self Tape) above script tools (My Scripts, New Script, Auditions, Dashboard).
+5. **Error Handling**: `getErrorMessage()` utility provides structured messages (timeout, network, file size, unsupported type, server error).
+
+### Testing
+- 22/22 tests passed (iteration_5.json)
+
+---
+
 
 ---
 

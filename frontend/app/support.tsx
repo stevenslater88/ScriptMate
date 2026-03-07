@@ -49,7 +49,7 @@ const FAQ_ITEMS = [
   },
 ];
 
-const SUPPORT_EMAIL = 'support@scriptmate.app';
+const SUPPORT_EMAIL = 'support@scriptm8.app';
 
 export default function SupportScreen() {
   const { isPremium } = useScriptStore();

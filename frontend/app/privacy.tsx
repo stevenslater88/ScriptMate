@@ -12,7 +12,7 @@ import { router } from 'expo-router';
 
 const APP_NAME = 'ScriptM8';
 const COMPANY_NAME = 'ScriptM8 App';
-const CONTACT_EMAIL = 'privacy@scriptmate.app';
+const CONTACT_EMAIL = 'privacy@scriptm8.app';
 const EFFECTIVE_DATE = 'June 2025';
 
 export default function PrivacyPolicyScreen() {
