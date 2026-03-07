@@ -1,171 +1,165 @@
-<analysis>
-<original_problem_statement>
-The user wants to enhance the existing ScriptMate mobile app by implementing a major new premium feature called Self Tape Mode. This feature should be a professional, minimal, and stable tool for actors to record auditions.
+<analysis>**original_problem_statement:**
+The user wants to transform the ScriptM8 app into a complete actor training and audition workflow platform, focusing on a  flow.
+
+The latest request was broken down into phases. The agent has just worked on implementing Phase C and D.
 
 **PRODUCT REQUIREMENTS**:
-- **Feature**: Self Tape Mode (Pro-only, gated by  entitlement).
-- **UI**: Split screen with a script overlay on top and a camera preview on the bottom.
-- **Flow**:
-    1. Select Script/Scene.
-    2. Go to a Prep screen with settings (font size, hide lines, countdown, teleprompter toggle).
-    3. Record video.
-    4. **Immediately** after stopping, show a Post-record Action Sheet with options to Share now, Save, or Retake. The primary goal is instant sharing to social media via the native OS share sheet.
-- **Teleprompter Mode**: An optional mode within Self Tape that auto-scrolls the script text with adjustable speed.
-- **Branded Watermark**: Automatically apply a subtle Sent from ScriptMate watermark to all exported/shared videos.
-- **Stability & Diagnostics**: A series of requests focused on making the app more robust, especially around RevenueCat. This includes:
-    - Preventing hard crashes on IAP errors.
-    - Adding a comprehensive diagnostics screen.
-    - Implementing Sentry for crash reporting.
-    - Adding feature flags for monetization.
-</original_problem_statement>
+
+-   **Phase C: Daily Drill AI Feedback**: After a user records their daily drill, the app should use AI to analyze the performance and provide structured feedback on emotional clarity, pacing, delivery, and confidence.
+-   **Phase D: Self Tape Share Links**: Users should be able to generate a unique, shareable casting link () for their recorded self-tapes. The share page must be professional, including a video player, actor/role details, and a download button.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack Expo (React Native) and FastAPI app. Over this session, numerous critical issues were resolved, making the app significantly more stable.
-- **Stabilization**: Fixed a persistent iOS deployment blocker caused by a lock file conflict, resolved an Android signing key mismatch, and fixed multiple RevenueCat-related crashes and configuration errors.
-- **Diagnostics Suite**: A comprehensive diagnostics and support system was implemented. This includes a new **Support/Diagnostics screen** (), a hidden **Debug screen** (), Sentry crash reporting integration (), and robust  error handling around all payment-related code.
-- **Self Tape Mode (Initial MVP)**: The basic structure for the Self Tape Mode feature was created. This includes new files and directories under , necessary package installations (, , etc.), and permissions in . A button to access the feature was added to the home screen.
+A full-stack Expo (React Native) and FastAPI application named ScriptM8. The app features a redesigned home screen centered on an actor's workflow (Train, Rehearse, Record, Career). Key features include AI-powered Acting/Dialect Coaches, a Daily Drill system with XP and streaks, and a Quick Rehearse function with an AI scene partner. The project is configured for local EAS builds with a custom Android keystore and connects to a hosted backend, resolving previous network errors.
 
 **Last working item**:
-- **Last item agent was working**: The agent was in the middle of a major overhaul of the Self Tape Mode to meet a more detailed user specification. The work began by installing , updating  and , and then started a complete rewrite of the recording screen (). The goal was to implement the Instant Share action sheet and prepare for adding the teleprompter and watermarking functionalities.
-- **Status**: IN PROGRESS
-- **Agent Testing Done**: N
-- **Which testing method agent to use?**: frontend testing agent. Due to the use of native device features (camera, media library), final verification will require on-device testing. The agent should generate a QR code for the user to test on Expo Go.
-- **User Testing Done**: N
+-   **Last item agent was working**: Implementing Phase C (Daily Drill AI Feedback) and Phase D (Self Tape Share Links).
+    -   **Phase C**: Backend endpoint () and frontend UI for displaying AI feedback on the Daily Drill screen are complete.
+    -   **Phase D**: The backend endpoint () is created and tested. On the frontend (), the Generate Casting Link button and modal UI have been added, but the underlying state management and handler functions (, , ) are not yet implemented.
+-   **Status**: IN PROGRESS
+-   **Agent Testing Done**: N (Only backend endpoints were tested via . The full E2E flow is not tested.)
+-   **Which testing method agent to use?**: frontend testing agent
+-   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-- There are no outstanding bugs or issues. The current focus is on new feature development.
+-   **Issue 1**: Complete Frontend Logic for Self Tape Share Links (P0)
+
+**Issues Detail**:
+-   **Issue 1**: Complete Frontend Logic for Self Tape Share Links
+    -   **Attempted fixes**: The UI button and modal were added to the self-tape review screen (). The corresponding backend API is functional.
+    -   **Next debug checklist**:
+        1.  Open .
+        2.  Add  hooks to manage the modal's visibility, the generated link, and loading state.
+        3.  Implement the  async function to call the  endpoint, handle the response, and update the state.
+        4.  Implement  using .
+        5.  Implement  using the  API from React Native.
+        6.  Wire up these functions to the respective buttons in the modal.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is the final step to complete the Self Tape Share Links feature, a critical part of the user's requested workflow.
+    -   **Status**: IN PROGRESS
+    -   **Is recurring issue?**: N
+    -   **Should Test frontend/backend/both after fix?**: frontend
+    -   **Blocked on other issue**: None
 
 **In progress Task List**:
-- **Task 1**: Complete Self Tape Mode and Enhancements (P0)
-    - **Description**: Implement the full feature set for Self Tape Mode as defined by the user's detailed specifications (Messages #306 and #348).
-    - **Where to resume**: The agent was rewriting . The next steps are:
-        1.  Complete the  screen, ensuring the camera view and script overlay work.
-        2.  Implement the post-recording action sheet for Instant Share, Save, and Retake.
-        3.  Implement the Teleprompter functionality (auto-scrolling text with speed controls) within .
-        4.  Implement the video watermarking logic. This is a technically challenging step and may require a new library like  or a custom native module if  is insufficient. The agent should investigate the best approach.
-        5.  Ensure all new UI is gated behind the  entitlement, triggering the paywall if the user is not a subscriber.
-        6.  Wire up all the analytics events defined in .
-        7.  Add a Self Tape button to the script detail screen (), as it was only added to the home screen.
-    - **What will be achieved with this?**: A major new premium feature that serves as a professional tool for actors, enhancing the app's value proposition.
-    - **Status**: IN PROGRESS
-    - **Should Test frontend/backend/both after fix?**: both
-    - **Blocked on something**: No.
+-   **Task 1**: Finalize and Test Phase C & D Implementation
+    -   **Where to resume**: Resume work in  to add the missing state and event handler logic for the sharing modal.
+    -   **What will be achieved with this?**: A fully functional Daily Drill AI Feedback and Self Tape Share Links feature, ready for user testing.
+    -   **Status**: IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?**: frontend
+    -   **Blocked on something**: No.
 
 **Upcoming and Future Tasks**
-- There are no other upcoming tasks mentioned by the user. The entire focus is on completing the Self Tape Mode feature.
+-   **Upcoming Tasks (Next Session)**:
+    -   (P0) **Phase E: Voice Actor Studio & Demo Reel Builder**: Build a dedicated voice-over recording section with features for trimming, normalizing audio, and automatically creating demo reels from selected takes. A placeholder screen () exists.
+    -   (P1) **Phase F: Audition Tracker Enhancement**: Enhance the existing tracker with fields for Project, Role, Date Submitted, and Status (Submitted / Callback / Booked).
+-   **Future Tasks**:
+    -   Implement multiple AI reader styles (e.g., neutral, emotional, aggressive) for the scene partner.
+    -   Add an optional password protection toggle for shared casting links.
+    -   Introduce a Director Mode with on-screen framing guides and scoring.
+    -   Add an Overall progress summary to the dashboard.
 
 **Completed work in this session**
-- **Deployment & Build Fixes**:
-  - Resolved a critical iOS deployment blocker by fixing a / conflict.
-  - Fixed an EAS build failure by moving  and  from  to .
-  - Guided the user to resolve a Google Play signing key mismatch.
-- **RevenueCat Stability Overhaul**:
-  - Fixed Wrong API Key error for closed testing by correctly using the production key.
-  - Fixed an Android crash caused by  by setting production mode and adding robust  error handling around all purchase and initialization calls.
-- **Diagnostics & Crash Reporting**:
-  - Integrated Sentry for crash reporting, including user-provided DSN.
-  - Created a comprehensive Support/Diagnostics screen () with version info, device details, RevenueCat User ID, and actions to Copy Diagnostics, Refresh Paywall, Restore Purchases, and Email Support.
-  - Created a hidden Debug screen accessible via a 5-tap gesture on the home screen logo.
-  - Added feature flags (, ) to .
-- **App Configuration**:
-  - Updated app icons for both iOS and Android.
-  - Consistently bumped app version (, , ) for new build attempts.
-- **Self Tape Mode (Foundation)**:
-  - Created the file structure, installed dependencies (, , , ), and configured permissions for the new feature.
+-   **Smart Script Parser (V2)**: Implemented and fully tested the client-side script parser and its 3-step UI wizard.
+-   **Production Stability Overhaul**:
+    -   **Branding**: Standardized app name to ScriptM8 across all files.
+    -   **Networking**: Fixed production build network errors by setting the backend URL in  and implementing a robust fallback mechanism in a new  file.
+    -   **Error Handling**: Replaced generic network errors with specific, user-friendly messages and added API call timeouts.
+-   **Home Screen Redesigns**:
+    -   Implemented a multi-phase redesign of the home screen, prioritizing a clean actor workflow: .
+    -   Added prominent Quick Rehearse and Quick Self Tape action buttons.
+-   **Quick Rehearse Enhancement**: Added AI reader style selection and auto-start logic to the script rehearsal screen.
+-   **Daily Drill & Streak System**:
+    -   Implemented backend endpoints (, ) and frontend UI for a daily acting challenge and streak tracker.
+-   **Phase C (Daily Drill Feedback - Partial)**: Created backend () and frontend components to display AI-driven performance feedback after a drill is completed.
+-   **Phase D (Share Links - Partial)**: Created backend () and initial frontend UI for generating shareable casting links.
 
 **Earlier issues found/mentioned but not fixed**
-   - **Issue 1**: ESLint parsing errors.
-     - **Debug checklist**: The initial handover mentioned linter failures like , indicating a misconfiguration in  for TypeScript. This was not addressed in the session. The next agent could fix this to improve code quality checks.
-     - **Why to solve this issue and what will be achieved with this?**: Improves code quality and developer experience by ensuring the linter works correctly.
-     - **Should Test frontend/backend/both after fix**: frontend
-     - **Is recurring issue?**: Y
+-   **Platform Overrides Blocking Deployment**: The original handoff noted that the Emergent deployment pipeline was forcefully overriding the Android package name, blocking Google Play Store uploads. While the agent configured a local keystore, this underlying platform-level issue was never confirmed to be resolved by support and remains a critical risk for production deployment. **Status: BLOCKED** (Awaiting user/Emergent Support action).
 
 **Known issue recurrence from previous fork**
-  - **Issue recurrence in previous fork**: Persistent frontend linting and TypeScript parsing errors.
-  - **Recurrence count**: 3+
-  - **Status**: NOT STARTED
+-   **Issue recurrence in previous fork**: Dependency-related build failures in the Expo/EAS environment.
+-   **Recurrence count**: 10+
+-   **Status**: RESOLVED (Agent has been managing dependencies, but this remains a persistent risk with Expo builds).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: Expo (React Native), TypeScript, Expo Router, Zustand
-- **Backend**: Python (FastAPI), MongoDB
-- **Monetization**: RevenueCat
-- **Deployment**: EAS Build
-- **Crash Reporting**: Sentry (NEW)
-- **Native Features**: Expo Camera, Expo Media Library, Expo Sharing, Expo Device, Expo Application (NEW)
+-   **Frontend**: Expo (React Native), TypeScript, Expo Router, Zustand () for state.
+-   **Backend**: FastAPI, MongoDB.
+-   **AI**:  library using GPT-4o for generating drills and analyzing performance.
+-   **Deployment**: EAS Build for native apps, configured via  to use environment variables for production secrets.
 
 **key DB schema**
-  - No changes made to the database schema.
+-   **shared_links**: { , , , , , ,  }
+-   **drill_attempts**: { , , ,  } (Implicitly created for streak tracking)
 
 **changes in tech stack**
-- **Added**:
-  - : For crash and error reporting.
-  - , , : For Self Tape Mode functionality.
-  - , , : For the diagnostics screen.
-  - : For Self Tape Mode enhancements.
+-   No changes to the core tech stack.
 
 **All files of reference**
-- **Core Task Files**: All files under .
-- **Supporting Services**: , , .
-- **Global Config**: , , .
-- **User Specification**: The user's prompt in **Message #348** is the primary source of truth for the requirements of the current task.
+-   : Where the current task needs to be completed.
+-   : The new screen for the daily drill feature.
+-   : The completely redesigned home screen.
+-   : Contains all new backend logic for recent features.
+-   : Contains the critical  configuration.
+-   : Defines the production environment for native builds.
+
+**Areas that need refactoring**:
+-    has grown significantly and should be broken down into a modular structure using FastAPI's  for better maintainability.
+
+**key api endpoints**
+-   : Analyzes a drill performance and returns AI feedback.
+-   : Creates a unique, shareable link for a self-tape.
+-   : Fetches a new daily acting drill.
+-   : Retrieves the user's current and best activity streak.
 
 **Critical Info for New Agent**
-- **You are in the middle of a large feature implementation.** The immediate priority is to complete the Self Tape Mode as per the user's detailed specification in message #348. Do not get sidetracked.
-- **Read Message #348 carefully.** It is the Product Requirements Document for this task. It details the full flow, including Instant Share, Teleprompter, and Watermarking.
-- **Watermarking is a challenge.** The agent will need to investigate the best library for applying a text overlay to a video in React Native (e.g., ). This is not a trivial task.
-- **The app is now stable.** Previous work fixed major deployment, build, and runtime crashes. The focus should be on clean, stable feature development, not bug hunting.
-- **Resume work in **. This was the last file being actively rewritten.
+1.  Your immediate task is to complete the frontend implementation for the Self Tape Share Links feature in . The backend and UI are ready; you just need to add the state and handler logic to make the modal functional.
+2.  After completing the implementation, run a comprehensive test of both Phase C (Daily Drill AI Feedback) and Phase D (Share Links) to ensure they work end-to-end.
+3.  The user has clearly defined the next priorities: **Voice Actor Studio** (Phase E) and **Audition Tracker enhancements** (Phase F). Plan to work on these after the current task is complete and verified.
+4.  Be aware of the unresolved **platform-level deployment blocker** regarding the Android package name. Do not attempt to deploy to the Google Play Store.
 
-**documents created in this job**
-- 
-- 
-- 
-- 
-- 
-- 
-- All files under 
+**documents and test reports created in this job**
+-   
+-   
+-   
+-   
+-   
+-    (Continuously updated with new requirements)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Provided detailed specs for Self Tape Mode v2 (Instant Share, Watermark). (IN PROGRESS)
-2.  **User**: Confirmed plan to build Self Tape Mode. (Completed)
-3.  **User**: Provided Sentry DSN. (Completed)
-4.  **User**: Confirmed Sentry DSN was saved. (Completed)
-5.  **User**: Asked to use a specific Sentry init config. (Completed)
-6.  **User**: Confirmed they wanted to implement the Send feedback with logs feature. (Completed)
-7.  **User**: Provided detailed specs for a comprehensive diagnostics/stability update. (Completed)
-8.  **User**: Requested a fix for a RevenueCat-related Android crash. (Completed)
-9.  **User**: Requested a hidden debug screen and  wrappers. (Completed)
-10. **User**: Provided new failing deployment logs. (Completed)
+1.  **user**: Provided a master prompt for Phase C (Daily Drill AI Feedback) and Phase D (Self Tape Share Links). (IN PROGRESS)
+2.  **user**: Approved the agent's plan for Phases C and D. (HANDLED)
+3.  **user**: Provided a large master prompt detailing a 10-part plan for the app's evolution. (HANDLED - Agent phased it)
+4.  **user**: Approved the agent's phased plan (A-F) and asked to proceed with A+B only. (COMPLETED)
+5.  **user**: Provided a prompt to redesign the home screen and enhance Quick Rehearse. (COMPLETED)
+6.  **user**: Provided a large prompt to optimize the app's core workflow, including a new home screen, quick actions, and several new features. (HANDLED - Agent phased it)
+7.  **user**: Approved the agent's phased plan and asked to proceed with Phases 1 and 2 (Home Screen Redesign, Daily Drill/Streak). (COMPLETED)
+8.  **user**: Asked the agent to proceed with implementing Part 6 (Homepage Simplification) and verify all recent production fixes. (COMPLETED)
+9.  **user**: Confirmed agent should proceed with all 5 parts of the production update. (COMPLETED)
+10. **user**: Requested a backend deployment and provided a 6th part for the prompt (Homepage Simplification). (HANDLED)
 
 **Project Health Check:**
-- **Broken**: None
-- **Incomplete**:
-    - **Self Tape Mode**: The entire feature is mid-development. The foundational files exist, but the core logic (recording, sharing, teleprompter, watermarking) is not fully implemented.
+-   **Broken**: The project is **not deployable** to the Google Play Store. An unresolved platform-level issue from a previous session, where the build pipeline injects the wrong Android package name, is likely still present. This blocks all production releases.
 
 **3rd Party Integrations**
-- **OpenAI GPT-4o**: Script parsing. — uses Emergent LLM Key.
-- **Expo Speech**: Client-side Text-to-Speech.
-- **RevenueCat**: In-app purchases. — requires User API Key.
-- **expo-speech-recognition**: Speech-to-text.
-- **Sentry**: Crash and error reporting. — requires User API Key (DSN).
+-   **OpenAI GPT-4o**: Used for Daily Drill generation, Acting Coach, and Dialect Coach analysis — uses Emergent LLM Key.
+-   **OpenAI Whisper**: Used for Speech-to-Text in Dialect Coach — uses Emergent LLM Key.
+-   **Expo Speech**: Basic client-side Text-to-Speech.
+-   **RevenueCat**: For in-app purchases — requires User API Key.
+-   **Sentry**: For crash and error reporting — requires User API Key (DSN).
+-   **ElevenLabs**: For multi-voice TTS — requires User API Key.
 
 **Testing status**
-  - **Testing agent used after significant changes**: NO (Agent was in the middle of implementation).
-  - **Troubleshoot agent used after agent stuck in loop**: NO (Not needed in the latter half).
-  - **Test files created**: None.
-  - **Known regressions**: None.
+-   **Testing agent used after significant changes**: YES
+-   **Troubleshoot agent used after agent stuck in loop**: NO
+-   **Test files created**: None in this session, but existing tests were run.
+-   **Known regressions**: None in the code.
 
 **Credentials to test flow:**
-- Sentry DSN is present in .
-- RevenueCat keys are present in .
+-   All necessary keys (Sentry, RevenueCat, ElevenLabs) are configured in the  file.
 
 **What agent forgot to execute**
-- The agent did not fix the recurring **ESLint/TypeScript parsing errors** mentioned in the initial handover.
-- The agent's plan for the Self Tape MVP included adding a button to the **script detail page** (), but it was only added to the home screen ().
-
-</analysis>
+-   The agent did not finish implementing the frontend logic for the Self Tape Share Links feature. The state variables () and handler functions (, , ) are missing from , leaving the UI non-functional.</analysis>

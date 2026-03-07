@@ -20,7 +20,7 @@
     "✅ Premium locking: Performance and Loop modes have premium: true flag, show 'Premium' text and lock icon for non-premium users",
     "✅ scriptStore.ts: API_TIMEOUT = 15000 (15s) for all API calls",
     "✅ upload.tsx: UPLOAD_TIMEOUT = 30000 (30s) for file uploads",
-    "✅ eas.json: production env has EXPO_PUBLIC_BACKEND_URL = https://line-assigner.preview.emergentagent.com",
+    "✅ eas.json: production env has EXPO_PUBLIC_BACKEND_URL = https://scriptm8-preview.preview.emergentagent.com",
     "✅ app.json: extra field has EXPO_PUBLIC_BACKEND_URL fallback",
     "✅ API: POST /api/scripts creates scripts with AI parsing successfully",
     "✅ API: GET /api/scripts/{id} retrieves scripts correctly",

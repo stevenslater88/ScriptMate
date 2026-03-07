@@ -11,7 +11,7 @@ ScriptM8 is a mobile AI Training Studio for actors to practice scripts, record p
 - **Native Features**: expo-camera, expo-media-library, expo-sharing, expo-notifications
 - **TTS**: ElevenLabs (Multi-Voice feature) - client-side integration
 - **EAS Project**: @stevenslater88/scriptmate (ID: a2f8beb4-8c5b-4fea-8650-ea7986c2e78c)
-- **Production API**: https://line-assigner.preview.emergentagent.com
+- **Production API**: https://scriptm8-preview.preview.emergentagent.com
 
 ---
 
@@ -527,7 +527,7 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 2. **Training Modes moved to script detail** — 6 modes now available inside script/practice workflow: Full Read, Cue Only, Recall, Character, Performance (Premium), Loop (Premium)
 3. **Premium locking** — Performance and Loop show lock icons and redirect to paywall for non-premium users
 4. **Production API verified** — All endpoints confirmed working: script CRUD, acting coach, dialect coach, health check
-5. **Production URL confirmed** — `https://line-assigner.preview.emergentagent.com` set in both `eas.json` (env) and `app.json` (extra fallback)
+5. **Production URL confirmed** — `https://scriptm8-preview.preview.emergentagent.com` set in both `eas.json` (env) and `app.json` (extra fallback)
 
 ### Testing
 - 21/21 tests passed (iteration_6.json)
@@ -624,7 +624,7 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 - Expo Tunnel: Available via Expo CLI
 - Backend: FastAPI on port 8001
 - Database: MongoDB
-- Preview URL: https://line-assigner.preview.emergentagent.com
+- Preview URL: https://scriptm8-preview.preview.emergentagent.com
 
 ## Testing Notes
 

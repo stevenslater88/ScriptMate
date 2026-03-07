@@ -100,7 +100,7 @@
       "eas": {
         "projectId": "a2f8beb4-8c5b-4fea-8650-ea7986c2e78c"
       },
-      "EXPO_PUBLIC_BACKEND_URL": "https://line-assigner.preview.emergentagent.com",
+      "EXPO_PUBLIC_BACKEND_URL": "https://scriptm8-preview.preview.emergentagent.com",
       "router": {}
     }
   }

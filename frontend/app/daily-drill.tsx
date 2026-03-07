@@ -18,6 +18,8 @@ export default function DailyDrillScreen() {
   const [streak, setStreak] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
+  const [feedback, setFeedback] = useState<any>(null);
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
 
   const getDeviceId = async () => {
     let id = await AsyncStorage.getItem('device_id');
@@ -55,6 +57,21 @@ export default function DailyDrillScreen() {
       const streakRes = await axios.get(`${BACKEND_URL}/api/streak/${userId}`, { timeout: 15000 });
       setStreak(streakRes.data);
       if (drill) setDrill({ ...drill, completed: true });
+      
+      // Fetch AI feedback
+      setLoadingFeedback(true);
+      try {
+        const fbRes = await axios.post(`${BACKEND_URL}/api/daily-drill/${userId}/feedback`, {
+          drill_prompt: drill.prompt,
+          challenge_type: drill.challenge_type,
+        }, { timeout: 20000 });
+        setFeedback(fbRes.data);
+      } catch (fbErr) {
+        console.error('Feedback error:', fbErr);
+      } finally {
+        setLoadingFeedback(false);
+      }
+      
       Alert.alert('Challenge Complete!', `+${res.data.xp_awarded} XP earned!`);
     } catch (error: any) {
       Alert.alert('Error', 'Failed to complete drill. Please try again.');
@@ -179,6 +196,51 @@ export default function DailyDrillScreen() {
           </View>
         ) : null}
 
+        {/* AI Performance Feedback */}
+        {loadingFeedback && (
+          <View style={styles.feedbackLoading}>
+            <ActivityIndicator size="small" color="#8b5cf6" />
+            <Text style={styles.feedbackLoadingText}>AI analyzing your performance...</Text>
+          </View>
+        )}
+
+        {feedback && (
+          <View style={styles.feedbackSection}>
+            <Text style={styles.feedbackTitle}>Performance Feedback</Text>
+            {(['emotion', 'pacing', 'delivery', 'confidence'] as const).map((key) => {
+              const item = feedback[key];
+              if (!item) return null;
+              const colors: Record<string, string> = { emotion: '#8b5cf6', pacing: '#3b82f6', delivery: '#10b981', confidence: '#f59e0b' };
+              const icons: Record<string, string> = { emotion: 'heart', pacing: 'speedometer', delivery: 'mic', confidence: 'shield-checkmark' };
+              return (
+                <View key={key} style={styles.feedbackCard}>
+                  <View style={styles.feedbackCardHeader}>
+                    <Ionicons name={icons[key] as any} size={20} color={colors[key]} />
+                    <Text style={styles.feedbackCardTitle}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
+                    <View style={[styles.scoreBadge, { backgroundColor: colors[key] + '20' }]}>
+                      <Text style={[styles.scoreText, { color: colors[key] }]}>{item.score}/10</Text>
+                    </View>
+                    <Text style={styles.feedbackLabel}>{item.label}</Text>
+                  </View>
+                  <Text style={styles.feedbackText}>{item.feedback}</Text>
+                  {item.tip && (
+                    <View style={styles.tipRow}>
+                      <Ionicons name="bulb" size={14} color="#f59e0b" />
+                      <Text style={styles.tipText}>{item.tip}</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+            {feedback.overall_note && (
+              <View style={styles.overallNote}>
+                <Ionicons name="star" size={18} color="#f59e0b" />
+                <Text style={styles.overallNoteText}>{feedback.overall_note}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Today's Activities */}
         {streak && streak.activities_today?.length > 0 && (
           <View style={styles.activitiesSection}>
@@ -237,4 +299,26 @@ const styles = StyleSheet.create({
   activitiesTitle: { fontSize: 16, fontWeight: '600', color: '#fff', marginBottom: 12 },
   activityRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   activityText: { fontSize: 14, color: '#9ca3af' },
+  // Feedback styles
+  feedbackLoading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20 },
+  feedbackLoadingText: { fontSize: 14, color: '#8b5cf6' },
+  feedbackSection: { marginBottom: 24 },
+  feedbackTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 12 },
+  feedbackCard: {
+    backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14, marginBottom: 10,
+    borderWidth: 1, borderColor: '#2a2a3e',
+  },
+  feedbackCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  feedbackCardTitle: { fontSize: 15, fontWeight: '600', color: '#fff', flex: 1 },
+  scoreBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  scoreText: { fontSize: 13, fontWeight: '700' },
+  feedbackLabel: { fontSize: 12, color: '#6b7280' },
+  feedbackText: { fontSize: 14, color: '#d1d5db', lineHeight: 20 },
+  tipRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: 'rgba(245,158,11,0.08)', padding: 8, borderRadius: 8 },
+  tipText: { fontSize: 13, color: '#f59e0b', flex: 1 },
+  overallNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(245,158,11,0.1)',
+    borderRadius: 12, padding: 14, marginTop: 4,
+  },
+  overallNoteText: { fontSize: 14, color: '#f59e0b', flex: 1, fontWeight: '500' },
 });

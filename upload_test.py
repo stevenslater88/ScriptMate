@@ -8,7 +8,7 @@ import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
-BACKEND_URL = "https://line-assigner.preview.emergentagent.com/api"
+BACKEND_URL = "https://scriptm8-preview.preview.emergentagent.com/api"
 
 def create_test_pdf():
     """Create a test PDF with script content"""

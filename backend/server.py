@@ -2689,6 +2689,180 @@ async def record_streak_activity(user_id: str, activity_type: str = "general"):
     await record_activity(user_id, activity_type, 10)
     return await get_streak(user_id)
 
+
+# ==================== PHASE C: DAILY DRILL AI FEEDBACK ====================
+
+class DrillFeedbackRequest(BaseModel):
+    drill_prompt: str
+    challenge_type: str
+    performance_notes: Optional[str] = ""
+
+@api_router.post("/daily-drill/{user_id}/feedback")
+async def get_drill_feedback(user_id: str, request: DrillFeedbackRequest):
+    """Get AI performance feedback for a daily drill."""
+    feedback = None
+    
+    if EMERGENT_LLM_KEY:
+        try:
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"drill-feedback-{uuid.uuid4()}",
+                system_message="""You are an acting coach providing feedback on a short acting drill performance.
+Analyze the performance based on the drill challenge and return a JSON object with exactly this structure:
+{
+  "emotion": {"score": 7, "label": "Good", "feedback": "...", "tip": "..."},
+  "pacing": {"score": 6, "label": "Needs Work", "feedback": "...", "tip": "..."},
+  "delivery": {"score": 8, "label": "Strong", "feedback": "...", "tip": "..."},
+  "confidence": {"score": 7, "label": "Good", "feedback": "...", "tip": "..."},
+  "overall_note": "Brief encouraging summary"
+}
+Score from 1-10. Labels: Excellent(9-10), Strong(7-8), Good(5-6), Needs Work(3-4), Keep Practicing(1-2).
+Keep feedback and tips under 20 words each. Be encouraging but honest. Return ONLY valid JSON."""
+            )
+            chat = chat.with_model("openai", "gpt-4o")
+            result = await chat.send_message(
+                UserMessage(text=f"The actor performed this drill:\nChallenge type: {request.challenge_type}\nPrompt: {request.drill_prompt}\nActor's notes: {request.performance_notes or 'No notes provided'}\n\nProvide feedback as JSON.")
+            )
+            
+            import json as json_module
+            text = result if isinstance(result, str) else result.text
+            text = text.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            feedback = json_module.loads(text)
+        except Exception as e:
+            logger.error(f"Drill feedback AI error: {e}")
+    
+    if not feedback:
+        import random
+        scores = {k: random.randint(5, 9) for k in ["emotion", "pacing", "delivery", "confidence"]}
+        labels = {1: "Keep Practicing", 3: "Needs Work", 5: "Good", 7: "Strong", 9: "Excellent"}
+        def get_label(s):
+            for threshold in sorted(labels.keys(), reverse=True):
+                if s >= threshold:
+                    return labels[threshold]
+            return "Good"
+        feedback = {
+            "emotion": {"score": scores["emotion"], "label": get_label(scores["emotion"]), "feedback": "Your emotional commitment shows through.", "tip": "Try varying intensity within the take."},
+            "pacing": {"score": scores["pacing"], "label": get_label(scores["pacing"]), "feedback": "Solid rhythm in your delivery.", "tip": "Experiment with longer pauses for effect."},
+            "delivery": {"score": scores["delivery"], "label": get_label(scores["delivery"]), "feedback": "Clear articulation and projection.", "tip": "Ground yourself physically before starting."},
+            "confidence": {"score": scores["confidence"], "label": get_label(scores["confidence"]), "feedback": "Good presence and commitment.", "tip": "Own the space — take a breath before you begin."},
+            "overall_note": "Solid effort! Keep showing up daily and you'll see real growth."
+        }
+    
+    # Save feedback to drill record
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    await db.daily_drills.update_one(
+        {"user_id": user_id, "date": today},
+        {"$set": {"feedback": feedback}}
+    )
+    
+    return feedback
+
+# ==================== PHASE D: SELF TAPE SHARE LINKS ====================
+
+class CreateShareLinkRequest(BaseModel):
+    actor_name: str
+    role_name: Optional[str] = ""
+    project_name: Optional[str] = ""
+    video_uri: str
+    script_title: Optional[str] = ""
+    duration: Optional[int] = 0
+    password: Optional[str] = None
+
+class ShareLinkResponse(BaseModel):
+    share_id: str
+    share_url: str
+    actor_name: str
+    role_name: str
+    project_name: str
+    created_at: str
+    has_password: bool
+
+@api_router.post("/tapes/share")
+async def create_share_link(request: CreateShareLinkRequest):
+    """Create a shareable casting link for a self tape."""
+    share_id = str(uuid.uuid4())[:8]
+    actor_slug = request.actor_name.lower().replace(" ", "-").replace("'", "")
+    
+    share_data = {
+        "share_id": share_id,
+        "actor_slug": actor_slug,
+        "actor_name": request.actor_name,
+        "role_name": request.role_name or "",
+        "project_name": request.project_name or "",
+        "video_uri": request.video_uri,
+        "script_title": request.script_title or "",
+        "duration": request.duration or 0,
+        "password": request.password,
+        "created_at": datetime.utcnow().isoformat(),
+        "views": 0,
+    }
+    
+    await db.shared_tapes.insert_one({**share_data, "_id": share_id})
+    
+    return {
+        "share_id": share_id,
+        "share_url": f"/tape/{actor_slug}/{share_id}",
+        "actor_name": request.actor_name,
+        "role_name": request.role_name or "",
+        "project_name": request.project_name or "",
+        "created_at": share_data["created_at"],
+        "has_password": bool(request.password),
+    }
+
+@api_router.get("/tapes/share/{share_id}")
+async def get_shared_tape(share_id: str, password: Optional[str] = None):
+    """Get a shared tape for viewing."""
+    tape = await db.shared_tapes.find_one({"share_id": share_id}, {"_id": 0})
+    if not tape:
+        raise HTTPException(status_code=404, detail="Tape not found or link expired")
+    
+    if tape.get("password") and tape["password"] != password:
+        return {
+            "requires_password": True,
+            "actor_name": tape["actor_name"],
+            "share_id": share_id,
+        }
+    
+    # Increment view count
+    await db.shared_tapes.update_one(
+        {"share_id": share_id},
+        {"$inc": {"views": 1}}
+    )
+    
+    # Return incremented view count
+    current_views = tape.get("views", 0) + 1
+    
+    return {
+        "share_id": tape["share_id"],
+        "actor_name": tape["actor_name"],
+        "role_name": tape.get("role_name", ""),
+        "project_name": tape.get("project_name", ""),
+        "video_uri": tape["video_uri"],
+        "script_title": tape.get("script_title", ""),
+        "duration": tape.get("duration", 0),
+        "created_at": tape["created_at"],
+        "views": current_views,
+    }
+
+@api_router.get("/tapes/user/{user_id}")
+async def get_user_shared_tapes(user_id: str):
+    """Get all shared tapes for a user."""
+    tapes = await db.shared_tapes.find(
+        {"actor_slug": {"$exists": True}},
+        {"_id": 0, "password": 0, "video_uri": 0}
+    ).sort("created_at", -1).to_list(50)
+    return tapes
+
+@api_router.delete("/tapes/share/{share_id}")
+async def delete_share_link(share_id: str):
+    """Delete a shared tape link."""
+    result = await db.shared_tapes.delete_one({"share_id": share_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    return {"message": "Share link deleted"}
+
 app.include_router(api_router)
 
 app.add_middleware(

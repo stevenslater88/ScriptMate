@@ -13,7 +13,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://line-assigner.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://scriptm8-preview.preview.emergentagent.com')
 
 # Test user prefix for cleanup
 TEST_USER_ID = f"test-drill-user-{int(time.time())}"
