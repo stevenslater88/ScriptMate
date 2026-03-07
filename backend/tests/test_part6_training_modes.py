@@ -10,7 +10,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://scriptm8-preview.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://production-ready-94.preview.emergentagent.com')
 
 class TestHealthAndConfig:
     """Health check and basic config tests"""
@@ -285,13 +285,13 @@ class TestCodeReview:
     def test_eas_json_has_backend_url(self):
         """eas.json production env should have EXPO_PUBLIC_BACKEND_URL"""
         # Verified by code review above - eas.json line 38
-        # "EXPO_PUBLIC_BACKEND_URL": "https://scriptm8-preview.preview.emergentagent.com"
+        # "EXPO_PUBLIC_BACKEND_URL": "https://production-ready-94.preview.emergentagent.com"
         print("✓ eas.json production env has EXPO_PUBLIC_BACKEND_URL (verified by code review)")
     
     def test_app_json_has_backend_url_fallback(self):
         """app.json extra should have EXPO_PUBLIC_BACKEND_URL fallback"""
         # Verified by code review above - app.json line 103
-        # "EXPO_PUBLIC_BACKEND_URL": "https://scriptm8-preview.preview.emergentagent.com"
+        # "EXPO_PUBLIC_BACKEND_URL": "https://production-ready-94.preview.emergentagent.com"
         print("✓ app.json extra has EXPO_PUBLIC_BACKEND_URL (verified by code review)")
     
     def test_index_tsx_no_training_modes_section(self):

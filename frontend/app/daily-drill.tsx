@@ -20,6 +20,7 @@ export default function DailyDrillScreen() {
   const [completing, setCompleting] = useState(false);
   const [feedback, setFeedback] = useState<any>(null);
   const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const getDeviceId = async () => {
     let id = await AsyncStorage.getItem('device_id');
@@ -41,6 +42,7 @@ export default function DailyDrillScreen() {
       setDrill(drillRes.data);
       setStreak(streakRes.data);
     } catch (error: any) {
+      setLoadError(true);
       Alert.alert('Error', 'Unable to load daily drill. Please check your connection.');
     } finally {
       setLoading(false);
@@ -50,20 +52,21 @@ export default function DailyDrillScreen() {
   useEffect(() => { fetchDrill(); }, [fetchDrill]);
 
   const completeDrill = async () => {
+    if (!drill) return;
     try {
       setCompleting(true);
       const userId = await getDeviceId();
       const res = await axios.post(`${BACKEND_URL}/api/daily-drill/${userId}/complete`, {}, { timeout: 15000 });
       const streakRes = await axios.get(`${BACKEND_URL}/api/streak/${userId}`, { timeout: 15000 });
       setStreak(streakRes.data);
-      if (drill) setDrill({ ...drill, completed: true });
+      setDrill({ ...drill, completed: true });
       
       // Fetch AI feedback
       setLoadingFeedback(true);
       try {
         const fbRes = await axios.post(`${BACKEND_URL}/api/daily-drill/${userId}/feedback`, {
-          drill_prompt: drill.prompt,
-          challenge_type: drill.challenge_type,
+          drill_prompt: drill.prompt || '',
+          challenge_type: drill.challenge_type || 'emotion_shift',
         }, { timeout: 20000 });
         setFeedback(fbRes.data);
       } catch (fbErr) {
@@ -102,6 +105,25 @@ export default function DailyDrillScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#f59e0b" />
           <Text style={styles.loadingText}>Loading today's challenge...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (loadError || !drill) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="cloud-offline" size={48} color="#374151" />
+          <Text style={[styles.loadingText, { marginTop: 12, fontSize: 16 }]}>Unable to load drill</Text>
+          <Text style={styles.loadingText}>Check your connection and try again</Text>
+          <TouchableOpacity
+            style={[styles.completeBtn, { backgroundColor: '#6366f1', marginTop: 20, paddingHorizontal: 32 }]}
+            onPress={() => { setLoadError(false); setLoading(true); fetchDrill(); }}
+          >
+            <Ionicons name="refresh" size={20} color="#fff" />
+            <Text style={styles.completeBtnText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );

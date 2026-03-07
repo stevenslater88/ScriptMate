@@ -2323,7 +2323,7 @@ Return ONLY valid JSON, no other text."""
                 
     except Exception as e:
         logger.error(f"Dialect analysis error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=json.dumps({"error": "Dialect analysis failed", "message": "Pronunciation analysis encountered an error. Please try again."}))
 
 @api_router.get("/dialect/history/{user_id}")
 async def get_dialect_history(user_id: str, accent_id: Optional[str] = None, limit: int = 20):
@@ -2461,10 +2461,11 @@ IMPORTANT:
         }
 
     except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="Failed to parse AI response")
+        logger.error("Acting coach: Failed to parse AI response")
+        raise HTTPException(status_code=500, detail=json.dumps({"error": "AI analysis failed", "message": "Could not parse coaching feedback. Please try again."}))
     except Exception as e:
-        logging.error(f"Acting coach analysis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Acting coach analysis error: {e}")
+        raise HTTPException(status_code=500, detail=json.dumps({"error": "AI analysis failed", "message": "Acting coach analysis encountered an error. Please try again."}))
 
 @api_router.get("/acting-coach/history/{user_id}")
 async def get_acting_coach_history(user_id: str, limit: int = 20):

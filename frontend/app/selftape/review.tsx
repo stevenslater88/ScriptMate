@@ -73,7 +73,8 @@ export default function ReviewScreen() {
 
   const script = scripts.find(s => s.id === (recordingInfo?.scriptId || params.scriptId));
   const scenes = script?.scenes || [{ name: 'Full Script' }];
-  const sceneIndex = parseInt(recordingInfo?.sceneIndex?.toString() || params.sceneIndex || '0');
+  const rawIndex = parseInt(recordingInfo?.sceneIndex?.toString() || params.sceneIndex || '0');
+  const sceneIndex = Math.max(0, Math.min(rawIndex, scenes.length - 1));
   const currentScene = scenes[sceneIndex];
 
   const handlePlayPause = async () => {

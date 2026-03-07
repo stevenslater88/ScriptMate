@@ -35,7 +35,7 @@
       },
       "env": {
         "__DEV__": "false",
-        "EXPO_PUBLIC_BACKEND_URL": "https://scriptm8-preview.preview.emergentagent.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://production-ready-94.preview.emergentagent.com"
       }
     }
   },

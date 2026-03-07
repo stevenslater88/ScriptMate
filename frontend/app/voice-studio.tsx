@@ -62,18 +62,29 @@ export default function VoiceStudioScreen() {
   const [reelName, setReelName] = useState('');
   const [showReelBuilder, setShowReelBuilder] = useState(false);
 
+  // Error state
+  const [loadError, setLoadError] = useState(false);
+
   // Animation refs
   const barAnims = useRef(new Array(BAR_COUNT).fill(0).map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
     loadData();
-    return () => { sound?.unloadAsync(); };
+    return () => {
+      try { sound?.unloadAsync(); } catch (_) { /* already unloaded */ }
+    };
   }, []);
 
   const loadData = async () => {
-    const [t, r] = await Promise.all([getTakes(), getReels()]);
-    setTakes(t);
-    setReels(r);
+    try {
+      setLoadError(false);
+      const [t, r] = await Promise.all([getTakes(), getReels()]);
+      setTakes(t);
+      setReels(r);
+    } catch (err) {
+      console.error('Load voice studio data error:', err);
+      setLoadError(true);
+    }
   };
 
   // ================= RECORDING =================
@@ -210,7 +221,10 @@ export default function VoiceStudioScreen() {
   };
 
   const stopPlayback = async () => {
-    if (sound) { await sound.stopAsync(); await sound.unloadAsync(); }
+    if (sound) {
+      try { await sound.stopAsync(); } catch (_) { /* already stopped */ }
+      try { await sound.unloadAsync(); } catch (_) { /* already unloaded */ }
+    }
     setSound(null);
     setPlayingId(null);
     setPlayProgress(0);
@@ -219,8 +233,13 @@ export default function VoiceStudioScreen() {
   // ================= TAKE MANAGEMENT =================
 
   const renameTake = async (id: string, newName: string) => {
-    await updateTake(id, { name: newName });
-    setTakes(prev => prev.map(t => t.id === id ? { ...t, name: newName } : t));
+    try {
+      await updateTake(id, { name: newName });
+      setTakes(prev => prev.map(t => t.id === id ? { ...t, name: newName } : t));
+    } catch (err) {
+      console.error('Rename error:', err);
+      Alert.alert('Error', 'Failed to rename take.');
+    }
     setEditingId(null);
   };
 
@@ -406,6 +425,17 @@ export default function VoiceStudioScreen() {
         <Text style={styles.headerTitle}>Voice Actor Studio</Text>
         <View style={{ width: 24 }} />
       </View>
+
+      {/* Error Banner */}
+      {loadError && (
+        <View style={styles.errorBanner} data-testid="voice-studio-error-banner">
+          <Ionicons name="warning" size={18} color="#f59e0b" />
+          <Text style={styles.errorBannerText}>Failed to load saved data</Text>
+          <TouchableOpacity onPress={loadData} data-testid="voice-studio-retry-btn">
+            <Ionicons name="refresh" size={18} color="#6366f1" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Tab Bar */}
       <View style={styles.tabBar}>
@@ -1040,4 +1070,10 @@ const styles = StyleSheet.create({
   reelTakeName: { fontSize: 15, fontWeight: '500', color: '#fff' },
   reelTakeMeta: { fontSize: 12, color: '#6b7280' },
   reorderBtns: { gap: 2 },
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(245, 158, 11, 0.2)',
+  },
+  errorBannerText: { fontSize: 13, color: '#f59e0b', fontWeight: '500' },
 });

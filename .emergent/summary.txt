@@ -1,81 +1,76 @@
 <analysis>**original_problem_statement:**
-The user wants to transform the ScriptM8 app into a complete actor training and audition workflow platform, focusing on a  flow.
-
-The latest request was broken down into phases. The agent has just worked on implementing Phase C and D.
+The user wants to prepare the ScriptM8 app for a production release by focusing on stability and polish. The user's latest requests were:
+1.  Implement a subtle watermark on exported media.
+2.  Add a promotional footer to the casting share page.
+3.  Update the text on the promotional footer.
+4.  Run a final crash safety audit and fix any identified issues to prevent the app from crashing.
 
 **PRODUCT REQUIREMENTS**:
-
--   **Phase C: Daily Drill AI Feedback**: After a user records their daily drill, the app should use AI to analyze the performance and provide structured feedback on emotional clarity, pacing, delivery, and confidence.
--   **Phase D: Self Tape Share Links**: Users should be able to generate a unique, shareable casting link () for their recorded self-tapes. The share page must be professional, including a video player, actor/role details, and a download button.
+-   **Watermark**: A semi-transparent watermark (Recorded with ScriptM8...) should appear on self-tapes and demo reels. A toggle to disable it (for a Pro version) should be in the settings.
+-   **Promotional Footer**: The public casting share page should have a subtle footer with the text Recorded with ScriptM8 / AI Training Studio for Actors and a clickable Try ScriptM8 button.
+-   **Crash Safety**: All screens and API endpoints must handle errors gracefully and show user-friendly fallback UIs instead of crashing, especially for unhandled API errors, null/undefined data rendering, and recording failures.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Expo (React Native) and FastAPI application named ScriptM8. The app features a redesigned home screen centered on an actor's workflow (Train, Rehearse, Record, Career). Key features include AI-powered Acting/Dialect Coaches, a Daily Drill system with XP and streaks, and a Quick Rehearse function with an AI scene partner. The project is configured for local EAS builds with a custom Android keystore and connects to a hosted backend, resolving previous network errors.
+A comprehensive full-stack Expo (React Native) and FastAPI application named ScriptM8, designed as an actor's workflow platform. It includes AI-powered coaching, daily drills, a self-tape studio, a voice-over studio, an audition tracker, and shareable casting pages. The watermark and promotional footer features have been fully implemented. A crash safety audit was performed, and several critical risks were identified.
 
 **Last working item**:
--   **Last item agent was working**: Implementing Phase C (Daily Drill AI Feedback) and Phase D (Self Tape Share Links).
-    -   **Phase C**: Backend endpoint () and frontend UI for displaying AI feedback on the Daily Drill screen are complete.
-    -   **Phase D**: The backend endpoint () is created and tested. On the frontend (), the Generate Casting Link button and modal UI have been added, but the underlying state management and handler functions (, , ) are not yet implemented.
+-   **Last item agent was working**: Fixing critical crash risks identified during a full-application safety audit. The agent had started implementing fixes but did not complete them.
 -   **Status**: IN PROGRESS
--   **Agent Testing Done**: N (Only backend endpoints were tested via . The full E2E flow is not tested.)
--   **Which testing method agent to use?**: frontend testing agent
+-   **Agent Testing Done**: N (Fixes were not completed, so testing has not occurred).
+-   **Which testing method agent to use?**: both (The fixes span both frontend and backend, and a full regression test is needed).
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1**: Complete Frontend Logic for Self Tape Share Links (P0)
+-   **Issue 1**: Complete Crash Safety Audit Fixes (P0)
 
 **Issues Detail**:
--   **Issue 1**: Complete Frontend Logic for Self Tape Share Links
-    -   **Attempted fixes**: The UI button and modal were added to the self-tape review screen (). The corresponding backend API is functional.
+-   **Issue 1**: Complete Crash Safety Audit Fixes
+    -   **Attempted fixes**: The agent started adding  blocks and fallback UIs to , , and , but the work is incomplete.
     -   **Next debug checklist**:
-        1.  Open .
-        2.  Add  hooks to manage the modal's visibility, the generated link, and loading state.
-        3.  Implement the  async function to call the  endpoint, handle the response, and update the state.
-        4.  Implement  using .
-        5.  Implement  using the  API from React Native.
-        6.  Wire up these functions to the respective buttons in the modal.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is the final step to complete the Self Tape Share Links feature, a critical part of the user's requested workflow.
+        1.  Open :
+            -   Wrap the  function in a  block and implement an error state UI.
+            -   Add a  block around the  call in  to prevent errors if the sound is already unloaded.
+        2.  Open :
+            -   Implement a fallback UI (e.g., an error message card) that displays if the initial drill fetch fails.
+            -   Add a null guard () before  is accessed in the  function.
+        3.  Open :
+            -   Add a bounds check  before accessing  to prevent out-of-bounds crashes.
+        4.  Open :
+            -   Review all AI-related endpoints (, , ).
+            -   Ensure each has a comprehensive  block that catches exceptions from the AI library and returns a structured JSON error (e.g., ) with a  status code.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is the final and most critical step to ensure the application is stable and production-ready. Resolving these issues will prevent runtime crashes and provide a reliable user experience.
     -   **Status**: IN PROGRESS
     -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: frontend
+    -   **Should Test frontend/backend/both after fix?**: both
     -   **Blocked on other issue**: None
 
 **In progress Task List**:
--   **Task 1**: Finalize and Test Phase C & D Implementation
-    -   **Where to resume**: Resume work in  to add the missing state and event handler logic for the sharing modal.
-    -   **What will be achieved with this?**: A fully functional Daily Drill AI Feedback and Self Tape Share Links feature, ready for user testing.
-    -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: frontend
-    -   **Blocked on something**: No.
+-   None. The current focus is on resolving the pending issue.
 
 **Upcoming and Future Tasks**
--   **Upcoming Tasks (Next Session)**:
-    -   (P0) **Phase E: Voice Actor Studio & Demo Reel Builder**: Build a dedicated voice-over recording section with features for trimming, normalizing audio, and automatically creating demo reels from selected takes. A placeholder screen () exists.
-    -   (P1) **Phase F: Audition Tracker Enhancement**: Enhance the existing tracker with fields for Project, Role, Date Submitted, and Status (Submitted / Callback / Booked).
+-   **Upcoming Tasks**:
+    -   (P0) **Full Regression Testing**: After all crash fixes are implemented, use the testing agent to run a comprehensive test of all features to ensure stability and no new bugs were introduced.
+    -   (P1) **Final Polish**: Improve loading states and transitions across the app for a smoother user experience.
 -   **Future Tasks**:
-    -   Implement multiple AI reader styles (e.g., neutral, emotional, aggressive) for the scene partner.
-    -   Add an optional password protection toggle for shared casting links.
+    -   Add optional password protection for shared casting links.
     -   Introduce a Director Mode with on-screen framing guides and scoring.
-    -   Add an Overall progress summary to the dashboard.
+    -   Implement multiple AI reader styles (e.g., neutral, emotional, aggressive) for the scene partner.
 
 **Completed work in this session**
--   **Smart Script Parser (V2)**: Implemented and fully tested the client-side script parser and its 3-step UI wizard.
--   **Production Stability Overhaul**:
-    -   **Branding**: Standardized app name to ScriptM8 across all files.
-    -   **Networking**: Fixed production build network errors by setting the backend URL in  and implementing a robust fallback mechanism in a new  file.
-    -   **Error Handling**: Replaced generic network errors with specific, user-friendly messages and added API call timeouts.
--   **Home Screen Redesigns**:
-    -   Implemented a multi-phase redesign of the home screen, prioritizing a clean actor workflow: .
-    -   Added prominent Quick Rehearse and Quick Self Tape action buttons.
--   **Quick Rehearse Enhancement**: Added AI reader style selection and auto-start logic to the script rehearsal screen.
--   **Daily Drill & Streak System**:
-    -   Implemented backend endpoints (, ) and frontend UI for a daily acting challenge and streak tracker.
--   **Phase C (Daily Drill Feedback - Partial)**: Created backend () and frontend components to display AI-driven performance feedback after a drill is completed.
--   **Phase D (Share Links - Partial)**: Created backend () and initial frontend UI for generating shareable casting links.
+-   **Watermark System**:
+    -   Implemented a reusable, non-clickable watermark component () for video overlays.
+    -   Added the watermark to the self-tape review screen () and voice demo reels ().
+    -   Created a settings toggle on the profile screen () to disable the watermark, managed by a new service ().
+    -   Fixed a significant layout bug on the profile screen to ensure the toggle is always visible.
+-   **Casting Share Page Enhancement**:
+    -   Created a new public-facing HTML endpoint () in  to serve a professional casting page.
+    -   Added a subtle promotional footer to the page with a clickable Try ScriptM8 button.
+    -   Updated the footer's branding text as per the user's final request.
 
 **Earlier issues found/mentioned but not fixed**
--   **Platform Overrides Blocking Deployment**: The original handoff noted that the Emergent deployment pipeline was forcefully overriding the Android package name, blocking Google Play Store uploads. While the agent configured a local keystore, this underlying platform-level issue was never confirmed to be resolved by support and remains a critical risk for production deployment. **Status: BLOCKED** (Awaiting user/Emergent Support action).
+-   **Platform Overrides Blocking Deployment**: A long-standing issue where the Emergent deployment pipeline may forcefully override the Android package name, blocking Google Play Store uploads. This platform-level issue was never confirmed to be resolved and remains a critical risk for production deployment. **Status: BLOCKED** (Awaiting user/Emergent Support action).
 
 **Known issue recurrence from previous fork**
 -   **Issue recurrence in previous fork**: Dependency-related build failures in the Expo/EAS environment.
@@ -86,80 +81,71 @@ A full-stack Expo (React Native) and FastAPI application named ScriptM8. The app
 
 
 **Key Technical Concepts**
--   **Frontend**: Expo (React Native), TypeScript, Expo Router, Zustand () for state.
+-   **Frontend**: Expo (React Native), TypeScript, Expo Router, Zustand for state management.
 -   **Backend**: FastAPI, MongoDB.
--   **AI**:  library using GPT-4o for generating drills and analyzing performance.
--   **Deployment**: EAS Build for native apps, configured via  to use environment variables for production secrets.
+-   **Video/Audio**: ,  (via bash),  for audio processing.
+-   **Error Handling**: Implementing  blocks, fallback UIs, and structured JSON error responses.
 
 **key DB schema**
--   **shared_links**: { , , , , , ,  }
--   **drill_attempts**: { , , ,  } (Implicitly created for streak tracking)
+-   No new database schemas were introduced in this session.
 
 **changes in tech stack**
--   No changes to the core tech stack.
+-   No changes to the core technology stack.
 
 **All files of reference**
--   : Where the current task needs to be completed.
--   : The new screen for the daily drill feature.
--   : The completely redesigned home screen.
--   : Contains all new backend logic for recent features.
--   : Contains the critical  configuration.
--   : Defines the production environment for native builds.
+-    (Target for crash fix)
+-    (Target for crash fix)
+-    (Target for crash fix)
+-    (Target for crash fix and location of new HTML share page)
+-    (Location of the watermark toggle)
+-    (New component created in this session)
+-    (New service created in this session)
 
 **Areas that need refactoring**:
--    has grown significantly and should be broken down into a modular structure using FastAPI's  for better maintainability.
+-    is a monolithic file that has grown significantly. It should be refactored into modular  files for improved organization and maintainability.
 
 **key api endpoints**
--   : Analyzes a drill performance and returns AI feedback.
--   : Creates a unique, shareable link for a self-tape.
--   : Fetches a new daily acting drill.
--   : Retrieves the user's current and best activity streak.
+-   : **NEW** endpoint that serves a public HTML page for casting directors.
+-   : Existing AI endpoint that requires robust error handling.
+-   : Existing AI endpoint that requires robust error handling.
+-   : Existing AI endpoint that requires robust error handling.
 
 **Critical Info for New Agent**
-1.  Your immediate task is to complete the frontend implementation for the Self Tape Share Links feature in . The backend and UI are ready; you just need to add the state and handler logic to make the modal functional.
-2.  After completing the implementation, run a comprehensive test of both Phase C (Daily Drill AI Feedback) and Phase D (Share Links) to ensure they work end-to-end.
-3.  The user has clearly defined the next priorities: **Voice Actor Studio** (Phase E) and **Audition Tracker enhancements** (Phase F). Plan to work on these after the current task is complete and verified.
-4.  Be aware of the unresolved **platform-level deployment blocker** regarding the Android package name. Do not attempt to deploy to the Google Play Store.
+1.  Your immediate and only priority is to **complete the crash safety fixes**. The application is currently unstable and not production-ready. A detailed checklist is provided in the All Pending/In progress Issue list.
+2.  **Do not add any new features**. The user's goal is to stabilize the app for release.
+3.  After implementing all fixes, you **must** run a comprehensive regression test using the testing agent to verify application stability and ensure no existing features have been broken.
+4.  Remember the unresolved platform-level deployment blocker for the Google Play Store. Do not attempt a production deployment.
 
 **documents and test reports created in this job**
--   
--   
--   
--   
--   
--    (Continuously updated with new requirements)
+-    (Updated with completed features)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **user**: Provided a master prompt for Phase C (Daily Drill AI Feedback) and Phase D (Self Tape Share Links). (IN PROGRESS)
-2.  **user**: Approved the agent's plan for Phases C and D. (HANDLED)
-3.  **user**: Provided a large master prompt detailing a 10-part plan for the app's evolution. (HANDLED - Agent phased it)
-4.  **user**: Approved the agent's phased plan (A-F) and asked to proceed with A+B only. (COMPLETED)
-5.  **user**: Provided a prompt to redesign the home screen and enhance Quick Rehearse. (COMPLETED)
-6.  **user**: Provided a large prompt to optimize the app's core workflow, including a new home screen, quick actions, and several new features. (HANDLED - Agent phased it)
-7.  **user**: Approved the agent's phased plan and asked to proceed with Phases 1 and 2 (Home Screen Redesign, Daily Drill/Streak). (COMPLETED)
-8.  **user**: Asked the agent to proceed with implementing Part 6 (Homepage Simplification) and verify all recent production fixes. (COMPLETED)
-9.  **user**: Confirmed agent should proceed with all 5 parts of the production update. (COMPLETED)
-10. **user**: Requested a backend deployment and provided a 6th part for the prompt (Homepage Simplification). (HANDLED)
+1.  **user**: Requested a minimal promotional footer for the casting share page.
+2.  **user**: Verified the watermark implementation and asked clarifying questions about where it's rendered and if it's clickable.
+3.  **user**: Requested an update to the promotional footer's branding text.
+4.  **user**: Approved the updated footer.
+5.  **user**: Requested a final crash safety audit of the entire application.
+6.  **user**: (Implicit) Approved the agent's findings from the audit and plan to fix them.
 
 **Project Health Check:**
--   **Broken**: The project is **not deployable** to the Google Play Store. An unresolved platform-level issue from a previous session, where the build pipeline injects the wrong Android package name, is likely still present. This blocks all production releases.
+-   **Broken**: Yes. The application has several identified critical crash risks that are currently being fixed. It is not stable for production use.
+-   **Mocked**: No mocked components.
 
 **3rd Party Integrations**
--   **OpenAI GPT-4o**: Used for Daily Drill generation, Acting Coach, and Dialect Coach analysis — uses Emergent LLM Key.
--   **OpenAI Whisper**: Used for Speech-to-Text in Dialect Coach — uses Emergent LLM Key.
--   **Expo Speech**: Basic client-side Text-to-Speech.
+-   **OpenAI GPT-4o**: Used for AI coaching and feedback — uses Emergent LLM Key.
+-   **OpenAI Whisper**: Used for Speech-to-Text — uses Emergent LLM Key.
 -   **RevenueCat**: For in-app purchases — requires User API Key.
 -   **Sentry**: For crash and error reporting — requires User API Key (DSN).
 -   **ElevenLabs**: For multi-voice TTS — requires User API Key.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES
+-   **Testing agent used after significant changes**: YES (Used to verify watermark and share page features).
 -   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**: None in this session, but existing tests were run.
--   **Known regressions**: None in the code.
+-   **Test files created**: None.
+-   **Known regressions**: None known, but regression testing is required after the crash fixes are implemented.
 
 **Credentials to test flow:**
--   All necessary keys (Sentry, RevenueCat, ElevenLabs) are configured in the  file.
+-   No new credentials are required. Existing keys are in the environment.
 
 **What agent forgot to execute**
--   The agent did not finish implementing the frontend logic for the Self Tape Share Links feature. The state variables () and handler functions (, , ) are missing from , leaving the UI non-functional.</analysis>
+-   The agent did not finish implementing all the required fixes identified during the crash safety audit. The task was left incomplete.</analysis>

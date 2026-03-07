@@ -7,7 +7,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://scriptm8-preview.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://production-ready-94.preview.emergentagent.com')
 
 class TestHealthEndpoint:
     """Test backend health check"""
