@@ -299,45 +299,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Training Modes */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Training Modes</Text>
-          <View style={styles.modesGrid}>
-            <View style={styles.modeCard}>
-              <Ionicons name="chatbubbles" size={28} color="#10b981" />
-              <Text style={styles.modeTitle}>Full Read</Text>
-              <Text style={styles.modeDesc}>Practice with AI partner</Text>
-            </View>
-            <View style={styles.modeCard}>
-              <Ionicons name="flash" size={28} color="#f59e0b" />
-              <Text style={styles.modeTitle}>Cue Only</Text>
-              <Text style={styles.modeDesc}>Recall your lines</Text>
-            </View>
-            <TouchableOpacity 
-              style={[styles.modeCard, !isPremium && styles.modeCardLocked]}
-              onPress={() => !isPremium && router.push('/premium')}
-            >
-              <View style={styles.modeIconRow}>
-                <Ionicons name="trophy" size={28} color={isPremium ? "#ef4444" : "#4a4a5e"} />
-                {!isPremium && <Ionicons name="lock-closed" size={14} color="#f59e0b" style={styles.lockIcon} />}
-              </View>
-              <Text style={[styles.modeTitle, !isPremium && styles.modeTextLocked]}>Performance</Text>
-              <Text style={styles.modeDesc}>{isPremium ? 'No prompts mode' : 'Premium'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.modeCard, !isPremium && styles.modeCardLocked]}
-              onPress={() => !isPremium && router.push('/premium')}
-            >
-              <View style={styles.modeIconRow}>
-                <Ionicons name="repeat" size={28} color={isPremium ? "#8b5cf6" : "#4a4a5e"} />
-                {!isPremium && <Ionicons name="lock-closed" size={14} color="#f59e0b" style={styles.lockIcon} />}
-              </View>
-              <Text style={[styles.modeTitle, !isPremium && styles.modeTextLocked]}>Loop</Text>
-              <Text style={styles.modeDesc}>{isPremium ? 'Repeat weak lines' : 'Premium'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {/* Loading indicator */}
         {loading && (
           <View style={styles.loadingContainer}>

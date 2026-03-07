@@ -35,12 +35,16 @@ interface ModeOption {
   description: string;
   navigable: boolean;
   route?: string;
+  premium: boolean;
 }
 
 const MODE_OPTIONS: ModeOption[] = [
-  { id: 'full_read', name: 'Full Read', icon: 'chatbubbles', description: 'Practice the complete scene with prompts', navigable: false },
-  { id: 'recall', name: 'Recall', icon: 'flash', description: 'Test your memory with hidden lines', navigable: true, route: '/recall' },
-  { id: 'character', name: 'Character', icon: 'person', description: 'Focus on your character lines only', navigable: false },
+  { id: 'full_read', name: 'Full Read', icon: 'chatbubbles', description: 'Practice the complete scene with prompts', navigable: false, premium: false },
+  { id: 'cue_only', name: 'Cue Only', icon: 'flash', description: 'Recall your lines from memory', navigable: false, premium: false },
+  { id: 'recall', name: 'Recall', icon: 'bulb', description: 'Test your memory with hidden lines', navigable: true, route: '/recall', premium: false },
+  { id: 'character', name: 'Character', icon: 'person', description: 'Focus on your character lines only', navigable: false, premium: false },
+  { id: 'performance', name: 'Performance', icon: 'trophy', description: 'No prompts — full performance mode', navigable: false, premium: true },
+  { id: 'loop', name: 'Loop', icon: 'repeat', description: 'Repeat weak lines until mastered', navigable: false, premium: true },
 ];
 
 export default function ScriptDetailScreen() {
@@ -231,52 +235,69 @@ export default function ScriptDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Training Mode</Text>
           <View style={styles.modeList}>
-            {MODE_OPTIONS.map((mode) => (
-              <TouchableOpacity
-                key={mode.id}
-                style={[
-                  styles.modeCard,
-                  selectedMode === mode.id && styles.modeCardSelected,
-                ]}
-                onPress={() => {
-                  if (mode.navigable && mode.route) {
-                    // Navigate to the specific training mode screen
-                    router.push(`${mode.route}?scriptId=${id}&sceneIndex=0`);
-                  } else {
-                    setSelectedMode(mode.id);
-                  }
-                }}
-              >
-                <View
+            {MODE_OPTIONS.map((mode) => {
+              const isLocked = mode.premium && !isPremium;
+              return (
+                <TouchableOpacity
+                  key={mode.id}
                   style={[
-                    styles.modeIconContainer,
-                    selectedMode === mode.id && styles.modeIconContainerSelected,
+                    styles.modeCard,
+                    selectedMode === mode.id && !isLocked && styles.modeCardSelected,
+                    isLocked && styles.modeCardLocked,
                   ]}
+                  onPress={() => {
+                    if (isLocked) {
+                      trackUpgradeTriggered('script_detail_mode_' + mode.id);
+                      presentPaywall();
+                      return;
+                    }
+                    if (mode.navigable && mode.route) {
+                      router.push(`${mode.route}?scriptId=${id}&sceneIndex=0`);
+                    } else {
+                      setSelectedMode(mode.id);
+                    }
+                  }}
                 >
-                  <Ionicons
-                    name={mode.icon as any}
-                    size={24}
-                    color={selectedMode === mode.id ? '#fff' : '#6366f1'}
-                  />
-                </View>
-                <View style={styles.modeInfo}>
-                  <Text
+                  <View
                     style={[
-                      styles.modeName,
-                      selectedMode === mode.id && styles.modeNameSelected,
+                      styles.modeIconContainer,
+                      selectedMode === mode.id && !isLocked && styles.modeIconContainerSelected,
+                      isLocked && styles.modeIconContainerLocked,
                     ]}
                   >
-                    {mode.name}
-                  </Text>
-                  <Text style={styles.modeDescription}>{mode.description}</Text>
-                </View>
-                {mode.navigable ? (
-                  <Ionicons name="chevron-forward" size={20} color="#6366f1" />
-                ) : selectedMode === mode.id ? (
-                  <Ionicons name="checkmark-circle" size={20} color="#6366f1" />
-                ) : null}
-              </TouchableOpacity>
-            ))}
+                    <Ionicons
+                      name={mode.icon as any}
+                      size={24}
+                      color={isLocked ? '#4a4a5e' : selectedMode === mode.id ? '#fff' : '#6366f1'}
+                    />
+                    {isLocked && (
+                      <Ionicons name="lock-closed" size={12} color="#f59e0b" style={{ position: 'absolute', top: -2, right: -2 }} />
+                    )}
+                  </View>
+                  <View style={styles.modeInfo}>
+                    <Text
+                      style={[
+                        styles.modeName,
+                        selectedMode === mode.id && !isLocked && styles.modeNameSelected,
+                        isLocked && styles.modeNameLocked,
+                      ]}
+                    >
+                      {mode.name}
+                    </Text>
+                    <Text style={styles.modeDescription}>
+                      {isLocked ? 'Premium' : mode.description}
+                    </Text>
+                  </View>
+                  {isLocked ? (
+                    <Ionicons name="lock-closed" size={16} color="#f59e0b" />
+                  ) : mode.navigable ? (
+                    <Ionicons name="chevron-forward" size={20} color="#6366f1" />
+                  ) : selectedMode === mode.id ? (
+                    <Ionicons name="checkmark-circle" size={20} color="#6366f1" />
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
@@ -694,6 +715,16 @@ const styles = StyleSheet.create({
   },
   modeNameSelected: {
     color: '#6366f1',
+  },
+  modeCardLocked: {
+    opacity: 0.6,
+    borderColor: '#2a2a3e',
+  },
+  modeIconContainerLocked: {
+    backgroundColor: '#1a1a2e',
+  },
+  modeNameLocked: {
+    color: '#4a4a5e',
   },
   modeDescription: {
     fontSize: 13,
