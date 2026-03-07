@@ -535,22 +535,54 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 ---
 
 
+
+## Phase 1+2: Core Workflow Redesign (March 2026)
+
+### Status: Complete & Tested
+
+### Phase 1 — Home Screen Redesign
+- Quick Rehearse + Quick Self Tape — large prominent buttons at top
+- Training section: Acting Coach, Dialect Coach
+- Rehearsal section: Practice Scene, Scripts
+- Recording section: Self Tape Studio, Voice Studio (coming soon placeholder)
+- Tools section: Audition Tracker, My Scripts
+- Removed old Training Modes, AI Coaching, Script Tools sections
+
+### Phase 2 — Daily Actor Drill + Streak System
+- **Backend endpoints**: GET/POST /api/daily-drill/{user_id}, GET/POST /api/streak/{user_id}
+- **AI drill generation**: GPT-4o generates daily challenges with 5 fallback types (emotion_shift, cold_read, physicality, improv_react, accent_sprint)
+- **XP system**: 25 XP per drill, 10 XP per activity
+- **Streak tracking**: Tracks consecutive days, best streak, total XP, daily activities
+- **Frontend**: Daily Drill screen with streak banner, challenge card, completion flow
+
+### New Files
+- `frontend/app/daily-drill.tsx` — Daily drill challenge screen
+- `frontend/app/voice-studio.tsx` — Voice Actor Studio placeholder
+- `backend/tests/test_phase2_daily_drill.py` — 12 pytest tests
+
+### Testing
+- 31/31 tests passed (iteration_7.json) — 12 backend pytest + 19 frontend playwright
+
+---
+
 ---
 
 ## Backlog / Future Tasks
 
+### P0 (Next Session)
+- [ ] Self Tape Share Links — shareable audition URLs (scriptm8.app/tape/{actor-name})
+- [ ] Voice Actor Studio — full recording, trim, normalize, multiple takes
+- [ ] Demo Reel Builder — combine recordings into 30-90s demo reel, export MP3
+
 ### P1 (High Priority)
+- [ ] Audition Tracker Enhancement — Project, Role, Date submitted, Status (Submitted/Callback/Booked)
 - [ ] Script UI Redesign — conversation-style/chat-bubble layout
 - [ ] Visual Graph for Audition Tracker stats modal
-- [ ] Overall progress summary (aggregate across all scenes)
-- [ ] Director Mode: Manual framing scoring with feedback
-- [ ] "Casting Ready" badge for score >85
 
 ### P2 (Medium Priority)
-- [ ] Random word removal mode
-- [ ] Multiple difficulty presets
 - [ ] Cloud backup/sync for data
-- [ ] FFmpeg-based video watermarking
+- [ ] Overall progress summary (aggregate across all scenes)
+- [ ] Director Mode: Manual framing scoring with feedback
 
 ### P3 (Low Priority)
 - [ ] Recording analytics dashboard
