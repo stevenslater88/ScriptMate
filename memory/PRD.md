@@ -622,6 +622,41 @@ Full application crash safety audit and fix to prevent runtime crashes and ensur
 
 ---
 
+## Production Hardening Pass (March 2026)
+
+### Status: Complete & Tested (27/27 backend tests passed)
+
+### Fixes Applied
+
+**Check 1 — Recording Reliability:**
+- `selftape/index.tsx`: Added try/catch around loadRecordings to prevent crash on corrupted storage
+- `selftape/record.tsx`: Added sceneIndex bounds check (`Math.max/Math.min` clamp)
+- `voice-studio.tsx`: Already had loadError state from crash safety pass
+
+**Check 2 — Share Link Hardening:**
+- `server.py`: Added HTML escaping (html_escape.escape) on all user-provided fields in casting share page to prevent XSS
+- `server.py`: Added "Video unavailable" fallback for missing/empty video_uri
+- Password-protected page title also XSS-escaped
+
+**Check 3 — Performance:**
+- Removed debug console.log from camera ready callback in record.tsx
+- No heavy animations or unnecessary re-renders found
+
+**Check 4 — Production Readiness:**
+- Sanitized ALL backend error responses — 12+ endpoints changed from `detail=str(e)` to user-friendly messages
+- Verified: no hardcoded localhost, no leaked stack traces, loading states on all network screens
+
+**Check 5 — Build Checklist:**
+- Generated `/app/memory/PRODUCTION_CHECKLIST.md` with full status + remaining items
+
+### Testing
+- 27/27 backend regression tests passed (iteration_13.json)
+- XSS protection verified with `<script>alert(1)</script>` test
+- Error sanitization verified across all endpoint categories
+- Video unavailable fallback verified
+
+---
+
 ## Backlog / Future Tasks
 
 ### P1 (High Priority)
