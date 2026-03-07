@@ -2865,6 +2865,180 @@ async def delete_share_link(share_id: str):
         raise HTTPException(status_code=404, detail="Share link not found")
     return {"message": "Share link deleted"}
 
+# ==================== PHASE E: VOICE ACTOR STUDIO ====================
+
+VOICE_STUDIO_DIR = Path(tempfile.gettempdir()) / "voice_studio"
+VOICE_STUDIO_DIR.mkdir(exist_ok=True)
+
+@api_router.post("/voice-studio/process")
+async def process_audio(
+    audio: UploadFile = File(...),
+    operation: str = Form(...),  # "trim", "normalize", "remove_silence", "all"
+    trim_start: float = Form(0.0),   # seconds
+    trim_end: float = Form(0.0),     # seconds from end to cut
+):
+    """Process an audio file: trim, normalize volume, remove silence."""
+    from pydub import AudioSegment
+    from pydub.silence import detect_nonsilent
+
+    try:
+        content = await audio.read()
+        suffix = ".m4a" if audio.filename and audio.filename.endswith(".m4a") else ".wav"
+        
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_in:
+            tmp_in.write(content)
+            tmp_in_path = tmp_in.name
+
+        try:
+            sound = AudioSegment.from_file(tmp_in_path)
+            original_duration = len(sound) / 1000.0
+
+            if operation in ("trim", "all"):
+                start_ms = int(trim_start * 1000)
+                end_ms = len(sound) - int(trim_end * 1000)
+                if end_ms > start_ms:
+                    sound = sound[start_ms:end_ms]
+
+            if operation in ("remove_silence", "all"):
+                chunks = detect_nonsilent(sound, min_silence_len=500, silence_thresh=-40)
+                if chunks:
+                    non_silent = AudioSegment.empty()
+                    for start, end in chunks:
+                        non_silent += sound[start:end]
+                    sound = non_silent
+
+            if operation in ("normalize", "all"):
+                target_dbfs = -20.0
+                change = target_dbfs - sound.dBFS
+                sound = sound.apply_gain(change)
+
+            out_path = str(VOICE_STUDIO_DIR / f"processed_{uuid.uuid4().hex[:8]}.mp3")
+            sound.export(out_path, format="mp3", bitrate="192k")
+            new_duration = len(sound) / 1000.0
+
+            with open(out_path, "rb") as f:
+                audio_b64 = base64.b64encode(f.read()).decode()
+
+            os.unlink(out_path)
+
+            return {
+                "audio_base64": audio_b64,
+                "format": "mp3",
+                "original_duration": round(original_duration, 2),
+                "new_duration": round(new_duration, 2),
+                "operation": operation,
+            }
+        finally:
+            if os.path.exists(tmp_in_path):
+                os.unlink(tmp_in_path)
+
+    except Exception as e:
+        logger.error(f"Audio processing error: {e}")
+        raise HTTPException(status_code=500, detail=f"Audio processing failed: {str(e)}")
+
+
+@api_router.post("/voice-studio/demo-reel")
+async def build_demo_reel(
+    files: List[UploadFile] = File(...),
+    gaps: str = Form("0.5"),  # comma-separated gap durations in seconds between clips
+):
+    """Build a demo reel by concatenating multiple audio files with optional gaps."""
+    from pydub import AudioSegment
+
+    try:
+        gap_list = [float(g.strip()) for g in gaps.split(",") if g.strip()]
+        segments = []
+
+        for f in files:
+            content = await f.read()
+            suffix = ".m4a" if f.filename and f.filename.endswith(".m4a") else ".wav"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            try:
+                seg = AudioSegment.from_file(tmp_path)
+                # Normalize each segment
+                target_dbfs = -20.0
+                change = target_dbfs - seg.dBFS
+                seg = seg.apply_gain(change)
+                segments.append(seg)
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+
+        if not segments:
+            raise HTTPException(status_code=400, detail="No valid audio files provided")
+
+        reel = segments[0]
+        for i, seg in enumerate(segments[1:], 1):
+            gap_sec = gap_list[i - 1] if i - 1 < len(gap_list) else 0.5
+            gap_ms = int(gap_sec * 1000)
+            if gap_ms > 0:
+                reel += AudioSegment.silent(duration=gap_ms)
+            reel += seg
+
+        out_path = str(VOICE_STUDIO_DIR / f"reel_{uuid.uuid4().hex[:8]}.mp3")
+        reel.export(out_path, format="mp3", bitrate="192k")
+        duration = len(reel) / 1000.0
+
+        with open(out_path, "rb") as f:
+            audio_b64 = base64.b64encode(f.read()).decode()
+
+        os.unlink(out_path)
+
+        return {
+            "audio_base64": audio_b64,
+            "format": "mp3",
+            "duration": round(duration, 2),
+            "segments_count": len(segments),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Demo reel build error: {e}")
+        raise HTTPException(status_code=500, detail=f"Demo reel build failed: {str(e)}")
+
+
+@api_router.post("/voice-studio/takes")
+async def save_take_metadata(
+    user_id: str = Form(...),
+    take_name: str = Form(...),
+    duration: float = Form(0),
+    script_id: str = Form(""),
+):
+    """Save voice take metadata to the database."""
+    take = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "take_name": take_name,
+        "duration": duration,
+        "script_id": script_id,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    await db.voice_takes.insert_one({**take})
+    take.pop("_id", None)
+    return take
+
+
+@api_router.get("/voice-studio/takes/{user_id}")
+async def get_user_takes(user_id: str):
+    """Get all voice takes for a user."""
+    takes = await db.voice_takes.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return {"takes": takes, "total": len(takes)}
+
+
+@api_router.delete("/voice-studio/takes/{take_id}")
+async def delete_take_metadata(take_id: str):
+    """Delete a voice take record."""
+    result = await db.voice_takes.delete_one({"id": take_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Take not found")
+    return {"message": "Take deleted"}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
