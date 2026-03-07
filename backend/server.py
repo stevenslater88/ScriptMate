@@ -2769,6 +2769,7 @@ class CreateShareLinkRequest(BaseModel):
     script_title: Optional[str] = ""
     duration: Optional[int] = 0
     password: Optional[str] = None
+    user_id: Optional[str] = "default"
 
 class ShareLinkResponse(BaseModel):
     share_id: str
@@ -2795,6 +2796,7 @@ async def create_share_link(request: CreateShareLinkRequest):
         "script_title": request.script_title or "",
         "duration": request.duration or 0,
         "password": request.password,
+        "user_id": request.user_id or "default",
         "created_at": datetime.utcnow().isoformat(),
         "views": 0,
     }
@@ -2850,7 +2852,7 @@ async def get_shared_tape(share_id: str, password: Optional[str] = None):
 async def get_user_shared_tapes(user_id: str):
     """Get all shared tapes for a user."""
     tapes = await db.shared_tapes.find(
-        {"actor_slug": {"$exists": True}},
+        {"user_id": user_id},
         {"_id": 0, "password": 0, "video_uri": 0}
     ).sort("created_at", -1).to_list(50)
     return tapes

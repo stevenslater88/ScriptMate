@@ -499,6 +499,9 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 - All 19 tests passed (10 backend API, 9 frontend UI/parser logic)
 - Test report: `/app/test_reports/iteration_4.json`
 
+### Latest Test Report
+- **Phase C + D**: 20/20 backend tests passed (`/app/test_reports/iteration_8.json`, March 2026)
+
 ---
 
 ## Feature 10: ScriptM8 5-Part Production Update (March 2026)
@@ -598,7 +601,6 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 ## Backlog / Future Tasks
 
 ### P0 (Next Session)
-- [ ] Self Tape Share Links — shareable audition URLs (scriptm8.app/tape/{actor-name})
 - [ ] Voice Actor Studio — full recording, trim, normalize, multiple takes
 - [ ] Demo Reel Builder — combine recordings into 30-90s demo reel, export MP3
 
@@ -611,11 +613,60 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 - [ ] Cloud backup/sync for data
 - [ ] Overall progress summary (aggregate across all scenes)
 - [ ] Director Mode: Manual framing scoring with feedback
+- [ ] Optional password protection toggle UX on shared casting links
 
 ### P3 (Low Priority)
 - [ ] Recording analytics dashboard
 - [ ] Export to social platforms
 - [ ] Collaborative review
+- [ ] Multiple AI reader styles (neutral, emotional, aggressive)
+
+---
+
+## Phase C: Daily Drill AI Feedback (March 2026)
+
+### Status: Complete & Tested
+
+### Description
+After completing a daily drill, the app uses AI (GPT-4o) to analyze performance and provide structured feedback on emotion, pacing, delivery, and confidence.
+
+### Features
+- [x] POST /api/daily-drill/{user_id}/feedback endpoint
+- [x] AI-powered analysis with GPT-4o via Emergent LLM Key
+- [x] Structured feedback: emotion, pacing, delivery, confidence scores (1-10) with labels, feedback text, and tips
+- [x] Overall encouraging summary note
+- [x] Fallback to random scores if AI fails
+- [x] Feedback saved to drill record in MongoDB
+- [x] Frontend UI displays feedback cards after drill completion
+
+### Testing
+- 20/20 backend tests passed (iteration_8.json)
+
+---
+
+## Phase D: Self Tape Share Links (March 2026)
+
+### Status: Complete & Tested
+
+### Description
+Generate unique, shareable casting links for self-tape recordings. Includes professional share modal with actor/role/project details and optional password protection.
+
+### Features
+- [x] POST /api/tapes/share — create shareable link with actor name, role, project, optional password
+- [x] GET /api/tapes/share/{share_id} — retrieve tape, increment views, password check
+- [x] GET /api/tapes/user/{user_id} — list user's shared tapes (filtered by user_id)
+- [x] DELETE /api/tapes/share/{share_id} — remove share link
+- [x] Frontend share modal on review screen with form inputs
+- [x] Copy link and native Share functionality
+- [x] Password protection toggle with switch UI
+- [x] Success state with link display after generation
+
+### Files
+- `frontend/app/selftape/review.tsx` — Share modal + handler functions
+- `backend/server.py` — Share link CRUD endpoints (lines 2762-2862)
+
+### Testing
+- 20/20 backend tests passed (iteration_8.json)
 
 ---
 
@@ -628,8 +679,9 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 
 ## Testing Notes
 
-⚠️ **Requires on-device testing** for:
+**Requires on-device testing** for:
 - Camera recording with Shot Coach overlays
 - Local push notifications for audition reminders
 - Full Adaptive Recall gameplay
 - **Rehearsal TTS callback flow (AI cue loop fix)**
+- Self Tape Share Link modal (end-to-end with video)
