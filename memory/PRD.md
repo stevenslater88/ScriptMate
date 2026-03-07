@@ -601,6 +601,27 @@ On-device, heuristic-based screenplay parser that automates the process of setti
 
 ---
 
+## Crash Safety Audit (March 2026)
+
+### Status: Complete & Tested
+
+### Description
+Full application crash safety audit and fix to prevent runtime crashes and ensure production stability.
+
+### Fixes Applied
+1. **`voice-studio.tsx`**: Added `loadError` state + error banner UI with retry; wrapped cleanup `unloadAsync` in try/catch; made `stopPlayback` resilient to already-unloaded sounds
+2. **`daily-drill.tsx`**: Added explicit null guard (`if (!drill) return`) in `completeDrill` before accessing drill properties
+3. **`selftape/review.tsx`**: Added bounds check for `scenes[sceneIndex]` using `Math.max(0, Math.min(rawIndex, scenes.length - 1))`
+4. **`backend/server.py`**: Improved error handling in `/api/acting-coach/analyze` and `/api/dialect/analyze` to return structured JSON error messages instead of raw exception strings
+
+### Testing
+- 23/23 backend regression tests passed (iteration_12.json)
+- All AI endpoints verified: acting-coach, dialect, daily-drill feedback
+- Validation errors return proper 422 with structured Pydantic messages
+- Share endpoint includes watermark field
+
+---
+
 ## Backlog / Future Tasks
 
 ### P1 (High Priority)
