@@ -18,6 +18,7 @@ import io
 import tempfile
 from docx import Document
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+import html as html_escape
 from emergentintegrations.llm.openai import OpenAISpeechToText
 from elevenlabs import ElevenLabs
 from elevenlabs.types import VoiceSettings
@@ -1262,7 +1263,7 @@ async def create_script(script_data: ScriptCreate):
         raise
     except Exception as e:
         logger.error(f"Error creating script: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create script. Please try again.")
 
 @api_router.post("/scripts/upload")
 async def upload_script(
@@ -1316,7 +1317,7 @@ async def upload_script(
         raise
     except Exception as e:
         logger.error(f"Error uploading script: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to upload script. Please try again.")
 
 @api_router.get("/scripts", response_model=List[Script])
 async def get_scripts(user_id: str = "default"):
@@ -1545,7 +1546,7 @@ async def analyze_script(request: AnalyzeScriptRequest):
         return parsed
     except Exception as e:
         logger.error(f"Error analyzing script: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Script analysis failed. Please try again.")
 
 # ==================== AUTHENTICATION ROUTES ====================
 
@@ -1679,7 +1680,7 @@ async def apple_sign_in(request: AppleAuthRequest):
         )
     except Exception as e:
         logger.error(f"Apple Sign-In error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Authentication failed. Please try again.")
 
 @api_router.post("/auth/google", response_model=AuthResponse)
 async def google_sign_in(request: GoogleAuthRequest):
@@ -1748,7 +1749,7 @@ async def google_sign_in(request: GoogleAuthRequest):
         raise
     except Exception as e:
         logger.error(f"Google Sign-In error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Authentication failed. Please try again.")
 
 @api_router.get("/auth/user/{user_id}")
 async def get_authenticated_user(user_id: str):
@@ -1832,7 +1833,7 @@ async def push_sync_data(request: SyncDataRequest):
         raise
     except Exception as e:
         logger.error(f"Sync push error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Sync failed. Please try again.")
 
 @api_router.get("/sync/pull/{user_id}")
 async def pull_sync_data(user_id: str, last_sync: str = None):
@@ -1871,7 +1872,7 @@ async def pull_sync_data(user_id: str, last_sync: str = None):
         raise
     except Exception as e:
         logger.error(f"Sync pull error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Sync failed. Please try again.")
 
 # ==================== DIRECTOR NOTES ROUTES ====================
 
@@ -2052,7 +2053,7 @@ async def generate_elevenlabs_tts(request: ElevenLabsTTSRequest):
         
     except Exception as e:
         logger.error(f"ElevenLabs TTS error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Voice generation failed. Please try again.")
 
 @api_router.get("/scripts/{script_id}/voices")
 async def get_script_voice_settings(script_id: str):
@@ -2861,19 +2862,19 @@ async def casting_share_page(actor_slug: str, share_id: str, password: Optional[
     if tape.get("password") and tape.get("password") != password:
         return HTMLResponse(content=f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{tape['actor_name']} — Self Tape</title>
+<title>{html_escape.escape(tape['actor_name'])} — Self Tape</title>
 <style>*{{margin:0;padding:0;box-sizing:border-box}}body{{background:#0a0a0f;color:#fff;font-family:system-ui,-apple-system,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh}}.card{{text-align:center;padding:40px}}.card h2{{font-size:18px;margin-bottom:8px}}.card p{{color:#6b7280;font-size:14px;margin-bottom:24px}}form{{display:flex;gap:8px;justify-content:center}}input{{background:#1a1a2e;border:1px solid #2a2a3e;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;outline:none}}input:focus{{border-color:#6366f1}}button{{background:#6366f1;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:14px;cursor:pointer}}button:hover{{background:#5558e6}}</style>
 </head><body><div class="card"><h2>Password Required</h2><p>This self tape is password protected.</p><form method="get"><input name="password" type="password" placeholder="Enter password"><button type="submit">View</button></form></div></body></html>""")
 
     await db.shared_tapes.update_one({"share_id": share_id}, {"$inc": {"views": 1}})
     views = tape.get("views", 0) + 1
 
-    actor = tape["actor_name"]
-    role = tape.get("role_name", "")
-    project = tape.get("project_name", "")
+    actor = html_escape.escape(tape["actor_name"])
+    role = html_escape.escape(tape.get("role_name", ""))
+    project = html_escape.escape(tape.get("project_name", ""))
     duration = tape.get("duration", 0)
-    created = tape.get("created_at", "")[:10]
-    video_uri = tape.get("video_uri", "")
+    created = html_escape.escape(tape.get("created_at", "")[:10])
+    video_uri = html_escape.escape(tape.get("video_uri", ""))
     dur_str = f"{duration // 60}:{duration % 60:02d}" if duration else ""
 
     subtitle_parts = [p for p in [role, project] if p]
@@ -2908,10 +2909,7 @@ video{{width:100%;height:100%;object-fit:contain;background:#000}}
 <body>
 <div class="page">
   <div class="player-wrap">
-    <video controls playsinline preload="metadata" poster="">
-      <source src="{video_uri}">
-      Your browser does not support video playback.
-    </video>
+    {"<video controls playsinline preload='metadata'><source src='" + video_uri + "'>Your browser does not support video playback.</video>" if video_uri else "<div style='display:flex;align-items:center;justify-content:center;height:100%;color:#6b7280;font-size:14px'>Video unavailable</div>"}
   </div>
   <div class="info">
     <div class="actor-name">{actor}</div>
@@ -3017,7 +3015,7 @@ async def process_audio(
 
     except Exception as e:
         logger.error(f"Audio processing error: {e}")
-        raise HTTPException(status_code=500, detail=f"Audio processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=json.dumps({"error": "Audio processing failed", "message": "Could not process audio file. Please try again."}))
 
 
 @api_router.post("/voice-studio/demo-reel")
@@ -3080,7 +3078,7 @@ async def build_demo_reel(
         raise
     except Exception as e:
         logger.error(f"Demo reel build error: {e}")
-        raise HTTPException(status_code=500, detail=f"Demo reel build failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=json.dumps({"error": "Demo reel build failed", "message": "Could not build demo reel. Please try again."}))
 
 
 @api_router.post("/voice-studio/takes")

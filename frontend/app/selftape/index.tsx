@@ -46,10 +46,15 @@ export default function SelfTapeHub() {
   }, []);
 
   const loadRecordings = async () => {
-    setLoadingRecordings(true);
-    const recs = await getRecordings();
-    setRecordings(recs);
-    setLoadingRecordings(false);
+    try {
+      setLoadingRecordings(true);
+      const recs = await getRecordings();
+      setRecordings(recs);
+    } catch (e) {
+      setRecordings([]);
+    } finally {
+      setLoadingRecordings(false);
+    }
   };
 
   const handleSelectScript = async (scriptId: string) => {

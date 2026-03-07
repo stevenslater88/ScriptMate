@@ -51,7 +51,9 @@ export default function RecordScreen() {
   const { scripts } = useScriptStore();
   const script = scripts.find(s => s.id === params.scriptId);
   const scenes = script?.scenes || [{ name: 'Full Script', lines: script?.lines || [] }];
-  const currentScene = scenes[parseInt(params.sceneIndex || '0')];
+  const rawSceneIdx = parseInt(params.sceneIndex || '0');
+  const safeSceneIdx = Math.max(0, Math.min(rawSceneIdx, scenes.length - 1));
+  const currentScene = scenes[safeSceneIdx];
   
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
@@ -658,7 +660,7 @@ export default function RecordScreen() {
             style={styles.camera}
             facing={facing}
             mode="video"
-            onCameraReady={() => console.log('[Camera] Camera ready')}
+            onCameraReady={() => {}}
             onMountError={(error) => {
               console.error('[Camera] Mount error:', error);
               Alert.alert('Camera Error', 'Failed to initialize camera. Please try again.');
