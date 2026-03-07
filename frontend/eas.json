@@ -25,13 +25,16 @@
     },
     "production": {
       "extends": "base",
+      "autoIncrement": true,
+      "channel": "production",
       "ios": {
-        "resourceClass": "m1-medium"
+        "resourceClass": "m1-medium",
+        "autoIncrement": "buildNumber"
       },
       "android": {
         "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease",
-        "credentialsSource": "local"
+        "autoIncrement": "versionCode",
+        "credentialsSource": "remote"
       },
       "env": {
         "__DEV__": "false",
@@ -47,7 +50,7 @@
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
-        "track": "production"
+        "track": "internal"
       }
     }
   }
