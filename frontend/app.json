@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ScriptMate",
+    "name": "ScriptM8",
     "slug": "scriptmate",
     "version": "1.1.0",
     "orientation": "portrait",
@@ -69,16 +69,16 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow ScriptMate to access your camera for self-tape recordings",
-          "microphonePermission": "Allow ScriptMate to access your microphone for self-tape recordings",
+          "cameraPermission": "Allow ScriptM8 to access your camera for self-tape recordings",
+          "microphonePermission": "Allow ScriptM8 to access your microphone for self-tape recordings",
           "recordAudioAndroid": true
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow ScriptMate to save your self-tape recordings",
-          "savePhotosPermission": "Allow ScriptMate to save your self-tape recordings",
+          "photosPermission": "Allow ScriptM8 to save your self-tape recordings",
+          "savePhotosPermission": "Allow ScriptM8 to save your self-tape recordings",
           "isAccessMediaLocationEnabled": true
         }
       ],
@@ -100,6 +100,7 @@
       "eas": {
         "projectId": "a2f8beb4-8c5b-4fea-8650-ea7986c2e78c"
       },
+      "EXPO_PUBLIC_BACKEND_URL": "https://line-assigner.preview.emergentagent.com",
       "router": {}
     }
   }

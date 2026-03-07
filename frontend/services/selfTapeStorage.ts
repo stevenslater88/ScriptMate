@@ -29,7 +29,7 @@ const generateFilename = (scriptTitle: string, sceneName: string): string => {
   // Sanitize names for filesystem
   const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
   
-  return `ScriptMate_${sanitize(scriptTitle)}_${sanitize(sceneName)}_${timestamp}.mp4`;
+  return `ScriptM8_${sanitize(scriptTitle)}_${sanitize(sceneName)}_${timestamp}.mp4`;
 };
 
 // Ensure directory exists

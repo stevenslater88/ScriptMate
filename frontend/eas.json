@@ -34,7 +34,8 @@
         "credentialsSource": "local"
       },
       "env": {
-        "__DEV__": "false"
+        "__DEV__": "false",
+        "EXPO_PUBLIC_BACKEND_URL": "https://line-assigner.preview.emergentagent.com"
       }
     }
   },

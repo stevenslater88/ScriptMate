@@ -188,7 +188,7 @@ export const generateTestCrash = () => {
     });
     
     // Capture a test exception
-    Sentry.captureException(new Error('Test crash generated from ScriptMate debug screen'));
+    Sentry.captureException(new Error('Test crash generated from ScriptM8 debug screen'));
     
     console.log('[Sentry] Test crash sent to Sentry');
     return true;

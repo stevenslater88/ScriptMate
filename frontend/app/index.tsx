@@ -15,8 +15,10 @@ import { router } from 'expo-router';
 import { useScriptStore } from '../store/scriptStore';
 import { safeHandler } from '../services/debugService';
 import { shouldShowOnboarding } from '../components/OnboardingTutorial';
+import Constants from 'expo-constants';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
+                    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
 
 export default function HomeScreen() {
   const { scripts, fetchScripts, loading, initializeUser, user, isPremium, limits } = useScriptStore();
@@ -105,7 +107,7 @@ export default function HomeScreen() {
           <View style={styles.headerTop}>
             <TouchableOpacity style={styles.logoContainer} onPress={handleLogoTap} activeOpacity={0.8}>
               <Ionicons name="mic" size={32} color="#6366f1" />
-              <Text style={styles.logoText}>ScriptMate</Text>
+              <Text style={styles.logoText}>ScriptM8</Text>
             </TouchableOpacity>
             <View style={styles.headerButtons}>
               <TouchableOpacity 
@@ -128,7 +130,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          <Text style={styles.tagline}>AI Script Learning Partner</Text>
+          <Text style={styles.tagline}>AI Training Studio for Actors</Text>
         </View>
 
         {/* Premium Banner */}
@@ -181,56 +183,92 @@ export default function HomeScreen() {
           <Ionicons name="chevron-forward" size={20} color="#6b7280" />
         </TouchableOpacity>
 
-        {/* Actor Tools Row */}
-        <View style={styles.toolsRow}>
-          <TouchableOpacity
-            style={styles.toolCard}
-            onPress={() => router.push('/auditions')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="calendar" size={24} color="#f59e0b" />
-            <Text style={styles.toolCardTitle}>Auditions</Text>
-            <Text style={styles.toolCardSubtitle}>Track & analyze</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.toolCard}
-            onPress={() => router.push('/dashboard')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="stats-chart" size={24} color="#10b981" />
-            <Text style={styles.toolCardTitle}>Dashboard</Text>
-            <Text style={styles.toolCardSubtitle}>Your progress</Text>
-          </TouchableOpacity>
+        {/* AI Coaching — Primary Features */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>AI Coaching</Text>
+          <View style={styles.modesGrid}>
+            <TouchableOpacity
+              style={styles.modeCard}
+              onPress={() => router.push('/acting-coach')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="school" size={28} color="#8b5cf6" />
+              <Text style={styles.modeTitle}>Acting Coach</Text>
+              <Text style={styles.modeDesc}>AI scene analysis</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modeCard}
+              onPress={() => router.push('/dialect-coach')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="mic" size={28} color="#ec4899" />
+              <Text style={styles.modeTitle}>Dialect Coach</Text>
+              <Text style={styles.modeDesc}>Accent training</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modeCard}
+              onPress={() => router.push('/scripts')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="chatbubbles" size={28} color="#10b981" />
+              <Text style={styles.modeTitle}>Practice Scene</Text>
+              <Text style={styles.modeDesc}>Run with AI partner</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modeCard}
+              onPress={() => router.push('/selftape')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="film" size={28} color="#f59e0b" />
+              <Text style={styles.modeTitle}>Record Self Tape</Text>
+              <Text style={styles.modeDesc}>Camera & teleprompter</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={[styles.actionCard, styles.primaryCard]}
-            onPress={() => router.push('/upload')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.actionIconContainer}>
-              <Ionicons name="add-circle" size={40} color="#fff" />
-            </View>
-            <Text style={styles.actionTitle}>New Script</Text>
-            <Text style={styles.actionSubtitle}>Upload or paste your script</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionCard, styles.secondaryCard]}
-            onPress={() => router.push('/scripts')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.actionIconContainer, styles.secondaryIcon]}>
-              <Ionicons name="library" size={40} color="#6366f1" />
-            </View>
-            <Text style={styles.actionTitle}>My Scripts</Text>
-            <Text style={styles.actionSubtitle}>
-              {scripts.length}{!isPremium && limits ? `/${limits.max_scripts}` : ''} scripts
-            </Text>
-          </TouchableOpacity>
+        {/* Script Tools — Secondary */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Script Tools</Text>
+          <View style={styles.modesGrid}>
+            <TouchableOpacity
+              style={styles.modeCard}
+              onPress={() => router.push('/scripts')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="library" size={28} color="#6366f1" />
+              <Text style={styles.modeTitle}>My Scripts</Text>
+              <Text style={styles.modeDesc}>
+                {scripts.length}{!isPremium && limits ? `/${limits.max_scripts}` : ''} saved
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modeCard}
+              onPress={() => router.push('/upload')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle" size={28} color="#3b82f6" />
+              <Text style={styles.modeTitle}>New Script</Text>
+              <Text style={styles.modeDesc}>Upload or paste</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modeCard}
+              onPress={() => router.push('/auditions')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar" size={28} color="#f59e0b" />
+              <Text style={styles.modeTitle}>Auditions</Text>
+              <Text style={styles.modeDesc}>Track & analyze</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modeCard}
+              onPress={() => router.push('/dashboard')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="stats-chart" size={28} color="#10b981" />
+              <Text style={styles.modeTitle}>Dashboard</Text>
+              <Text style={styles.modeDesc}>Your progress</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Continue Learning */}

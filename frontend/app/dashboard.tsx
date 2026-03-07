@@ -126,7 +126,7 @@ export default function DashboardScreen() {
               <View style={styles.logoIcon}>
                 <Ionicons name="mic" size={20} color="#fff" />
               </View>
-              <Text style={styles.logoText}>ScriptMate</Text>
+              <Text style={styles.logoText}>ScriptM8</Text>
             </TouchableOpacity>
             <View style={styles.headerButtons}>
               <TouchableOpacity 
@@ -145,7 +145,7 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          <Text style={styles.greeting}>Today in ScriptMate</Text>
+          <Text style={styles.greeting}>Today in ScriptM8</Text>
           <Text style={styles.subGreeting}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
           </Text>

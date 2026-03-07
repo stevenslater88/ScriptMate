@@ -200,7 +200,7 @@ export const getDiagnostics = async (): Promise<DiagnosticsInfo> => {
   
   return {
     // App Info
-    appName: Application.applicationName || 'ScriptMate',
+    appName: Application.applicationName || 'ScriptM8',
     appVersion: Application.nativeApplicationVersion || 'Unknown',
     buildNumber: Application.nativeBuildVersion || 'Unknown',
     versionCode: Platform.OS === 'android' 
@@ -247,7 +247,7 @@ export const formatDiagnosticsText = async (): Promise<string> => {
   const diag = await getDiagnostics();
   
   const lines = [
-    '=== ScriptMate Diagnostics ===',
+    '=== ScriptM8 Diagnostics ===',
     `Timestamp: ${new Date().toISOString()}`,
     '',
     '--- App Info ---',
@@ -330,7 +330,7 @@ export const sendDiagnosticsEmail = async (userNote?: string): Promise<void> => 
   );
   
   const body = encodeURIComponent(
-    `Hi ScriptMate Support,\n\n` +
+    `Hi ScriptM8 Support,\n\n` +
     `${userNote ? `Issue: ${userNote}\n\n` : 'Please describe your issue here:\n\n\n'}` +
     `---\n\n` +
     diagnosticsText

@@ -30,7 +30,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     icon: 'mic',
     iconColor: '#6366f1',
-    title: 'Welcome to ScriptMate',
+    title: 'Welcome to ScriptM8',
     subtitle: 'Your AI-powered script learning partner',
     features: [
       'Practice scripts with AI scene partners',

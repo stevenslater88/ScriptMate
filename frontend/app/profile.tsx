@@ -98,7 +98,7 @@ export default function ProfileScreen() {
               </View>
             )}
           </View>
-          <Text style={styles.userName}>{user?.name || 'ScriptMate User'}</Text>
+          <Text style={styles.userName}>{user?.name || 'ScriptM8 User'}</Text>
           <Text style={styles.userEmail}>{user?.email || 'No email'}</Text>
           <View style={styles.tierBadge}>
             <Text style={[

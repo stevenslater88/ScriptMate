@@ -187,7 +187,7 @@ export default function ReviewScreen() {
 
         {/* Watermark Overlay */}
         <View style={styles.watermarkContainer}>
-          <Text style={styles.watermarkText}>Sent from ScriptMate</Text>
+          <Text style={styles.watermarkText}>Sent from ScriptM8</Text>
         </View>
 
         {/* Play/Pause Overlay */}

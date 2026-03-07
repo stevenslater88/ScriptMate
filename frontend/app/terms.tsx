@@ -10,8 +10,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
-const APP_NAME = 'ScriptMate';
-const COMPANY_NAME = 'ScriptMate App';
+const APP_NAME = 'ScriptM8';
+const COMPANY_NAME = 'ScriptM8 App';
 const CONTACT_EMAIL = 'legal@scriptmate.app';
 const EFFECTIVE_DATE = 'June 2025';
 

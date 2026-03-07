@@ -13,7 +13,7 @@ const REVENUECAT_APPLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KE
 const REVENUECAT_GOOGLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || '';
 
 // Entitlement identifier that unlocks premium features
-export const PREMIUM_ENTITLEMENT_ID = 'ScriptMate Pro';
+export const PREMIUM_ENTITLEMENT_ID = 'ScriptM8 Pro';
 
 // Product identifiers (must match RevenueCat dashboard)
 export const PRODUCT_IDS = {

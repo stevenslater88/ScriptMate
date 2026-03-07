@@ -17,9 +17,13 @@ import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import axios from 'axios';
+import Constants from 'expo-constants';
 import { useScriptStore } from '../store/scriptStore';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
+                    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
+
+const UPLOAD_TIMEOUT = 30000; // 30s for file uploads
 
 export default function UploadScreen() {
   const [title, setTitle] = useState('');
@@ -83,6 +87,7 @@ export default function UploadScreen() {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
+            timeout: UPLOAD_TIMEOUT,
           }
         );
 
@@ -96,8 +101,20 @@ export default function UploadScreen() {
       }
     } catch (error: any) {
       setLoading(false);
-      console.error('File pick error:', error);
-      Alert.alert('Error', error.message || 'Failed to upload file');
+      console.error('File upload error:', error);
+      let msg = 'Failed to upload file';
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        msg = 'Upload timed out. Please check your internet connection and try again.';
+      } else if (error?.message === 'Network Error' || !error?.response) {
+        msg = 'Unable to reach server. Please check your internet connection.';
+      } else if (error?.response?.status === 413) {
+        msg = 'File is too large. Please try a smaller file.';
+      } else if (error?.response?.status === 415) {
+        msg = 'Unsupported file type. Please use PDF, DOCX, or TXT files.';
+      } else if (error?.response?.data?.detail) {
+        msg = error.response.data.detail;
+      }
+      Alert.alert('Upload Failed', msg);
     }
   };
 
@@ -123,7 +140,15 @@ export default function UploadScreen() {
         ]);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create script');
+      let msg = 'Failed to create script';
+      if (error?.message?.includes('timeout') || error?.code === 'ECONNABORTED') {
+        msg = 'Request timed out. Please check your internet connection.';
+      } else if (error?.message === 'Network Error') {
+        msg = 'Unable to reach server. Please check your internet connection.';
+      } else if (error?.response?.data?.detail) {
+        msg = error.response.data.detail;
+      }
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }

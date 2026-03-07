@@ -151,7 +151,7 @@ export default function PremiumScreen() {
       if (result.success) {
         Alert.alert(
           'Welcome to Pro!',
-          'You now have access to all ScriptMate Pro features.',
+          'You now have access to all ScriptM8 Pro features.',
           [{ text: 'Get Started', onPress: () => router.back() }]
         );
       } else if (!result.cancelled) {
@@ -163,7 +163,7 @@ export default function PremiumScreen() {
       if (success) {
         Alert.alert(
           'Welcome to Pro!',
-          'You now have access to all ScriptMate Pro features.',
+          'You now have access to all ScriptM8 Pro features.',
           [{ text: 'Get Started', onPress: () => router.back() }]
         );
       } else {
@@ -250,7 +250,7 @@ export default function PremiumScreen() {
           </View>
           <Text style={styles.premiumActiveTitle}>You're a Pro!</Text>
           <Text style={styles.premiumActiveSubtitle}>
-            You have access to all ScriptMate Pro features
+            You have access to all ScriptM8 Pro features
           </Text>
           <TouchableOpacity style={styles.primaryButton} onPress={() => router.back()}>
             <Text style={styles.primaryButtonText}>Back to App</Text>
@@ -342,7 +342,7 @@ export default function PremiumScreen() {
           <View style={styles.heroIcon}>
             <Ionicons name="star" size={32} color="#f59e0b" />
           </View>
-          <Text style={styles.heroTitle}>ScriptMate Pro</Text>
+          <Text style={styles.heroTitle}>ScriptM8 Pro</Text>
           <Text style={styles.heroSubtitle}>
             Unlock Self Tape Studio + Pro Tools
           </Text>

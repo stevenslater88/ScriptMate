@@ -3,7 +3,31 @@ import axios from 'axios';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import Constants from 'expo-constants';
+
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
+                    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
+
+const API_TIMEOUT = 15000; // 15 second timeout for all API calls
+
+function getErrorMessage(error: any): string {
+  if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+    return 'Request timed out. Please check your internet connection and try again.';
+  }
+  if (error?.message === 'Network Error' || !error?.response) {
+    return 'Unable to reach server. Please check your internet connection.';
+  }
+  if (error?.response?.status === 413) {
+    return 'File is too large to upload. Please try a smaller file.';
+  }
+  if (error?.response?.status === 415) {
+    return 'Unsupported file type. Please use PDF, DOCX, or TXT files.';
+  }
+  if (error?.response?.status >= 500) {
+    return 'Server error. Please try again in a moment.';
+  }
+  return error?.response?.data?.detail || error?.message || 'Something went wrong. Please try again.';
+}
 
 export interface Character {
   id: string;
@@ -184,7 +208,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       // Create or get user
       const response = await axios.post(`${BACKEND_URL}/api/users`, {
         device_id: deviceId,
-      });
+      }, { timeout: API_TIMEOUT });
       
       const user = response.data;
       set({ 
@@ -197,7 +221,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       await get().fetchSubscriptionPlans();
     } catch (error: any) {
       console.error('Error initializing user:', error);
-      set({ error: error.message });
+      set({ error: getErrorMessage(error) });
     }
   },
 
@@ -206,7 +230,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     if (!deviceId) return;
     
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/users/${deviceId}/limits`);
+      const response = await axios.get(`${BACKEND_URL}/api/users/${deviceId}/limits`, { timeout: API_TIMEOUT });
       set({ 
         limits: response.data.limits,
         isPremium: response.data.is_premium,
@@ -220,7 +244,8 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     const currentRegion = region || get().region;
     try {
       const response = await axios.get(`${BACKEND_URL}/api/subscription/plans`, {
-        params: { region: currentRegion }
+        params: { region: currentRegion },
+        timeout: API_TIMEOUT,
       });
       set({ 
         subscriptionPlans: response.data.plans,
@@ -237,7 +262,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     if (!deviceId) return false;
     
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/users/${deviceId}/start-trial`);
+      const response = await axios.post(`${BACKEND_URL}/api/users/${deviceId}/start-trial`, {}, { timeout: API_TIMEOUT });
       set({ 
         user: response.data, 
         isPremium: true 
@@ -245,7 +270,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       await get().fetchUserLimits();
       return true;
     } catch (error: any) {
-      set({ error: error.response?.data?.detail || error.message });
+      set({ error: getErrorMessage(error) });
       return false;
     }
   },
@@ -257,7 +282,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     try {
       const response = await axios.post(`${BACKEND_URL}/api/users/${deviceId}/subscribe`, {
         plan,
-      });
+      }, { timeout: API_TIMEOUT });
       set({ 
         user: response.data, 
         isPremium: true 
@@ -265,7 +290,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       await get().fetchUserLimits();
       return true;
     } catch (error: any) {
-      set({ error: error.response?.data?.detail || error.message });
+      set({ error: getErrorMessage(error) });
       return false;
     }
   },
@@ -281,11 +306,12 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await axios.get(`${BACKEND_URL}/api/scripts`, {
-        params: { user_id: deviceId || 'default' }
+        params: { user_id: deviceId || 'default' },
+        timeout: API_TIMEOUT,
       });
       set({ scripts: response.data, loading: false });
     } catch (error: any) {
-      set({ error: error.message, loading: false });
+      set({ error: getErrorMessage(error), loading: false });
       console.error('Error fetching scripts:', error);
     }
   },
@@ -293,11 +319,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   fetchScript: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/scripts/${id}`);
+      const response = await axios.get(`${BACKEND_URL}/api/scripts/${id}`, { timeout: API_TIMEOUT });
       set({ currentScript: response.data, loading: false });
       return response.data;
     } catch (error: any) {
-      set({ error: error.message, loading: false });
+      set({ error: getErrorMessage(error), loading: false });
       console.error('Error fetching script:', error);
       return null;
     }
@@ -311,7 +337,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         title,
         raw_text: rawText,
         user_id: deviceId || 'default',
-      });
+      }, { timeout: API_TIMEOUT });
       const newScript = response.data;
       set((state) => ({
         scripts: [newScript, ...state.scripts],
@@ -320,7 +346,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       }));
       return newScript;
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || error.message;
+      const errorMsg = getErrorMessage(error);
       set({ error: errorMsg, loading: false });
       console.error('Error creating script:', error);
       return null;
@@ -330,14 +356,14 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   updateScript: async (id: string, data) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.put(`${BACKEND_URL}/api/scripts/${id}`, data);
+      const response = await axios.put(`${BACKEND_URL}/api/scripts/${id}`, data, { timeout: API_TIMEOUT });
       set((state) => ({
         scripts: state.scripts.map((s) => (s.id === id ? response.data : s)),
         currentScript: state.currentScript?.id === id ? response.data : state.currentScript,
         loading: false,
       }));
     } catch (error: any) {
-      set({ error: error.message, loading: false });
+      set({ error: getErrorMessage(error), loading: false });
       console.error('Error updating script:', error);
     }
   },
@@ -345,14 +371,14 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   deleteScript: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      await axios.delete(`${BACKEND_URL}/api/scripts/${id}`);
+      await axios.delete(`${BACKEND_URL}/api/scripts/${id}`, { timeout: API_TIMEOUT });
       set((state) => ({
         scripts: state.scripts.filter((s) => s.id !== id),
         currentScript: state.currentScript?.id === id ? null : state.currentScript,
         loading: false,
       }));
     } catch (error: any) {
-      set({ error: error.message, loading: false });
+      set({ error: getErrorMessage(error), loading: false });
       console.error('Error deleting script:', error);
     }
   },
@@ -367,11 +393,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         mode,
         voice_type: voiceType,
         user_id: deviceId || 'default',
-      });
+      }, { timeout: API_TIMEOUT });
       set({ currentRehearsal: response.data, loading: false });
       return response.data;
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || error.message;
+      const errorMsg = getErrorMessage(error);
       set({ error: errorMsg, loading: false });
       console.error('Error creating rehearsal:', error);
       return null;
@@ -381,11 +407,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   fetchRehearsal: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/rehearsals/${id}`);
+      const response = await axios.get(`${BACKEND_URL}/api/rehearsals/${id}`, { timeout: API_TIMEOUT });
       set({ currentRehearsal: response.data, loading: false });
       return response.data;
     } catch (error: any) {
-      set({ error: error.message, loading: false });
+      set({ error: getErrorMessage(error), loading: false });
       console.error('Error fetching rehearsal:', error);
       return null;
     }
@@ -394,10 +420,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   updateRehearsal: async (id: string, data) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.put(`${BACKEND_URL}/api/rehearsals/${id}`, data);
+      const response = await axios.put(`${BACKEND_URL}/api/rehearsals/${id}`, data, { timeout: API_TIMEOUT });
       set({ currentRehearsal: response.data, loading: false });
     } catch (error: any) {
-      set({ error: error.message, loading: false });
+      set({ error: getErrorMessage(error), loading: false });
       console.error('Error updating rehearsal:', error);
     }
   },
