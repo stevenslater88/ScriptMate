@@ -160,6 +160,8 @@ export default function RootLayout() {
           <Stack.Screen name="script-parser" />
           <Stack.Screen name="acting-coach" />
           <Stack.Screen name="acting-feedback" />
+          <Stack.Screen name="daily-drill" />
+          <Stack.Screen name="voice-studio" />
           <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal' }} />
         </Stack>
       </View>

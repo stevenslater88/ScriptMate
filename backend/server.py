@@ -2495,6 +2495,200 @@ async def get_acting_coach_scenes():
     return {"scenes": SCENE_LIBRARY}
 
 # Include the router in the main app
+
+# ==================== DAILY DRILL & STREAK SYSTEM ====================
+
+class DailyDrillResponse(BaseModel):
+    id: str
+    challenge_type: str
+    title: str
+    description: str
+    prompt: str
+    duration_seconds: int
+    xp_reward: int
+    date: str
+
+class StreakResponse(BaseModel):
+    current_streak: int
+    best_streak: int
+    total_xp: int
+    today_completed: bool
+    activities_today: List[str]
+
+@api_router.get("/daily-drill/{user_id}")
+async def get_daily_drill(user_id: str):
+    """Get today's daily acting drill challenge."""
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    
+    # Check if drill already generated for today
+    existing = await db.daily_drills.find_one({"user_id": user_id, "date": today}, {"_id": 0})
+    if existing:
+        return existing
+    
+    # Generate new drill using AI
+    challenge_types = [
+        {"type": "emotion_shift", "title": "Emotion Shift", "desc": "Deliver a line shifting between two emotions"},
+        {"type": "cold_read", "title": "Cold Read", "desc": "Perform an unseen monologue with feeling"},
+        {"type": "physicality", "title": "Physical Expression", "desc": "Express emotion through movement and voice"},
+        {"type": "improv_react", "title": "Improv Reaction", "desc": "React naturally to an unexpected scenario"},
+        {"type": "accent_sprint", "title": "Accent Sprint", "desc": "Deliver a line in a specific accent"},
+    ]
+    
+    import random
+    challenge = random.choice(challenge_types)
+    
+    prompt_text = ""
+    if EMERGENT_LLM_KEY:
+        try:
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"daily-drill-{uuid.uuid4()}",
+                system_message="You are an acting coach creating short daily challenges for actors. Generate a specific, actionable acting challenge. Return ONLY the challenge prompt text (2-3 sentences). Make it fun and motivating."
+            ).with_model("openai", "gpt-4o")
+            result = await chat.send_message(
+                UserMessage(text=f"Generate a '{challenge['type']}' acting challenge: {challenge['desc']}. The actor should be able to perform it in 10-15 seconds.")
+            )
+            prompt_text = result.strip() if isinstance(result, str) else result
+        except Exception as e:
+            logger.error(f"AI drill generation failed: {e}")
+    
+    if not prompt_text:
+        fallback_prompts = {
+            "emotion_shift": "Say 'I never thought this day would come' — start with joy, end with grief. Let the shift happen naturally in one breath.",
+            "cold_read": "Perform this line as if your life depends on it: 'They told me I had one chance, and I took it without looking back.'",
+            "physicality": "Stand up and deliver 'I'm not afraid of you' while physically shrinking, then growing with each word.",
+            "improv_react": "You just opened a letter. React as if you got the role of a lifetime — then realize it's for the wrong person.",
+            "accent_sprint": "Say 'The rain in Spain falls mainly on the plain' in your best British accent. Commit fully!",
+        }
+        prompt_text = fallback_prompts.get(challenge["type"], fallback_prompts["cold_read"])
+    
+    drill = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "challenge_type": challenge["type"],
+        "title": challenge["title"],
+        "description": challenge["desc"],
+        "prompt": prompt_text,
+        "duration_seconds": 15,
+        "xp_reward": 25,
+        "date": today,
+        "completed": False,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    
+    await db.daily_drills.insert_one({**drill})
+    drill.pop("_id", None)
+    return drill
+
+@api_router.post("/daily-drill/{user_id}/complete")
+async def complete_daily_drill(user_id: str):
+    """Mark today's drill as complete and award XP."""
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    
+    drill = await db.daily_drills.find_one({"user_id": user_id, "date": today})
+    if not drill:
+        raise HTTPException(status_code=404, detail="No drill found for today")
+    
+    if drill.get("completed"):
+        return {"message": "Already completed", "xp_awarded": 0}
+    
+    await db.daily_drills.update_one(
+        {"user_id": user_id, "date": today},
+        {"$set": {"completed": True, "completed_at": datetime.utcnow().isoformat()}}
+    )
+    
+    # Record activity for streak
+    await record_activity(user_id, "daily_drill", drill.get("xp_reward", 25))
+    
+    return {"message": "Drill completed!", "xp_awarded": drill.get("xp_reward", 25)}
+
+async def record_activity(user_id: str, activity_type: str, xp: int = 10):
+    """Record an activity and update streak."""
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    
+    # Get or create streak record
+    streak = await db.streaks.find_one({"user_id": user_id})
+    if not streak:
+        streak = {
+            "user_id": user_id,
+            "current_streak": 0,
+            "best_streak": 0,
+            "total_xp": 0,
+            "last_activity_date": None,
+            "activities": {},
+        }
+        await db.streaks.insert_one({**streak, "_id": user_id})
+    
+    # Check if this extends the streak
+    yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+    last_date = streak.get("last_activity_date")
+    
+    if last_date == today:
+        # Already active today, just add XP and activity
+        new_streak = streak.get("current_streak", 1)
+    elif last_date == yesterday:
+        # Consecutive day — extend streak
+        new_streak = streak.get("current_streak", 0) + 1
+    else:
+        # Streak broken — start fresh
+        new_streak = 1
+    
+    best = max(streak.get("best_streak", 0), new_streak)
+    
+    # Track today's activities
+    today_key = f"activities.{today}"
+    
+    await db.streaks.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "current_streak": new_streak,
+                "best_streak": best,
+                "last_activity_date": today,
+            },
+            "$inc": {"total_xp": xp},
+            "$addToSet": {today_key: activity_type},
+        }
+    )
+
+@api_router.get("/streak/{user_id}")
+async def get_streak(user_id: str):
+    """Get user's training streak and XP."""
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    streak = await db.streaks.find_one({"user_id": user_id}, {"_id": 0})
+    if not streak:
+        return {
+            "current_streak": 0,
+            "best_streak": 0,
+            "total_xp": 0,
+            "today_completed": False,
+            "activities_today": [],
+        }
+    
+    # Check if streak is still active
+    last_date = streak.get("last_activity_date")
+    current = streak.get("current_streak", 0)
+    if last_date != today and last_date != yesterday:
+        current = 0  # Streak broken
+    
+    activities_today = streak.get("activities", {}).get(today, [])
+    
+    return {
+        "current_streak": current,
+        "best_streak": streak.get("best_streak", 0),
+        "total_xp": streak.get("total_xp", 0),
+        "today_completed": len(activities_today) > 0,
+        "activities_today": activities_today,
+    }
+
+@api_router.post("/streak/{user_id}/record")
+async def record_streak_activity(user_id: str, activity_type: str = "general"):
+    """Record an activity for streak tracking (acting_coach, dialect_coach, rehearsal, etc)."""
+    await record_activity(user_id, activity_type, 10)
+    return await get_streak(user_id)
+
 app.include_router(api_router)
 
 app.add_middleware(
