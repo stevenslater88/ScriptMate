@@ -688,6 +688,38 @@ Full application crash safety audit and fix to prevent runtime crashes and ensur
 
 ---
 
+## Production Build Connectivity Fix (March 2026)
+
+### Status: Complete & Tested (27/27 backend tests passed - iteration_14)
+
+### Root Cause
+`EXPO_PUBLIC_BACKEND_URL` was `undefined` in production builds because it was only in `.env` (dev-time) but not baked into the JS bundle. Every file resolved the URL independently with no fallback.
+
+### Fixes Applied
+
+**1. Centralized API Config (`services/apiConfig.ts`) — NEW**
+- Single source of truth for backend URL with 3-tier resolution: process.env → Constants.expoConfig.extra → hardcoded production fallback
+- Exported: `API_BASE_URL`, `API_TIMEOUT`, `apiUrl()` helper
+
+**2. Migrated 12+ files to centralized config**
+- `store/scriptStore.ts`, `services/actingCoachService.ts`, `services/dialectCoachService.ts`, `services/syncService.ts`, `services/debugService.ts`
+- `app/index.tsx`, `app/daily-drill.tsx`, `app/voice-studio.tsx`, `app/upload.tsx`, `app/selftape/review.tsx`
+- Zero remaining direct `process.env.EXPO_PUBLIC_BACKEND_URL` reads outside apiConfig.ts
+
+**3. DEV_TEST_MODE (`services/devTestMode.ts`) — NEW**
+- AsyncStorage-based flag, toggle-able from debug screen (logo 5x tap)
+- Bypasses RevenueCat premium checks in both `useRevenueCat` hook and `scriptStore`
+- Enables testing of Self Tape, Voice Studio, AI tools without purchases
+
+**4. useRevenueCat premium bypass**
+- Added `devTestModeActive` state to hook
+- `isPremium` now returns `true` when DEV_TEST_MODE is enabled
+
+**5. Debug screen updated**
+- Added Dev Test Mode toggle button with enable/disable UI
+
+---
+
 ## Backlog / Future Tasks
 
 ### P1 (High Priority)
