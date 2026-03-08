@@ -21,10 +21,8 @@ import { useScriptStore } from '../../store/scriptStore';
 import useRevenueCat from '../../hooks/useRevenueCat';
 import { trackSelfTapeOpened, trackUpgradeTriggered } from '../../services/analyticsService';
 import { getRecordings, SelfTapeRecording } from '../../services/selfTapeStorage';
-import Constants from 'expo-constants';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
-                    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
+
 
 export default function SelfTapeHub() {
   const { scripts, fetchScripts, loading, createScript } = useScriptStore();

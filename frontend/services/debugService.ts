@@ -33,12 +33,13 @@ const debugState: DebugState = {
   backendStatus: 'unknown',
 };
 
+import { API_BASE_URL } from './apiConfig';
+
 // Get environment
 const getEnvironment = (): string => {
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || '';
-  if (backendUrl.includes('preview.emergentagent.com')) return 'development';
-  if (backendUrl.includes('emergent.host')) return 'production';
-  if (backendUrl.includes('localhost')) return 'local';
+  if (API_BASE_URL.includes('preview.emergentagent.com')) return 'development';
+  if (API_BASE_URL.includes('emergent.host')) return 'production';
+  if (API_BASE_URL.includes('localhost')) return 'local';
   return 'unknown';
 };
 
@@ -101,7 +102,7 @@ export const getDebugInfo = () => {
     buildNumber: expoConfig?.ios?.buildNumber || expoConfig?.android?.versionCode?.toString() || 'Unknown',
     environment: getEnvironment(),
     expoSdk: expoConfig?.sdkVersion || 'Unknown',
-    apiBaseUrl: process.env.EXPO_PUBLIC_BACKEND_URL || 'Not configured',
+    apiBaseUrl: API_BASE_URL || 'Not configured',
     backendStatus: debugState.backendStatus,
     lastRequest: debugState.lastRequest,
     recentErrors: debugState.recentErrors,

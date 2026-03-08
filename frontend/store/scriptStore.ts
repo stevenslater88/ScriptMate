@@ -3,12 +3,8 @@ import axios from 'axios';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import Constants from 'expo-constants';
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
-                    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
-
-const API_TIMEOUT = 15000; // 15 second timeout for all API calls
+import { API_BASE_URL, API_TIMEOUT } from '../services/apiConfig';
+import { isDevTestMode } from '../services/devTestMode';
 
 function getErrorMessage(error: any): string {
   if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
@@ -206,14 +202,16 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       set({ deviceId });
       
       // Create or get user
-      const response = await axios.post(`${BACKEND_URL}/api/users`, {
+      const response = await axios.post(`${API_BASE_URL}/api/users`, {
         device_id: deviceId,
       }, { timeout: API_TIMEOUT });
       
       const user = response.data;
+      // Check dev test mode for premium override
+      const devMode = await isDevTestMode();
       set({ 
         user, 
-        isPremium: user.subscription_tier === 'premium' 
+        isPremium: devMode || user.subscription_tier === 'premium' 
       });
       
       // Fetch limits and subscription plans
@@ -230,7 +228,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     if (!deviceId) return;
     
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/users/${deviceId}/limits`, { timeout: API_TIMEOUT });
+      const response = await axios.get(`${API_BASE_URL}/api/users/${deviceId}/limits`, { timeout: API_TIMEOUT });
       set({ 
         limits: response.data.limits,
         isPremium: response.data.is_premium,
@@ -243,7 +241,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   fetchSubscriptionPlans: async (region?: string) => {
     const currentRegion = region || get().region;
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/subscription/plans`, {
+      const response = await axios.get(`${API_BASE_URL}/api/subscription/plans`, {
         params: { region: currentRegion },
         timeout: API_TIMEOUT,
       });
@@ -262,7 +260,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     if (!deviceId) return false;
     
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/users/${deviceId}/start-trial`, {}, { timeout: API_TIMEOUT });
+      const response = await axios.post(`${API_BASE_URL}/api/users/${deviceId}/start-trial`, {}, { timeout: API_TIMEOUT });
       set({ 
         user: response.data, 
         isPremium: true 
@@ -280,7 +278,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     if (!deviceId) return false;
     
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/users/${deviceId}/subscribe`, {
+      const response = await axios.post(`${API_BASE_URL}/api/users/${deviceId}/subscribe`, {
         plan,
       }, { timeout: API_TIMEOUT });
       set({ 
@@ -305,7 +303,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     const { deviceId } = get();
     set({ loading: true, error: null });
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/scripts`, {
+      const response = await axios.get(`${API_BASE_URL}/api/scripts`, {
         params: { user_id: deviceId || 'default' },
         timeout: API_TIMEOUT,
       });
@@ -319,7 +317,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   fetchScript: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/scripts/${id}`, { timeout: API_TIMEOUT });
+      const response = await axios.get(`${API_BASE_URL}/api/scripts/${id}`, { timeout: API_TIMEOUT });
       set({ currentScript: response.data, loading: false });
       return response.data;
     } catch (error: any) {
@@ -333,7 +331,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     const { deviceId } = get();
     set({ loading: true, error: null });
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/scripts`, {
+      const response = await axios.post(`${API_BASE_URL}/api/scripts`, {
         title,
         raw_text: rawText,
         user_id: deviceId || 'default',
@@ -356,7 +354,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   updateScript: async (id: string, data) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.put(`${BACKEND_URL}/api/scripts/${id}`, data, { timeout: API_TIMEOUT });
+      const response = await axios.put(`${API_BASE_URL}/api/scripts/${id}`, data, { timeout: API_TIMEOUT });
       set((state) => ({
         scripts: state.scripts.map((s) => (s.id === id ? response.data : s)),
         currentScript: state.currentScript?.id === id ? response.data : state.currentScript,
@@ -371,7 +369,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   deleteScript: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      await axios.delete(`${BACKEND_URL}/api/scripts/${id}`, { timeout: API_TIMEOUT });
+      await axios.delete(`${API_BASE_URL}/api/scripts/${id}`, { timeout: API_TIMEOUT });
       set((state) => ({
         scripts: state.scripts.filter((s) => s.id !== id),
         currentScript: state.currentScript?.id === id ? null : state.currentScript,
@@ -387,7 +385,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     const { deviceId } = get();
     set({ loading: true, error: null });
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/rehearsals`, {
+      const response = await axios.post(`${API_BASE_URL}/api/rehearsals`, {
         script_id: scriptId,
         user_character: userCharacter,
         mode,
@@ -407,7 +405,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   fetchRehearsal: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/rehearsals/${id}`, { timeout: API_TIMEOUT });
+      const response = await axios.get(`${API_BASE_URL}/api/rehearsals/${id}`, { timeout: API_TIMEOUT });
       set({ currentRehearsal: response.data, loading: false });
       return response.data;
     } catch (error: any) {
@@ -420,7 +418,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   updateRehearsal: async (id: string, data) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.put(`${BACKEND_URL}/api/rehearsals/${id}`, data, { timeout: API_TIMEOUT });
+      const response = await axios.put(`${API_BASE_URL}/api/rehearsals/${id}`, data, { timeout: API_TIMEOUT });
       set({ currentRehearsal: response.data, loading: false });
     } catch (error: any) {
       set({ error: getErrorMessage(error), loading: false });

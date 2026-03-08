@@ -12,15 +12,14 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import Constants from 'expo-constants';
+
 import {
   VoiceTake, saveTake, getTakes, updateTake, deleteTake,
   DemoReel, saveReel, getReels, deleteReel,
 } from '../services/voiceStudioStorage';
 import { WATERMARK_TEXT, WATERMARK_SUBTEXT } from '../services/watermarkService';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
-  Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
+import { API_BASE_URL } from '../services/apiConfig';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const BAR_COUNT = 30;
@@ -281,7 +280,7 @@ export default function VoiceStudioScreen() {
       formData.append('trim_start', trimStart);
       formData.append('trim_end', trimEnd);
 
-      const res = await axios.post(`${BACKEND_URL}/api/voice-studio/process`, formData, {
+      const res = await axios.post(`${API_BASE_URL}/api/voice-studio/process`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 30000,
       });
@@ -353,7 +352,7 @@ export default function VoiceStudioScreen() {
       }
       formData.append('gaps', '0.5');
 
-      const res = await axios.post(`${BACKEND_URL}/api/voice-studio/demo-reel`, formData, {
+      const res = await axios.post(`${API_BASE_URL}/api/voice-studio/demo-reel`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 60000,
       });

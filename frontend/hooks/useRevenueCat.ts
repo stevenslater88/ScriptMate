@@ -26,6 +26,7 @@ import {
   capturePaywallError,
   addBreadcrumb,
 } from '../services/sentryService';
+import { isDevTestMode } from '../services/devTestMode';
 
 // The offering identifier configured in RevenueCat dashboard
 const PRODUCTION_OFFERING_ID = 'production';
@@ -68,6 +69,12 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [devTestModeActive, setDevTestModeActive] = useState(false);
+
+  // Check dev test mode on mount
+  useEffect(() => {
+    isDevTestMode().then(setDevTestModeActive);
+  }, []);
 
   /**
    * Safely get the "production" offering from RevenueCat.
@@ -96,7 +103,7 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
 
   // Derived state - use production offering
   const currentOffering = getProductionOffering(offerings);
-  const isPremium = customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
+  const isPremium = devTestModeActive || customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
   
   // Get packages from production offering
   // Match by packageType first, then by identifier (for flexibility)

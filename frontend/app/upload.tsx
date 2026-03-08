@@ -17,11 +17,10 @@ import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import axios from 'axios';
-import Constants from 'expo-constants';
+
 import { useScriptStore } from '../store/scriptStore';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
-                    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
+import { API_BASE_URL } from '../services/apiConfig';
 
 const UPLOAD_TIMEOUT = 30000; // 30s for file uploads
 
@@ -81,7 +80,7 @@ export default function UploadScreen() {
         formData.append('title', title || file.name.replace(/\.[^/.]+$/, ''));
 
         const response = await axios.post(
-          `${BACKEND_URL}/api/scripts/upload`,
+          `${API_BASE_URL}/api/scripts/upload`,
           formData,
           {
             headers: {

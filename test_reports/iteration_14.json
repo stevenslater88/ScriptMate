@@ -1,0 +1,47 @@
+{
+  "summary": "Backend API Regression Test Complete - All 27 tests passed (100%). Verified all API endpoints still work after frontend migration to centralized apiConfig.ts. No backend issues detected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_production_hardening.py",
+    "/app/test_reports/pytest/iteration14_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (27/27 tests passed)"
+  },
+  "test_credentials": "No auth required",
+  "seed_data_creation": "TEST_ prefixed data created and cleaned up during tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend regression after frontend apiConfig.ts migration completed. All endpoints verified: health, scripts CRUD, scripts/upload validation, acting-coach analyze + scenes, dialect accents + sample-lines, daily-drill + feedback + complete, streak, users, subscription/plans, voices/presets, tapes/share + HTML share page, voice-studio validation errors. XSS protection and error sanitization continue to work correctly.",
+  "tests_performed": [
+    {"test": "GET /api/health returns 200", "result": "PASS"},
+    {"test": "POST /api/scripts creates script with parsed scenes", "result": "PASS"},
+    {"test": "GET /api/scripts returns list", "result": "PASS"},
+    {"test": "POST /api/scripts/upload without file returns 422", "result": "PASS (verified via curl)"},
+    {"test": "POST /api/acting-coach/analyze returns success:true", "result": "PASS"},
+    {"test": "GET /api/acting-coach/scenes returns scenes list", "result": "PASS"},
+    {"test": "GET /api/dialect/accents returns accent list", "result": "PASS"},
+    {"test": "GET /api/dialect/sample-lines returns lines", "result": "PASS"},
+    {"test": "GET /api/daily-drill/{user_id} returns drill", "result": "PASS"},
+    {"test": "POST /api/daily-drill/{user_id}/feedback returns feedback", "result": "PASS"},
+    {"test": "GET /api/streak/{user_id} returns streak data", "result": "PASS"},
+    {"test": "POST /api/users creates/gets user", "result": "PASS"},
+    {"test": "GET /api/subscription/plans returns plans", "result": "PASS"},
+    {"test": "GET /api/voices/presets returns presets", "result": "PASS"},
+    {"test": "Error handling: 500 errors return sanitized messages", "result": "PASS"},
+    {"test": "Error handling: invalid input returns 422 with Pydantic validation", "result": "PASS"},
+    {"test": "POST /api/tapes/share creates share link", "result": "PASS"},
+    {"test": "GET /api/tape/{actor}/{id} returns HTML share page with XSS protection", "result": "PASS"}
+  ]
+}

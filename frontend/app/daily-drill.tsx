@@ -8,10 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import Constants from 'expo-constants';
+import { API_BASE_URL } from '../services/apiConfig';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
-                    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
+
 
 export default function DailyDrillScreen() {
   const [drill, setDrill] = useState<any>(null);
@@ -36,8 +35,8 @@ export default function DailyDrillScreen() {
       setLoading(true);
       const userId = await getDeviceId();
       const [drillRes, streakRes] = await Promise.all([
-        axios.get(`${BACKEND_URL}/api/daily-drill/${userId}`, { timeout: 15000 }),
-        axios.get(`${BACKEND_URL}/api/streak/${userId}`, { timeout: 15000 }),
+        axios.get(`${API_BASE_URL}/api/daily-drill/${userId}`, { timeout: 15000 }),
+        axios.get(`${API_BASE_URL}/api/streak/${userId}`, { timeout: 15000 }),
       ]);
       setDrill(drillRes.data);
       setStreak(streakRes.data);
@@ -56,15 +55,15 @@ export default function DailyDrillScreen() {
     try {
       setCompleting(true);
       const userId = await getDeviceId();
-      const res = await axios.post(`${BACKEND_URL}/api/daily-drill/${userId}/complete`, {}, { timeout: 15000 });
-      const streakRes = await axios.get(`${BACKEND_URL}/api/streak/${userId}`, { timeout: 15000 });
+      const res = await axios.post(`${API_BASE_URL}/api/daily-drill/${userId}/complete`, {}, { timeout: 15000 });
+      const streakRes = await axios.get(`${API_BASE_URL}/api/streak/${userId}`, { timeout: 15000 });
       setStreak(streakRes.data);
       setDrill({ ...drill, completed: true });
       
       // Fetch AI feedback
       setLoadingFeedback(true);
       try {
-        const fbRes = await axios.post(`${BACKEND_URL}/api/daily-drill/${userId}/feedback`, {
+        const fbRes = await axios.post(`${API_BASE_URL}/api/daily-drill/${userId}/feedback`, {
           drill_prompt: drill.prompt || '',
           challenge_type: drill.challenge_type || 'emotion_shift',
         }, { timeout: 20000 });

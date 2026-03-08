@@ -18,15 +18,12 @@ import { Video, ResizeMode } from 'expo-av';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import axios from 'axios';
-import Constants from 'expo-constants';
+
+import { API_BASE_URL } from '../../services/apiConfig';
 import { useScriptStore } from '../../store/scriptStore';
 import { saveRecording, saveToGallery, getRecordings, deleteRecording as deleteFromStorage } from '../../services/selfTapeStorage';
 import { trackVideoSaved, trackVideoShared } from '../../services/analyticsService';
-
 import { Watermark } from '../../components/Watermark';
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
-                    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
 
 export default function ReviewScreen() {
   const params = useLocalSearchParams<{
@@ -177,7 +174,7 @@ export default function ReviewScreen() {
     if (!actorName.trim()) return;
     setGeneratingLink(true);
     try {
-      const res = await axios.post(`${BACKEND_URL}/api/tapes/share`, {
+      const res = await axios.post(`${API_BASE_URL}/api/tapes/share`, {
         actor_name: actorName.trim(),
         role_name: roleName.trim(),
         project_name: projectName.trim(),
@@ -186,7 +183,7 @@ export default function ReviewScreen() {
         duration: parseInt(params.duration || '0') || recordingInfo?.duration || 0,
         password: usePassword ? sharePassword : null,
       }, { timeout: 15000 });
-      const fullUrl = `${BACKEND_URL}/api/tapes/share/${res.data.share_id}`;
+      const fullUrl = `${API_BASE_URL}/api/tapes/share/${res.data.share_id}`;
       setShareLink(fullUrl);
       setShareId(res.data.share_id);
     } catch (error) {

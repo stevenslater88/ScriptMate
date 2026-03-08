@@ -13,13 +13,16 @@ import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { getDebugInfo, clearDebugLogs } from '../services/debugService';
 import { generateTestCrash } from '../services/sentryService';
+import { isDevTestMode, setDevTestMode } from '../services/devTestMode';
 
 export default function DebugScreen() {
   const [debugInfo, setDebugInfo] = useState(getDebugInfo());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [devMode, setDevMode] = useState(false);
 
   useEffect(() => {
     setDebugInfo(getDebugInfo());
+    isDevTestMode().then(setDevMode);
   }, [refreshKey]);
 
   const handleRefresh = () => {
@@ -135,6 +138,29 @@ export default function DebugScreen() {
             ))}
           </View>
         )}
+
+        {/* Dev Test Mode */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Dev Test Mode</Text>
+          <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 8 }}>
+            Bypasses RevenueCat and unlocks all premium features for internal testing.
+          </Text>
+          <TouchableOpacity
+            style={[styles.clearButton, { backgroundColor: devMode ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)' }]}
+            onPress={async () => {
+              const next = !devMode;
+              await setDevTestMode(next);
+              setDevMode(next);
+              Alert.alert('Dev Test Mode', next ? 'Enabled — restart app to apply' : 'Disabled — restart app to apply');
+            }}
+            data-testid="dev-test-mode-toggle"
+          >
+            <Ionicons name={devMode ? 'close-circle' : 'checkmark-circle'} size={20} color={devMode ? '#ef4444' : '#10b981'} />
+            <Text style={[styles.clearButtonText, { color: devMode ? '#ef4444' : '#10b981' }]}>
+              {devMode ? 'Disable Dev Test Mode' : 'Enable Dev Test Mode'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Clear Logs Button */}
         <TouchableOpacity style={styles.clearButton} onPress={handleClearLogs}>

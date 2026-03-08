@@ -3,10 +3,9 @@
  * API client for dialect/pronunciation analysis
  */
 
-import Constants from 'expo-constants';
+import { API_BASE_URL } from './apiConfig';
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || 
-                process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = API_BASE_URL;
 
 export interface AccentProfile {
   id: string;

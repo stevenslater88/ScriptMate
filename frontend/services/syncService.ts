@@ -7,8 +7,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
-const BACKEND_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || 
-                    process.env.EXPO_PUBLIC_BACKEND_URL || '';
+import { API_BASE_URL } from './apiConfig';
+
+const BACKEND_URL = API_BASE_URL;
 
 // Storage Keys
 const STORAGE_KEYS = {

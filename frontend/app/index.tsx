@@ -11,15 +11,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { API_BASE_URL } from '../services/apiConfig';
 import { useScriptStore } from '../store/scriptStore';
 import { safeHandler } from '../services/debugService';
 import { shouldShowOnboarding } from '../components/OnboardingTutorial';
-import Constants from 'expo-constants';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ||
-                    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL;
 
 export default function HomeScreen() {
   const { scripts, fetchScripts, initializeUser, isPremium } = useScriptStore();
@@ -48,7 +47,7 @@ export default function HomeScreen() {
     await fetchScripts();
     try {
       const id = await AsyncStorage.getItem('device_id');
-      if (id && BACKEND_URL) { const r = await axios.get(`${BACKEND_URL}/api/streak/${id}`, { timeout: 10000 }); setStreak(r.data); }
+      if (id && API_BASE_URL) { const r = await axios.get(`${API_BASE_URL}/api/streak/${id}`, { timeout: 10000 }); setStreak(r.data); }
     } catch (_) {}
   }, [initializeUser, fetchScripts]);
 
