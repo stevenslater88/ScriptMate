@@ -8,6 +8,7 @@ import { logError } from '../services/debugService';
 import { markRevenueCatConfigured } from '../services/revenuecat';
 import { API_BASE_URL } from '../services/apiConfig';
 import { isDevTestMode } from '../services/devTestMode';
+import Constants from 'expo-constants';
 import { 
   logRevenueCatInitError, 
   updateOfferingsCache, 
@@ -17,9 +18,15 @@ import {
 } from '../services/diagnosticsService';
 import { initSentry, setSentryUserId, captureRevenueCatError } from '../services/sentryService';
 
-// RevenueCat API Keys (from environment - no fallbacks)
-const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || '';
-const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || '';
+// RevenueCat API Keys — read from process.env (build-time) then Constants.extra (runtime fallback)
+const REVENUECAT_IOS_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY ||
+  (Constants.expoConfig?.extra?.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY as string) ||
+  '';
+const REVENUECAT_ANDROID_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY ||
+  (Constants.expoConfig?.extra?.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY as string) ||
+  '';
 
 export default function RootLayout() {
   // Initialize Sentry for crash reporting
@@ -61,6 +68,8 @@ export default function RootLayout() {
         // Platform-specific configuration with crash protection
         const apiKey = Platform.OS === 'ios' ? REVENUECAT_IOS_API_KEY : REVENUECAT_ANDROID_API_KEY;
         
+        console.log(`[RevenueCat] Platform: ${Platform.OS}, Key prefix: ${apiKey ? apiKey.substring(0, 5) + '***' : 'EMPTY'}, Key length: ${apiKey.length}`);
+
         if (!apiKey || apiKey.length < 10) {
           console.warn('[RevenueCat] Invalid or missing API key - subscriptions will be unavailable');
           logRevenueCatInitError('Invalid or missing API key');

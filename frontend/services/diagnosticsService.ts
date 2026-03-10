@@ -4,6 +4,7 @@ import * as Device from 'expo-device';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import Purchases, { PurchasesOfferings, CustomerInfo } from 'react-native-purchases';
+import Constants from 'expo-constants';
 
 // Feature Flags - controlled via environment variables
 export const FeatureFlags = {
@@ -86,8 +87,9 @@ export const updateCustomerInfoCache = (info: CustomerInfo | null) => {
 
 // Get API key prefix (safe to show)
 const getApiKeyPrefix = (): string => {
-  const iosKey = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || '';
-  const androidKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || '';
+  const extra = Constants.expoConfig?.extra || {};
+  const iosKey = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || (extra.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY as string) || '';
+  const androidKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || (extra.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY as string) || '';
   const key = Platform.OS === 'ios' ? iosKey : androidKey;
   
   if (!key) return 'Not configured';
