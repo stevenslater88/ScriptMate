@@ -26,11 +26,18 @@ export const PRODUCT_IDS = {
 let isConfigured = false;
 
 /**
- * Check if RevenueCat is already configured
- * (Configuration happens in _layout.tsx on app start)
+ * Mark RevenueCat as configured (called from _layout.tsx after successful configure)
+ */
+export const markRevenueCatConfigured = (): void => {
+  isConfigured = true;
+};
+
+/**
+ * Check if RevenueCat is actually configured and ready to use
  */
 export const isRevenueCatConfigured = (): boolean => {
-  return Platform.OS !== 'web';
+  if (Platform.OS === 'web') return false;
+  return isConfigured;
 };
 
 /**

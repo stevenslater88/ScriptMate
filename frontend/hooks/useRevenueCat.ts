@@ -31,6 +31,19 @@ import { isDevTestMode } from '../services/devTestMode';
 // The offering identifier configured in RevenueCat dashboard
 const PRODUCTION_OFFERING_ID = 'production';
 
+/**
+ * Wait for RevenueCat to be configured (by _layout.tsx).
+ * Polls every 300ms for up to 5 seconds.
+ */
+const waitForRevenueCatReady = async (maxWaitMs = 5000): Promise<boolean> => {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    if (isRevenueCatConfigured()) return true;
+    await new Promise(r => setTimeout(r, 300));
+  }
+  return isRevenueCatConfigured();
+};
+
 interface UseRevenueCatReturn {
   // State
   isConfigured: boolean;
@@ -198,9 +211,15 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
         setIsLoading(true);
         setError(null);
 
-        // Configure SDK (already done in _layout.tsx, this is a no-op)
-        await configureRevenueCat(userId);
-        setIsConfigured(isRevenueCatConfigured());
+        // Wait for _layout.tsx to finish Purchases.configure()
+        const ready = await waitForRevenueCatReady();
+        if (!ready) {
+          console.warn('[useRevenueCat] RevenueCat not configured after timeout — skipping');
+          setIsLoading(false);
+          return;
+        }
+
+        setIsConfigured(true);
 
         // Fetch initial data in parallel (with individual error handling)
         await Promise.all([

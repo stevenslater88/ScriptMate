@@ -47,8 +47,14 @@ export default function HomeScreen() {
     await fetchScripts();
     try {
       const id = await AsyncStorage.getItem('device_id');
-      if (id && API_BASE_URL) { const r = await axios.get(`${API_BASE_URL}/api/streak/${id}`, { timeout: 10000 }); setStreak(r.data); }
-    } catch (_) {}
+      if (id && API_BASE_URL) {
+        const r = await axios.get(`${API_BASE_URL}/api/streak/${id}`, { timeout: 10000 });
+        setStreak(r.data);
+        console.log(`[Home] Streak loaded: ${r.data.current_streak} day streak`);
+      }
+    } catch (e: any) {
+      console.warn(`[Home] Streak fetch failed: ${e?.message || e}`);
+    }
   }, [initializeUser, fetchScripts]);
 
   useEffect(() => { if (!checkingOnboarding) initialize(); }, [initialize, checkingOnboarding]);

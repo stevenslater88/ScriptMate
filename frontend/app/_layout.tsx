@@ -5,6 +5,9 @@ import { View, StyleSheet, Platform, Alert } from 'react-native';
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { AuthProvider } from '../contexts/AuthContext';
 import { logError } from '../services/debugService';
+import { markRevenueCatConfigured } from '../services/revenuecat';
+import { API_BASE_URL } from '../services/apiConfig';
+import { isDevTestMode } from '../services/devTestMode';
 import { 
   logRevenueCatInitError, 
   updateOfferingsCache, 
@@ -22,6 +25,12 @@ export default function RootLayout() {
   // Initialize Sentry for crash reporting
   useEffect(() => {
     initSentry();
+  }, []);
+
+  // Debug log: backend URL and dev mode on startup
+  useEffect(() => {
+    console.log(`[ScriptM8] Backend URL: ${API_BASE_URL}`);
+    isDevTestMode().then(dm => console.log(`[ScriptM8] Dev Test Mode: ${dm}`));
   }, []);
 
   // Initialize RevenueCat on app start - with crash protection
@@ -60,6 +69,7 @@ export default function RootLayout() {
 
         // Configure with production settings
         await Purchases.configure({ apiKey });
+        markRevenueCatConfigured();
         
         console.log(`[RevenueCat] ${Platform.OS} configured successfully (${__DEV__ ? 'DEV' : 'PROD'} mode)`);
 
@@ -160,8 +170,10 @@ export default function RootLayout() {
           <Stack.Screen name="script-parser" />
           <Stack.Screen name="acting-coach" />
           <Stack.Screen name="acting-feedback" />
+          <Stack.Screen name="dialect-coach" />
           <Stack.Screen name="daily-drill" />
           <Stack.Screen name="voice-studio" />
+          <Stack.Screen name="debug" />
           <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal' }} />
         </Stack>
       </View>
