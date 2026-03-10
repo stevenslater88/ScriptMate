@@ -720,6 +720,32 @@ Full application crash safety audit and fix to prevent runtime crashes and ensur
 
 ---
 
+## Production Build Audit Fix (March 2026)
+
+### Status: Complete & Tested (20/20 - iteration_15)
+
+### Root Causes & Fixes
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| **A) Upload "Network Error"** | `EXPO_PUBLIC_BACKEND_URL` undefined in production build — built before `apiConfig.ts` existed | `services/apiConfig.ts` with hardcoded production fallback URL |
+| **B) RevenueCat singleton error** | `isRevenueCatConfigured()` returned `true` on Android regardless of actual init state; `useRevenueCat` called `Purchases.getOfferings()` before `Purchases.configure()` finished | `markRevenueCatConfigured()` tracks real state; `waitForRevenueCatReady()` polls up to 5s before loading offerings |
+| **C) Daily Streak missing** | Backend URL undefined → streak API call silently failed | Fixed by centralized `apiConfig.ts` + debug logging on failure |
+| **D) Broken routes** | `dialect-coach` and `debug` not registered in `_layout.tsx` `<Stack.Screen>` | Added both to layout |
+| **E) No debug visibility** | No logging for backend URL, RevenueCat status, streak loads, or route targets | Added `[ScriptM8]`, `[RevenueCat]`, `[Home]` prefixed console logs |
+
+### Files Changed
+- `app/_layout.tsx` — Added `dialect-coach` + `debug` Stack.Screen, `markRevenueCatConfigured()` call, startup debug logs
+- `services/revenuecat.ts` — `isRevenueCatConfigured()` now checks actual init state via `markRevenueCatConfigured()`
+- `hooks/useRevenueCat.ts` — `waitForRevenueCatReady()` polling before loading, `devTestModeActive` premium bypass
+- `app/index.tsx` — Streak fetch debug logging
+- `app/debug.tsx` — Dev Test Mode toggle
+
+### New EAS Build Required: YES
+All fixes are code-level changes. The currently installed APK has the old code. A new `eas build --platform android --profile production` is needed.
+
+---
+
 ## Backlog / Future Tasks
 
 ### P1 (High Priority)
