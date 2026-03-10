@@ -7,10 +7,17 @@ import Purchases, {
   PurchasesError,
   PURCHASES_ERROR_CODE,
 } from 'react-native-purchases';
+import Constants from 'expo-constants';
 
-// RevenueCat API Keys from environment
-const REVENUECAT_APPLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || '';
-const REVENUECAT_GOOGLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || '';
+// RevenueCat API Keys — process.env (build-time) then Constants.extra (runtime fallback)
+const REVENUECAT_APPLE_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY ||
+  (Constants.expoConfig?.extra?.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY as string) ||
+  '';
+const REVENUECAT_GOOGLE_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY ||
+  (Constants.expoConfig?.extra?.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY as string) ||
+  '';
 
 // Entitlement identifier that unlocks premium features
 export const PREMIUM_ENTITLEMENT_ID = 'ScriptM8 Pro';

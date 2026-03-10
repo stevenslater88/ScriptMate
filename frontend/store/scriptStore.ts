@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { API_BASE_URL, API_TIMEOUT } from '../services/apiConfig';
 import { isDevTestMode } from '../services/devTestMode';
+import { checkPremiumAccess } from '../services/revenuecat';
 
 function getErrorMessage(error: any): string {
   if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
@@ -209,9 +210,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       const user = response.data;
       // Check dev test mode for premium override
       const devMode = await isDevTestMode();
+      // Check RevenueCat entitlements (source of truth for purchases)
+      const rcPremium = await checkPremiumAccess();
       set({ 
         user, 
-        isPremium: devMode || user.subscription_tier === 'premium' 
+        isPremium: devMode || rcPremium || user.subscription_tier === 'premium' 
       });
       
       // Fetch limits and subscription plans

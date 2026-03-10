@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import Purchases from 'react-native-purchases';
-import { PREMIUM_ENTITLEMENT_ID } from '../services/revenuecat';
+import { PREMIUM_ENTITLEMENT_ID, isRevenueCatConfigured } from '../services/revenuecat';
 
 /**
  * Paywall Screen - Presents RevenueCat's native paywall
@@ -35,6 +35,14 @@ export default function PaywallScreen() {
     // On web, redirect to custom premium screen
     if (Platform.OS === 'web') {
       router.replace('/premium');
+      return;
+    }
+
+    // Guard: RevenueCat must be configured before presenting paywall
+    if (!isRevenueCatConfigured()) {
+      console.error('[Paywall] RevenueCat not configured — cannot present paywall');
+      setError('Subscription service is not available. Please restart the app and try again.');
+      setIsLoading(false);
       return;
     }
 
