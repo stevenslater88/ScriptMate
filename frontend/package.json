@@ -85,6 +85,7 @@
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.55.0",
     "@typescript-eslint/parser": "^8.55.0",
+    "babel-preset-expo": "55.0.10",
     "eslint": "^9.25.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1"
