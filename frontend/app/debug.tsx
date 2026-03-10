@@ -14,15 +14,18 @@ import Constants from 'expo-constants';
 import { getDebugInfo, clearDebugLogs } from '../services/debugService';
 import { generateTestCrash } from '../services/sentryService';
 import { isDevTestMode, setDevTestMode } from '../services/devTestMode';
+import { getDiagnostics, DiagnosticsInfo } from '../services/diagnosticsService';
 
 export default function DebugScreen() {
   const [debugInfo, setDebugInfo] = useState(getDebugInfo());
   const [refreshKey, setRefreshKey] = useState(0);
   const [devMode, setDevMode] = useState(false);
+  const [rcDiag, setRcDiag] = useState<DiagnosticsInfo | null>(null);
 
   useEffect(() => {
     setDebugInfo(getDebugInfo());
     isDevTestMode().then(setDevMode);
+    getDiagnostics().then(setRcDiag);
   }, [refreshKey]);
 
   const handleRefresh = () => {
@@ -138,6 +141,36 @@ export default function DebugScreen() {
             ))}
           </View>
         )}
+
+        {/* RevenueCat Diagnostics */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>RevenueCat</Text>
+          <InfoRow
+            label="API Key"
+            value={rcDiag?.rcApiKeyPrefix || 'Loading...'}
+            isError={rcDiag?.rcApiKeyPrefix === 'Not configured'}
+          />
+          <InfoRow
+            label="Init Error"
+            value={rcDiag?.rcInitError || 'None'}
+            isError={!!rcDiag?.rcInitError}
+          />
+          <InfoRow label="App User ID" value={rcDiag?.rcAppUserId || 'Loading...'} />
+          <InfoRow
+            label="Current Offering"
+            value={rcDiag?.currentOfferingId || 'None'}
+            isError={!rcDiag?.currentOfferingId}
+          />
+          <InfoRow
+            label="Products Loaded"
+            value={rcDiag ? `${rcDiag.products.length}` : 'Loading...'}
+          />
+          <InfoRow
+            label="Active Entitlements"
+            value={rcDiag?.activeEntitlements.length ? rcDiag.activeEntitlements.join(', ') : 'None'}
+          />
+          <InfoRow label="Premium" value={rcDiag?.isPremium ? 'Yes' : 'No'} />
+        </View>
 
         {/* Dev Test Mode */}
         <View style={styles.section}>
