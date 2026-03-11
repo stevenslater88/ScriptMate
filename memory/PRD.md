@@ -913,3 +913,33 @@ Fixed three critical frontend bugs reported from the Android test build that wer
 ### Important
 A **new EAS Android build** must be generated and installed on device to see these fixes. The currently installed APK is from before these changes.
 
+
+
+---
+
+## Bug Fix: Paywall Branding & File Upload (Feb 2026)
+
+### Status: Complete & Tested (iteration_17.json — 14/14 pass)
+
+### Fixes Applied
+
+**1. Paywall — Removed RevenueCat template UI ("StarFinder Plus")**
+- Root cause: The `/paywall` route used `RevenueCatUI.presentPaywall()` which showed RevenueCat's SDK-native paywall with template content configured in their dashboard.
+- Fix: Replaced ALL `presentPaywall()` calls across 5 screens (`acting-coach.tsx`, `dialect-coach.tsx`, `script/[id].tsx`, `selftape/index.tsx`, `recall.tsx`) with `router.push('/premium')`.
+- `paywall.tsx` now redirects to `/premium` via `router.replace()`.
+- Homepage banner routes to `/premium` instead of `/paywall`.
+
+**2. Paywall — Removed hardcoded prices**
+- Removed `$4.99`, `$29.99`, `$49.99` hardcoded fallbacks from `premium.tsx`.
+- Prices now come from: RevenueCat `priceString` (native) → backend API (web) → generic "Subscribe" label (fallback).
+
+**3. File Upload — Fixed FormData boundary issue**
+- Root cause: Manual `Content-Type: multipart/form-data` header was set without boundary parameter, breaking multipart parsing on Android.
+- Fix: Removed manual header (let axios auto-set with correct boundary).
+- Added Android URI compatibility: copies file to cache if URI isn't `file://` format.
+- Added base64 fallback: if FormData fails on Android, reads file as base64 and posts to new `/api/scripts/upload-base64` endpoint.
+- Added better error logging with `console.error` showing URI, MIME type, and specific error.
+
+### New Backend Endpoint
+- `POST /api/scripts/upload-base64`: Accepts JSON `{title, filename, file_data}` where `file_data` is base64-encoded file content. Supports PDF, DOCX, TXT.
+
