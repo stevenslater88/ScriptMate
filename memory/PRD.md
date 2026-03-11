@@ -938,6 +938,27 @@ A **new EAS Android build** must be generated and installed on device to see the
 - Fix: Removed manual header (let axios auto-set with correct boundary).
 - Added Android URI compatibility: copies file to cache if URI isn't `file://` format.
 - Added base64 fallback: if FormData fails on Android, reads file as base64 and posts to new `/api/scripts/upload-base64` endpoint.
+
+---
+
+## Recovery Mode: Core Flow Fixes (Feb 2026)
+
+### Status: Complete & Tested (iteration_18.json — 31/31 checks pass)
+
+### Critical Bug Found & Fixed
+- **fetchScript didn't update scripts[]**: When navigating from file upload → script detail → teleprompter, the teleprompter would show "Script not found" because the script was only in `currentScript`, not in `scripts[]`. Fixed `fetchScript` in `scriptStore.ts` to also add/update the script in the `scripts[]` array.
+
+### Core Flow Status
+| Flow | Status |
+|------|--------|
+| Add Script (paste) | PASS |
+| Add Script (file upload) | PASS |
+| Script Library | PASS |
+| Teleprompter / Self Tape | PASS |
+| Premium Screen | PASS |
+| Daily Drill | PASS |
+
+
 - Added better error logging with `console.error` showing URI, MIME type, and specific error.
 
 ### New Backend Endpoint
