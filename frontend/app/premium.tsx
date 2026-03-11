@@ -91,6 +91,7 @@ export default function PremiumScreen() {
 
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly' | 'lifetime'>('yearly');
   const [loading, setLoading] = useState(false);
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
   const isNative = Platform.OS !== 'web';
   const isPremium = isNative ? rcIsPremium : storeIsPremium;
@@ -106,6 +107,20 @@ export default function PremiumScreen() {
   const hasOfferings = isNative 
     ? offeringsReady && (monthlyPackage || yearlyPackage || lifetimePackage)
     : true;
+
+  // Timeout: if RevenueCat is still loading after 8s, stop waiting
+  useEffect(() => {
+    if (!isNative || !rcLoading || hasOfferings) {
+      setLoadingTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (rcLoading && !hasOfferings) {
+        setLoadingTimedOut(true);
+      }
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [isNative, rcLoading, hasOfferings]);
 
   useEffect(() => {
     const detectRegion = () => {
@@ -212,6 +227,7 @@ export default function PremiumScreen() {
   // Retry loading offerings when they fail
   const handleRetryLoadOfferings = async () => {
     setLoading(true);
+    setLoadingTimedOut(false);
     await retryLoadOfferings();
     setLoading(false);
   };
@@ -260,8 +276,8 @@ export default function PremiumScreen() {
     );
   }
 
-  // Show loading state while RevenueCat initializes (native only)
-  if (isNative && rcLoading && !hasOfferings) {
+  // Show loading state while RevenueCat initializes (native only), but not forever
+  if (isNative && rcLoading && !hasOfferings && !loadingTimedOut) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.headerRow}>
@@ -277,8 +293,8 @@ export default function PremiumScreen() {
     );
   }
 
-  // Show error state with retry button if offerings failed to load (native only)
-  if (isNative && !rcLoading && !hasOfferings) {
+  // Show error state with retry button if offerings failed to load or timed out (native only)
+  if (isNative && !hasOfferings && (!rcLoading || loadingTimedOut)) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.headerRow}>

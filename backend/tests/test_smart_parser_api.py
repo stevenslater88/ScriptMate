@@ -7,7 +7,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://production-ready-94.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://upload-drill-pay.preview.emergentagent.com')
 
 # Test data
 TEST_DEVICE_ID = f"TEST_parser_device_{uuid.uuid4().hex[:8]}"

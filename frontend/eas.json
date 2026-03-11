@@ -38,7 +38,7 @@
       },
       "env": {
         "__DEV__": "false",
-        "EXPO_PUBLIC_BACKEND_URL": "https://production-ready-94.preview.emergentagent.com",
+        "EXPO_PUBLIC_BACKEND_URL": "https://upload-drill-pay.preview.emergentagent.com",
         "EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY": "appl_YOUR_IOS_KEY_HERE",
         "EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY": "goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT",
         "EXPO_PUBLIC_PREMIUM_ENABLED": "true",

@@ -19,7 +19,7 @@ export default function DailyDrillScreen() {
   const [completing, setCompleting] = useState(false);
   const [feedback, setFeedback] = useState<any>(null);
   const [loadingFeedback, setLoadingFeedback] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const getDeviceId = async () => {
     let id = await AsyncStorage.getItem('device_id');
@@ -33,16 +33,21 @@ export default function DailyDrillScreen() {
   const fetchDrill = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const userId = await getDeviceId();
+      console.log(`[Drill] Fetching from ${API_BASE_URL}/api/daily-drill/${userId}`);
       const [drillRes, streakRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/daily-drill/${userId}`, { timeout: 15000 }),
         axios.get(`${API_BASE_URL}/api/streak/${userId}`, { timeout: 15000 }),
       ]);
       setDrill(drillRes.data);
       setStreak(streakRes.data);
+      console.log(`[Drill] Loaded: ${drillRes.data?.prompt?.substring(0, 40)}`);
     } catch (error: any) {
-      setLoadError(true);
-      Alert.alert('Error', 'Unable to load daily drill. Please check your connection.');
+      const errMsg = error?.message || 'Unknown error';
+      const serverMsg = error?.response?.data?.detail;
+      console.error(`[Drill] Failed: ${errMsg}, server=${serverMsg}, url=${API_BASE_URL || 'MISSING'}`);
+      setLoadError(serverMsg || errMsg);
     } finally {
       setLoading(false);
     }
@@ -115,10 +120,13 @@ export default function DailyDrillScreen() {
         <View style={styles.loadingContainer}>
           <Ionicons name="cloud-offline" size={48} color="#374151" />
           <Text style={[styles.loadingText, { marginTop: 12, fontSize: 16 }]}>Unable to load drill</Text>
-          <Text style={styles.loadingText}>Check your connection and try again</Text>
+          <Text style={[styles.loadingText, { paddingHorizontal: 24, textAlign: 'center' }]}>
+            {loadError || 'Check your connection and try again'}
+          </Text>
           <TouchableOpacity
             style={[styles.completeBtn, { backgroundColor: '#6366f1', marginTop: 20, paddingHorizontal: 32 }]}
-            onPress={() => { setLoadError(false); setLoading(true); fetchDrill(); }}
+            onPress={() => { setLoadError(null); fetchDrill(); }}
+            data-testid="retry-drill-btn"
           >
             <Ionicons name="refresh" size={20} color="#fff" />
             <Text style={styles.completeBtnText}>Retry</Text>

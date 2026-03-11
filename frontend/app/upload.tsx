@@ -100,18 +100,26 @@ export default function UploadScreen() {
       }
     } catch (error: any) {
       setLoading(false);
-      console.error('File upload error:', error);
+      const status = error?.response?.status;
+      const serverMsg = error?.response?.data?.detail;
+      const errMsg = error?.message || 'Unknown error';
+      console.error(`[Upload] Failed: status=${status}, msg=${errMsg}, server=${serverMsg}, url=${API_BASE_URL}/api/scripts/upload`);
+
       let msg = 'Failed to upload file';
-      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-        msg = 'Upload timed out. Please check your internet connection and try again.';
-      } else if (error?.message === 'Network Error' || !error?.response) {
-        msg = 'Unable to reach server. Please check your internet connection.';
-      } else if (error?.response?.status === 413) {
+      if (error?.code === 'ECONNABORTED' || errMsg.includes('timeout')) {
+        msg = 'Upload timed out. Please check your connection and try again.';
+      } else if (errMsg === 'Network Error' || !error?.response) {
+        msg = `Unable to reach server (${API_BASE_URL ? 'URL set' : 'URL MISSING'}). Check your internet connection.`;
+      } else if (status === 413) {
         msg = 'File is too large. Please try a smaller file.';
-      } else if (error?.response?.status === 415) {
+      } else if (status === 415) {
         msg = 'Unsupported file type. Please use PDF, DOCX, or TXT files.';
-      } else if (error?.response?.data?.detail) {
-        msg = error.response.data.detail;
+      } else if (status === 400 && serverMsg) {
+        msg = serverMsg;
+      } else if (serverMsg) {
+        msg = serverMsg;
+      } else {
+        msg = `Upload failed: ${errMsg}`;
       }
       Alert.alert('Upload Failed', msg);
     }
@@ -139,13 +147,19 @@ export default function UploadScreen() {
         ]);
       }
     } catch (error: any) {
+      const errMsg = error?.message || 'Unknown error';
+      const serverMsg = error?.response?.data?.detail;
+      console.error(`[Upload] Submit failed: msg=${errMsg}, server=${serverMsg}`);
+
       let msg = 'Failed to create script';
       if (error?.message?.includes('timeout') || error?.code === 'ECONNABORTED') {
         msg = 'Request timed out. Please check your internet connection.';
       } else if (error?.message === 'Network Error') {
-        msg = 'Unable to reach server. Please check your internet connection.';
-      } else if (error?.response?.data?.detail) {
-        msg = error.response.data.detail;
+        msg = `Unable to reach server. Please check your internet connection.`;
+      } else if (serverMsg) {
+        msg = serverMsg;
+      } else {
+        msg = `Upload failed: ${errMsg}`;
       }
       Alert.alert('Error', msg);
     } finally {

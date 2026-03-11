@@ -9,7 +9,7 @@ import Constants from 'expo-constants';
 // 1. process.env (inlined by Metro at build time for EXPO_PUBLIC_* vars)
 // 2. Constants.expoConfig.extra (from app.json / app.config.js)
 // 3. Hardcoded production fallback (ensures the app NEVER ships with undefined URL)
-const PRODUCTION_FALLBACK = 'https://production-ready-94.preview.emergentagent.com';
+const PRODUCTION_FALLBACK = 'https://upload-drill-pay.preview.emergentagent.com';
 
 function resolveBackendUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_BACKEND_URL;

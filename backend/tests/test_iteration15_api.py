@@ -23,7 +23,7 @@ import uuid
 from datetime import datetime
 
 # Use production URL from environment
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://production-ready-94.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://upload-drill-pay.preview.emergentagent.com').rstrip('/')
 
 
 @pytest.fixture(scope="module")
