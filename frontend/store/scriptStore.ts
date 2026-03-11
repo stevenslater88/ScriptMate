@@ -321,8 +321,18 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await axios.get(`${API_BASE_URL}/api/scripts/${id}`, { timeout: API_TIMEOUT });
-      set({ currentScript: response.data, loading: false });
-      return response.data;
+      const script = response.data;
+      set((state) => {
+        const exists = state.scripts.some(s => s.id === id);
+        return {
+          currentScript: script,
+          scripts: exists
+            ? state.scripts.map(s => s.id === id ? script : s)
+            : [script, ...state.scripts],
+          loading: false,
+        };
+      });
+      return script;
     } catch (error: any) {
       set({ error: getErrorMessage(error), loading: false });
       console.error('Error fetching script:', error);
