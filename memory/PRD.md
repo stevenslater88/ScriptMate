@@ -890,3 +890,26 @@ Transformed the basic audition tracker into a full career management dashboard w
 - Full Adaptive Recall gameplay
 - **Rehearsal TTS callback flow (AI cue loop fix)**
 - Self Tape Share Link modal (end-to-end with video)
+
+
+---
+
+## Bug Fix: Android Build P0 Fixes (Feb 2026)
+
+### Status: Complete & Tested
+
+### Description
+Fixed three critical frontend bugs reported from the Android test build that were blocking the core user flow.
+
+### Fixes Applied
+1. **File Upload Error Display** (`upload.tsx`): `handleSubmit` catch block now extracts and shows the real `error.message` in fallback case instead of generic "Failed to create script".
+2. **Paywall Loading Timeout** (`premium.tsx`): Added 8-second timeout via `loadingTimedOut` state. If RevenueCat stays loading beyond 8s, the screen transitions from infinite spinner to the error/retry UI. Retry resets timeout.
+3. **Drill Screen Error Display** (`daily-drill.tsx`): Changed `loadError` from boolean to `string|null`. Error UI now shows the actual error message. Added `data-testid="retry-drill-btn"` to retry button.
+
+### Testing
+- 9/9 backend API tests passed (iteration_16.json)
+- All 3 frontend fixes verified via code review (Expo React Native - not browser testable)
+
+### Important
+A **new EAS Android build** must be generated and installed on device to see these fixes. The currently installed APK is from before these changes.
+
