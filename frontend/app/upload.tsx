@@ -52,10 +52,15 @@ export default function UploadScreen() {
 
       // Text files can be read directly
       if (filename.endsWith('.txt') || filename.endsWith('.text')) {
-        const content = await FileSystem.readAsStringAsync(file.uri);
-        setScriptText(content);
-        if (!title) {
-          setTitle(file.name.replace(/\.[^/.]+$/, ''));
+        try {
+          const content = await FileSystem.readAsStringAsync(file.uri);
+          setScriptText(content);
+          if (!title) {
+            setTitle(file.name.replace(/\.[^/.]+$/, ''));
+          }
+        } catch (readErr: any) {
+          console.error(`[Upload] Failed to read text file: ${readErr?.message}`);
+          Alert.alert('Error', `Could not read file: ${readErr?.message || 'Unknown error'}`);
         }
         setLoading(false);
       } else {
@@ -63,7 +68,7 @@ export default function UploadScreen() {
         const formData = new FormData();
         
         // Determine MIME type
-        let mimeType = 'application/octet-stream';
+        let mimeType = file.mimeType || 'application/octet-stream';
         if (filename.endsWith('.pdf')) {
           mimeType = 'application/pdf';
         } else if (filename.endsWith('.docx')) {
@@ -71,9 +76,20 @@ export default function UploadScreen() {
         } else if (filename.endsWith('.doc')) {
           mimeType = 'application/msword';
         }
+
+        // Ensure URI is properly formatted for Android
+        let fileUri = file.uri;
+        if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
+          // If URI is not file://, read to cache first
+          const cacheUri = `${FileSystem.cacheDirectory}upload_${Date.now()}_${file.name}`;
+          await FileSystem.copyAsync({ from: file.uri, to: cacheUri });
+          fileUri = cacheUri;
+        }
+
+        console.log(`[Upload] Uploading file: name=${file.name}, mime=${mimeType}, uri=${fileUri.substring(0, 80)}`);
         
         formData.append('file', {
-          uri: file.uri,
+          uri: fileUri,
           type: mimeType,
           name: file.name,
         } as any);
@@ -83,12 +99,29 @@ export default function UploadScreen() {
           `${API_BASE_URL}/api/scripts/upload`,
           formData,
           {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
             timeout: UPLOAD_TIMEOUT,
+            // Do NOT set Content-Type manually — axios/RN must set it with the correct multipart boundary
           }
-        );
+        ).catch(async (formDataError: any) => {
+          // Fallback: if FormData upload fails on Android, try base64 upload
+          if (Platform.OS === 'android') {
+            console.log('[Upload] FormData failed, trying base64 fallback...');
+            const base64Data = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+            return axios.post(
+              `${API_BASE_URL}/api/scripts/upload-base64`,
+              {
+                title: title || file.name.replace(/\.[^/.]+$/, ''),
+                filename: file.name,
+                file_data: base64Data,
+              },
+              {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: UPLOAD_TIMEOUT,
+              }
+            );
+          }
+          throw formDataError;
+        });
 
         setLoading(false);
         Alert.alert('Success', 'Script uploaded and parsed successfully!', [

@@ -34,7 +34,7 @@ interface WordState {
 export default function RecallScreen() {
   const { scriptId, sceneIndex } = useLocalSearchParams<{ scriptId: string; sceneIndex: string }>();
   const { scripts } = useScriptStore();
-  const { isPremium, presentPaywall } = useRevenueCat();
+  const { isPremium } = useRevenueCat();
   
   const script = scripts.find(s => s.id === scriptId);
   const scenes = script?.scenes || [{ name: 'Full Script', lines: script?.lines || [] }];

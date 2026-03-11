@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import Response, HTMLResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -1318,6 +1318,67 @@ async def upload_script(
     except Exception as e:
         logger.error(f"Error uploading script: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload script. Please try again.")
+
+
+@api_router.post("/scripts/upload-base64")
+async def upload_script_base64(request: Request):
+    """Fallback upload endpoint that accepts base64-encoded file content.
+    Used when multipart/form-data upload fails on Android."""
+    try:
+        body = await request.json()
+        title = body.get("title", "Untitled Script")
+        filename = body.get("filename", "file.txt").lower()
+        file_base64 = body.get("file_data", "")
+        user_id = body.get("user_id", "default")
+        
+        if not file_base64:
+            raise HTTPException(status_code=400, detail="No file data provided")
+        
+        import base64
+        content = base64.b64decode(file_base64)
+        
+        # Check user limits
+        limits_check = await check_user_limits(user_id, "create_script")
+        if not limits_check["allowed"]:
+            raise HTTPException(status_code=403, detail=limits_check["upgrade_reason"])
+        
+        file_size_mb = len(content) / (1024 * 1024)
+        max_size = limits_check["limits"]["max_file_size_mb"]
+        if file_size_mb > max_size:
+            raise HTTPException(
+                status_code=403,
+                detail=f"File size ({file_size_mb:.1f}MB) exceeds limit ({max_size}MB). Upgrade to Premium!"
+            )
+        
+        if filename.endswith('.pdf'):
+            raw_text = extract_text_from_pdf(content)
+        elif filename.endswith(('.docx',)):
+            raw_text = extract_text_from_docx(content)
+        elif filename.endswith(('.txt', '.text', '.rtf')):
+            try:
+                raw_text = content.decode('utf-8')
+            except UnicodeDecodeError:
+                raw_text = content.decode('latin-1')
+        else:
+            try:
+                raw_text = content.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    raw_text = content.decode('latin-1')
+                except Exception:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Unsupported file type. Use PDF, Word (.docx), or text files (.txt)"
+                    )
+        
+        script_data = ScriptCreate(title=title, raw_text=raw_text, user_id=user_id)
+        return await create_script(script_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in base64 upload: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload script. Please try again.")
+
 
 @api_router.get("/scripts", response_model=List[Script])
 async def get_scripts(user_id: str = "default"):

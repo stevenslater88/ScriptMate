@@ -39,7 +39,7 @@ const STYLES = [
 const ENERGY_LABELS = ['Calm', 'Calm', 'Calm', 'Balanced', 'Balanced', 'Balanced', 'Balanced', 'Intense', 'Intense', 'Intense'];
 
 export default function ActingCoachScreen() {
-  const { isPremium, presentPaywall } = useRevenueCat();
+  const { isPremium } = useRevenueCat();
   
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [selectedSceneIndex, setSelectedSceneIndex] = useState(0);
@@ -94,7 +94,7 @@ export default function ActingCoachScreen() {
 
   const handleCoachMe = async () => {
     if (!isPremium) {
-      presentPaywall();
+      router.push('/premium');
       return;
     }
 

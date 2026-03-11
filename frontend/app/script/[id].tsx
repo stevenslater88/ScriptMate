@@ -57,7 +57,7 @@ export default function ScriptDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string; autoStart?: string }>();
   const autoStart = useLocalSearchParams<{ autoStart?: string }>().autoStart === 'true';
   const { currentScript, fetchScript, updateScript, createRehearsal, loading, isPremium: isPremiumFromStore } = useScriptStore();
-  const { isPremium: isPremiumFromRevenueCat, presentPaywall } = useRevenueCat();
+  const { isPremium: isPremiumFromRevenueCat } = useRevenueCat();
   const isPremium = isPremiumFromStore || isPremiumFromRevenueCat;
   
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
@@ -73,8 +73,8 @@ export default function ScriptDetailScreen() {
   const handleSelfTape = async () => {
     if (!isPremium) {
       trackUpgradeTriggered('script_detail_selftape');
-      const purchased = await presentPaywall();
-      if (!purchased) return;
+      router.push('/premium');
+      return;
     }
     router.push(`/selftape/prep?scriptId=${id}`);
   };
@@ -273,7 +273,7 @@ export default function ScriptDetailScreen() {
                   onPress={() => {
                     if (isLocked) {
                       trackUpgradeTriggered('script_detail_mode_' + mode.id);
-                      presentPaywall();
+                      router.push('/premium');
                       return;
                     }
                     if (mode.navigable && mode.route) {
@@ -391,7 +391,7 @@ export default function ScriptDetailScreen() {
             isPremium={isPremium}
             onUpgradePress={async () => {
               trackUpgradeTriggered('script_detail_multivoice');
-              await presentPaywall();
+              router.push('/premium');
             }}
           />
         </View>

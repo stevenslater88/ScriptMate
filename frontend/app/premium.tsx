@@ -243,12 +243,12 @@ export default function PremiumScreen() {
       }
     }
     
-    // Fallback pricing
+    // Fallback pricing from backend API
     if (plan === 'monthly' && monthlyPlan) return `${currencySymbol}${monthlyPlan.price}`;
     if (plan === 'yearly' && yearlyPlan) return `${currencySymbol}${yearlyPlan.price}`;
-    if (plan === 'lifetime') return `${currencySymbol}49.99`;
     
-    return plan === 'monthly' ? '$4.99' : plan === 'yearly' ? '$29.99' : '$49.99';
+    // No price available yet — show generic label
+    return 'Subscribe';
   };
 
   if (isPremium) {

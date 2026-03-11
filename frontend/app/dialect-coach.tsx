@@ -33,7 +33,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.7;
 
 export default function DialectCoachScreen() {
-  const { isPremium, presentPaywall } = useRevenueCat();
+  const { isPremium } = useRevenueCat();
   
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState<'record' | 'feedback' | 'progress'>('record');
@@ -183,7 +183,7 @@ export default function DialectCoachScreen() {
   const handleAccentChange = (index: number) => {
     if (!isPremium) {
       trackUpgradeTriggered('dialect_coach_accent');
-      presentPaywall();
+      router.push('/premium');
       return;
     }
     setSelectedAccentIndex(index);
@@ -192,7 +192,7 @@ export default function DialectCoachScreen() {
   const startRecording = async () => {
     if (!isPremium) {
       trackUpgradeTriggered('dialect_coach_record');
-      presentPaywall();
+      router.push('/premium');
       return;
     }
 
@@ -468,7 +468,7 @@ export default function DialectCoachScreen() {
 
           {/* Premium CTA for free users */}
           {!isPremium && (
-            <TouchableOpacity style={styles.premiumCta} onPress={presentPaywall}>
+            <TouchableOpacity style={styles.premiumCta} onPress={() => router.push('/premium')}>
               <LinearGradient
                 colors={['rgba(139, 92, 246, 0.2)', 'rgba(99, 102, 241, 0.2)']}
                 style={styles.premiumCtaGradient}

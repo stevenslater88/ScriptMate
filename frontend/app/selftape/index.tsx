@@ -26,7 +26,7 @@ import { getRecordings, SelfTapeRecording } from '../../services/selfTapeStorage
 
 export default function SelfTapeHub() {
   const { scripts, fetchScripts, loading, createScript } = useScriptStore();
-  const { isPremium, presentPaywall } = useRevenueCat();
+  const { isPremium } = useRevenueCat();
   const [recordings, setRecordings] = useState<SelfTapeRecording[]>([]);
   const [loadingRecordings, setLoadingRecordings] = useState(true);
   
