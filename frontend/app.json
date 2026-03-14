@@ -8,6 +8,8 @@
     "scheme": "scriptmate",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "owner": "stevenslater88",
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.scriptmate.app",
@@ -17,37 +19,32 @@
         "NSSpeechRecognitionUsageDescription": "Recognize when you finish speaking your lines",
         "NSCameraUsageDescription": "Record video self-tapes for auditions",
         "NSPhotoLibraryUsageDescription": "Save your self-tape recordings",
-        "NSPhotoLibraryAddUsageDescription": "Save your self-tape recordings to your photo library",
-        "UIBackgroundModes": [
-          "audio"
-        ]
+        "NSPhotoLibraryAddUsageDescription": "Save your self-tape recordings to your photo library"
       }
     },
+
     "android": {
+      "package": "app.emergent.scriptmate870106af3",
+      "versionCode": 1025,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0a0a0f"
       },
       "edgeToEdgeEnabled": true,
-      "package": "app.emergent.scriptmate870106af3",
-      "versionCode": 1019,
       "permissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
         "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
-        "android.permission.ACCESS_MEDIA_LOCATION",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_AUDIO"
+        "android.permission.READ_MEDIA_IMAGES"
       ]
     },
+
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       [
         "expo-build-properties",
@@ -64,8 +61,10 @@
           }
         }
       ],
+
       "expo-router",
       "expo-speech-recognition",
+
       [
         "expo-camera",
         {
@@ -74,14 +73,16 @@
           "recordAudioAndroid": true
         }
       ],
+
       [
         "expo-media-library",
         {
           "photosPermission": "Allow ScriptM8 to save your self-tape recordings",
           "savePhotosPermission": "Allow ScriptM8 to save your self-tape recordings",
-          "isAccessMediaLocationEnabled": true
+          "isAccessMediaLocationEnabled": false
         }
       ],
+
       [
         "expo-splash-screen",
         {
@@ -92,10 +93,11 @@
         }
       ]
     ],
+
     "experiments": {
       "typedRoutes": true
     },
-    "owner": "stevenslater88",
+
     "extra": {
       "eas": {
         "projectId": "a2f8beb4-8c5b-4fea-8650-ea7986c2e78c"
