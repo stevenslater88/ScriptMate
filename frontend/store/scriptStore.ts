@@ -303,11 +303,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   },
 
   fetchScripts: async () => {
-    const { deviceId } = get();
+    const deviceId = await getDeviceId();
     set({ loading: true, error: null });
     try {
       const response = await axios.get(`${API_BASE_URL}/api/scripts`, {
-        params: { user_id: deviceId || 'default' },
+        params: { user_id: deviceId },
         timeout: API_TIMEOUT,
       });
       set({ scripts: response.data, loading: false });
@@ -341,13 +341,13 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   },
 
   createScript: async (title: string, rawText: string) => {
-    const { deviceId } = get();
+    const deviceId = await getDeviceId();
     set({ loading: true, error: null });
     try {
       const response = await axios.post(`${API_BASE_URL}/api/scripts`, {
         title,
         raw_text: rawText,
-        user_id: deviceId || 'default',
+        user_id: deviceId,
       }, { timeout: API_TIMEOUT });
       const newScript = response.data;
       set((state) => ({

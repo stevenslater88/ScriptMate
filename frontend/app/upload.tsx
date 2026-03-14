@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Device from 'expo-device';
 import axios from 'axios';
 
 import { useScriptStore } from '../store/scriptStore';
@@ -23,6 +25,20 @@ import { useScriptStore } from '../store/scriptStore';
 import { API_BASE_URL } from '../services/apiConfig';
 
 const UPLOAD_TIMEOUT = 30000; // 30s for file uploads
+
+// Get device ID directly — same logic as store, ensures it's always available
+const getDeviceId = async (): Promise<string> => {
+  try {
+    let deviceId = await AsyncStorage.getItem('device_id');
+    if (deviceId) return deviceId;
+    const uniqueId = Device.modelId || Device.deviceName || 'unknown';
+    deviceId = `${uniqueId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await AsyncStorage.setItem('device_id', deviceId);
+    return deviceId;
+  } catch {
+    return `fallback-${Date.now()}`;
+  }
+};
 
 export default function UploadScreen() {
   const [title, setTitle] = useState('');
@@ -88,12 +104,16 @@ export default function UploadScreen() {
 
         console.log(`[Upload] Uploading file: name=${file.name}, mime=${mimeType}, uri=${fileUri.substring(0, 80)}`);
         
+        // Get device ID for user association
+        const userId = await getDeviceId();
+        
         formData.append('file', {
           uri: fileUri,
           type: mimeType,
           name: file.name,
         } as any);
         formData.append('title', title || file.name.replace(/\.[^/.]+$/, ''));
+        formData.append('user_id', userId);
 
         const response = await axios.post(
           `${API_BASE_URL}/api/scripts/upload`,
@@ -113,6 +133,7 @@ export default function UploadScreen() {
                 title: title || file.name.replace(/\.[^/.]+$/, ''),
                 filename: file.name,
                 file_data: base64Data,
+                user_id: userId,
               },
               {
                 headers: { 'Content-Type': 'application/json' },
