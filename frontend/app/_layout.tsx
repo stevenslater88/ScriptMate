@@ -182,6 +182,7 @@ export default function RootLayout() {
           <Stack.Screen name="dialect-coach" />
           <Stack.Screen name="daily-drill" />
           <Stack.Screen name="voice-studio" />
+          <Stack.Screen name="scene-partner" />
           <Stack.Screen name="debug" />
           <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal' }} />
         </Stack>

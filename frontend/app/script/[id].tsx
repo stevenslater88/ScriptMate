@@ -459,6 +459,15 @@ export default function ScriptDetailScreen() {
         
         <View style={styles.buttonRow}>
           <TouchableOpacity
+            style={styles.scenePartnerButton}
+            onPress={() => router.push(`/scene-partner?scriptId=${id}`)}
+            data-testid="scene-partner-btn"
+          >
+            <Ionicons name="people" size={20} color="#f59e0b" />
+            <Text style={styles.scenePartnerButtonText}>Scene Partner</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={styles.selfTapeButton}
             onPress={handleSelfTape}
           >
@@ -958,6 +967,23 @@ const styles = StyleSheet.create({
   selfTapeButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  scenePartnerButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a2e',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  scenePartnerButtonText: {
+    color: '#f59e0b',
+    fontSize: 14,
     fontWeight: '600',
   },
   startButton: {
