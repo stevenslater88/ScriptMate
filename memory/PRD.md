@@ -973,6 +973,36 @@ Single new screen (`scene-partner.tsx`) with two phases:
 
 **Rehearsal Phase:**
 - Sequential scene playback using device TTS (`expo-speech`)
+
+---
+
+## Android Device Build Fixes (Feb 2026)
+
+### Status: Complete & Tested (iteration_20.json — 27/27 pass)
+
+### Root Causes & Fixes
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| Voice recording save fails | `getURI()` called AFTER `stopAndUnloadAsync()` — URI lost on some Android devices | Get URI BEFORE stopping; verify file exists before copy |
+| Self-tape save fails | Same ordering issue + no file existence validation | Added pre-copy source verification + post-copy destination verification |
+| Camera doesn't init | Permission hook returns `null` on first render; code skipped to denied state | Added null check → loading spinner while permissions load |
+| Script upload fails | `Content-Type: multipart/form-data` set without boundary; missing expo-document-picker plugin | Removed manual header; added plugin to app.json |
+| Premium hangs | No timeout on RevenueCat loading | 8-second timeout (fixed in earlier session) |
+
+### Plugins Added to app.json
+- `expo-av` (with microphonePermission)
+- `expo-document-picker` (with iCloudContainerEnvironment)
+- `expo-file-system` (with driveModules)
+
+### Files Changed
+- `frontend/app/voice-studio.tsx` — Recording URI ordering + FileSystem validation
+- `frontend/app/selftape/teleprompter.tsx` — Camera permission null check + FileSystem save validation
+- `frontend/services/selfTapeStorage.ts` — Defensive file checks in saveRecording
+- `frontend/services/voiceStudioStorage.ts` — Defensive file checks in saveTake
+- `frontend/app.json` — Added 3 missing plugins
+
+
 - Non-user lines spoken aloud, user lines pause with "Continue" button
 - Controls: Play, Pause, Restart, Continue, Replay Cue, Exit
 - Progress bar showing position in scene
