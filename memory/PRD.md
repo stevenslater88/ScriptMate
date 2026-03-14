@@ -956,6 +956,39 @@ A **new EAS Android build** must be generated and installed on device to see the
 | Script Library | PASS |
 | Teleprompter / Self Tape | PASS |
 | Premium Screen | PASS |
+
+---
+
+## Feature: AI Scene Partner V1 (Feb 2026)
+
+### Status: Complete & Tested (iteration_19.json — 19/19 pass)
+
+### What Was Built
+Single new screen (`scene-partner.tsx`) with two phases:
+
+**Setup Phase:**
+- Character selection from parsed script characters
+- 5 Reader Styles: Neutral, Calm, Serious, Aggressive, Fast Pace (adjusts TTS rate/pitch)
+- 4 Cue Timing options: Immediate, 1s, 2s, 3s delay between lines
+
+**Rehearsal Phase:**
+- Sequential scene playback using device TTS (`expo-speech`)
+- Non-user lines spoken aloud, user lines pause with "Continue" button
+- Controls: Play, Pause, Restart, Continue, Replay Cue, Exit
+- Progress bar showing position in scene
+- Visual indicators: character badges (green=user, purple=AI), current line highlight
+- Scene Complete state at end
+
+### Files Changed
+- **New**: `frontend/app/scene-partner.tsx`
+- **Modified**: `frontend/app/_layout.tsx` (route registration)
+- **Modified**: `frontend/app/script/[id].tsx` (Scene Partner button + styles)
+
+### No Backend Changes
+- Uses existing script data structure (lines, characters, is_stage_direction)
+- Uses `expo-speech` for on-device TTS — zero cost, no cloud APIs
+
+
 | Daily Drill | PASS |
 
 
