@@ -998,6 +998,30 @@ Single new screen (`scene-partner.tsx`) with two phases:
 ### Files Changed
 - `frontend/app/voice-studio.tsx` — Recording URI ordering + FileSystem validation
 - `frontend/app/selftape/teleprompter.tsx` — Camera permission null check + FileSystem save validation
+
+---
+
+## Stabilization: Script Upload / Save / Library Fix (Feb 2026)
+
+### Status: Complete & Tested (iteration_21.json — 14/14 pass)
+
+### Root Cause
+**deviceId race condition.** `initializeUser()` is async (makes network call). If user navigates to upload before it completes, `store.deviceId` is null. Scripts get created with `user_id: 'default'`. Library later queries with the real deviceId and finds nothing.
+
+Additionally, the file upload path (`handleFilePick`) never sent `user_id` at all — backend defaulted to `'default'`.
+
+### Fix (3 changes in 2 files)
+
+| File | Change |
+|------|--------|
+| `store/scriptStore.ts` → `createScript` | `get().deviceId \|\| 'default'` → `await getDeviceId()` |
+| `store/scriptStore.ts` → `fetchScripts` | `get().deviceId \|\| 'default'` → `await getDeviceId()` |
+| `app/upload.tsx` → `handleFilePick` | Added `getDeviceId()` helper + `formData.append('user_id', userId)` + `user_id: userId` in base64 fallback |
+
+### Why This Fixes It
+`getDeviceId()` reads directly from AsyncStorage (or generates and persists a new one). It works instantly without waiting for `initializeUser()`. Every script operation now uses the same consistent deviceId.
+
+
 - `frontend/services/selfTapeStorage.ts` — Defensive file checks in saveRecording
 - `frontend/services/voiceStudioStorage.ts` — Defensive file checks in saveTake
 - `frontend/app.json` — Added 3 missing plugins
