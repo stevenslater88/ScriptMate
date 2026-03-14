@@ -166,28 +166,45 @@ export default function VoiceStudioScreen() {
   const stopRecording = async () => {
     if (!recording) return;
     try {
+      // CRITICAL: Get URI BEFORE stopping — some Android devices lose the URI after unload
+      const uri = recording.getURI();
+      console.log('[VoiceStudio] Pre-stop URI:', uri);
+
       await recording.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      const uri = recording.getURI();
+
       setRecording(null);
       setIsRecording(false);
       setIsPaused(false);
 
-      if (uri) {
-        const takeNum = takes.length + 1;
-        const name = `Take ${takeNum}`;
-        const take = await saveTake(uri, name, recDuration);
-        setTakes(prev => [take, ...prev]);
-        setActiveTab('takes');
-        Alert.alert('Saved!', `"${name}" saved (${formatDuration(recDuration)})`);
+      if (!uri) {
+        console.error('[VoiceStudio] Recording URI is null after stop');
+        Alert.alert('Error', 'Recording completed but the audio file was not found. Please try again.');
+        return;
       }
+
+      // Verify the temp file actually exists before saving
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      console.log('[VoiceStudio] Temp file exists:', fileInfo.exists, 'size:', fileInfo.exists ? (fileInfo as any).size : 0);
+
+      if (!fileInfo.exists) {
+        Alert.alert('Error', 'Recording file was not saved by the system. Please check app permissions in device Settings.');
+        return;
+      }
+
+      const takeNum = takes.length + 1;
+      const name = `Take ${takeNum}`;
+      const take = await saveTake(uri, name, recDuration);
+      setTakes(prev => [take, ...prev]);
+      setActiveTab('takes');
+      Alert.alert('Saved!', `"${name}" saved (${formatDuration(recDuration)})`);
 
       // Reset waveform
       barAnims.forEach(a => a.setValue(0));
       setMeterLevels(new Array(BAR_COUNT).fill(0));
-    } catch (err) {
-      console.error('Stop recording error:', err);
-      Alert.alert('Error', 'Failed to save recording.');
+    } catch (err: any) {
+      console.error('[VoiceStudio] Stop recording error:', err?.message || err);
+      Alert.alert('Error', `Failed to save recording: ${err?.message || 'Unknown error'}. Check app storage permissions.`);
     }
   };
 

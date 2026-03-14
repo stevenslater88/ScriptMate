@@ -26,9 +26,17 @@ export interface DemoReel {
 }
 
 const ensureDir = async () => {
-  const info = await FileSystem.getInfoAsync(VOICE_DIR);
-  if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(VOICE_DIR, { intermediates: true });
+  try {
+    if (!FileSystem.documentDirectory) {
+      throw new Error('documentDirectory is not available');
+    }
+    const info = await FileSystem.getInfoAsync(VOICE_DIR);
+    if (!info.exists) {
+      await FileSystem.makeDirectoryAsync(VOICE_DIR, { intermediates: true });
+    }
+  } catch (err) {
+    console.error('[VoiceStorage] ensureDir failed:', err);
+    throw err;
   }
 };
 
@@ -39,6 +47,19 @@ export const saveTake = async (
   scriptId?: string,
   scriptTitle?: string,
 ): Promise<VoiceTake> => {
+  console.log('[VoiceStorage] saveTake called, tempUri:', tempUri?.substring(0, 80));
+
+  if (!tempUri) {
+    throw new Error('No recording URI provided');
+  }
+
+  // Verify source file exists
+  const sourceInfo = await FileSystem.getInfoAsync(tempUri);
+  if (!sourceInfo.exists) {
+    throw new Error(`Recording temp file does not exist: ${tempUri.substring(0, 80)}`);
+  }
+  console.log('[VoiceStorage] Source file exists, size:', (sourceInfo as any).size || 'unknown');
+
   await ensureDir();
   const id = `take_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   const ext = tempUri.includes('.wav') ? 'wav' : 'm4a';
@@ -46,6 +67,13 @@ export const saveTake = async (
   const permanentUri = `${VOICE_DIR}${filename}`;
 
   await FileSystem.copyAsync({ from: tempUri, to: permanentUri });
+
+  // Verify copy succeeded
+  const destInfo = await FileSystem.getInfoAsync(permanentUri);
+  if (!destInfo.exists) {
+    throw new Error('File copy appeared to succeed but destination file not found');
+  }
+  console.log('[VoiceStorage] Saved to:', permanentUri);
 
   const take: VoiceTake = {
     id,

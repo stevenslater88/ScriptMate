@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import Slider from '@react-native-community/slider';
 import { useScriptStore } from '../../store/scriptStore';
 import { 
@@ -83,11 +84,17 @@ export default function TeleprompterScreen() {
   // Request permissions
   useEffect(() => {
     const requestPermissions = async () => {
-      if (!cameraPermission?.granted) {
-        await requestCameraPermission();
-      }
-      if (!micPermission?.granted) {
-        await requestMicPermission();
+      try {
+        if (!cameraPermission?.granted) {
+          const camResult = await requestCameraPermission();
+          console.log('[Teleprompter] Camera permission result:', camResult?.status);
+        }
+        if (!micPermission?.granted) {
+          const micResult = await requestMicPermission();
+          console.log('[Teleprompter] Mic permission result:', micResult?.status);
+        }
+      } catch (err) {
+        console.error('[Teleprompter] Permission request error:', err);
       }
     };
     requestPermissions();
@@ -250,7 +257,8 @@ export default function TeleprompterScreen() {
         clearInterval(recordingTimer.current);
       }
       
-      Alert.alert('Recording Error', 'Failed to record video. Please try again.');
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Recording Error', `Failed to record: ${errMsg}. Check camera and storage permissions.`);
     }
   };
 
@@ -304,6 +312,13 @@ export default function TeleprompterScreen() {
     
     setIsSaving(true);
     try {
+      // Verify source file before attempting save
+      const sourceInfo = await FileSystem.getInfoAsync(recordedVideoUri);
+      if (!sourceInfo.exists) {
+        throw new Error('Recording file no longer exists. It may have been cleaned up by the system.');
+      }
+      console.log('[Teleprompter] Saving video, source size:', (sourceInfo as any).size || 'unknown');
+
       await saveRecording(
         recordedVideoUri,
         params.scriptId || '',
@@ -321,8 +336,9 @@ export default function TeleprompterScreen() {
           router.replace('/selftape');
         }}
       ]);
-    } catch (error) {
-      Alert.alert('Save Failed', 'Could not save the recording.');
+    } catch (error: any) {
+      console.error('[Teleprompter] Save failed:', error?.message || error);
+      Alert.alert('Save Failed', `Could not save: ${error?.message || 'Unknown error'}. Check storage permissions.`);
     } finally {
       setIsSaving(false);
     }
@@ -352,6 +368,19 @@ export default function TeleprompterScreen() {
         return { bottom: 180 };
     }
   };
+
+  // Permission loading state — hooks haven't returned status yet
+  if (cameraPermission === null || micPermission === null) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.permissionView}>
+          <ActivityIndicator size="large" color="#6366f1" />
+          <Text style={styles.permissionTitle}>Checking permissions...</Text>
+        </View>
+      </View>
+    );
+  }
 
   // Permission denied view
   if (!cameraPermission?.granted || !micPermission?.granted) {

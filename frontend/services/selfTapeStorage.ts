@@ -34,9 +34,17 @@ const generateFilename = (scriptTitle: string, sceneName: string): string => {
 
 // Ensure directory exists
 export const ensureDirectory = async (): Promise<void> => {
-  const dirInfo = await FileSystem.getInfoAsync(SELF_TAPE_DIR);
-  if (!dirInfo.exists) {
-    await FileSystem.makeDirectoryAsync(SELF_TAPE_DIR, { intermediates: true });
+  try {
+    if (!FileSystem.documentDirectory) {
+      throw new Error('documentDirectory is not available');
+    }
+    const dirInfo = await FileSystem.getInfoAsync(SELF_TAPE_DIR);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(SELF_TAPE_DIR, { intermediates: true });
+    }
+  } catch (err) {
+    console.error('[SelfTapeStorage] ensureDirectory failed:', err);
+    throw err;
   }
 };
 
@@ -49,6 +57,20 @@ export const saveRecording = async (
   sceneName: string,
   duration: number
 ): Promise<SelfTapeRecording> => {
+  console.log('[SelfTapeStorage] saveRecording called, tempUri:', tempUri?.substring(0, 80));
+
+  // Validate input
+  if (!tempUri) {
+    throw new Error('No recording URI provided');
+  }
+
+  // Verify source file exists
+  const sourceInfo = await FileSystem.getInfoAsync(tempUri);
+  if (!sourceInfo.exists) {
+    throw new Error(`Recording temp file does not exist: ${tempUri.substring(0, 80)}`);
+  }
+  console.log('[SelfTapeStorage] Source file exists, size:', (sourceInfo as any).size || 'unknown');
+
   await ensureDirectory();
   
   const id = `selftape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -60,6 +82,13 @@ export const saveRecording = async (
     from: tempUri,
     to: permanentUri,
   });
+
+  // Verify copy succeeded
+  const destInfo = await FileSystem.getInfoAsync(permanentUri);
+  if (!destInfo.exists) {
+    throw new Error('File copy appeared to succeed but destination file not found');
+  }
+  console.log('[SelfTapeStorage] Saved to:', permanentUri);
   
   const recording: SelfTapeRecording = {
     id,
