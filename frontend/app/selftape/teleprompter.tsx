@@ -37,9 +37,39 @@ export default function TeleprompterScreen() {
     character?: string;
   }>();
 
-  const { scripts } = useScriptStore();
+  const { scripts, fetchScript } = useScriptStore();
   const script = scripts.find(s => s.id === params.scriptId);
-  const scenes = script?.scenes || [{ name: 'Full Script', lines: script?.lines || [] }];
+  const [scriptLoading, setScriptLoading] = useState(!script);
+  const [scriptError, setScriptError] = useState<string | null>(null);
+
+  // If script not in store, fetch it
+  useEffect(() => {
+    if (script || !params.scriptId) {
+      setScriptLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setScriptLoading(true);
+      setScriptError(null);
+      try {
+        const result = await fetchScript(params.scriptId);
+        if (!cancelled && !result) {
+          setScriptError('Script not found. It may have been deleted.');
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setScriptError(err?.message || 'Failed to load script');
+        }
+      } finally {
+        if (!cancelled) setScriptLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [params.scriptId, script]);
+
+  const scenes = script?.scenes || (script?.lines ? [{ name: 'Full Script', lines: script.lines }] : []);
   const currentScene = scenes[parseInt(params.sceneIndex || '0')];
   const userCharacter = params.character || '';
   
@@ -75,7 +105,62 @@ export default function TeleprompterScreen() {
   const currentScrollPosition = useRef(0);
 
   const lines = currentScene?.lines || [];
-  
+
+  // --- GATE: Script loading / error / empty states (before anything else renders) ---
+
+  // Script loading state
+  if (scriptLoading) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.permissionView}>
+          <ActivityIndicator size="large" color="#6366f1" />
+          <Text style={styles.permissionTitle}>Loading script...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Script not found / error state
+  if (!script || scriptError) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.permissionView}>
+          <Ionicons name="document-text-outline" size={64} color="#ef4444" />
+          <Text style={styles.permissionTitle}>
+            {scriptError || 'Unable to load script for teleprompter'}
+          </Text>
+          <Text style={[styles.permissionText, { marginTop: 8 }]}>
+            {!params.scriptId ? 'No script ID provided.' : `Script ID: ${params.scriptId.substring(0, 12)}...`}
+          </Text>
+          <TouchableOpacity style={styles.permissionButton} onPress={() => router.back()}>
+            <Text style={styles.permissionButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // No content in script
+  if (lines.length === 0) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.permissionView}>
+          <Ionicons name="document-text-outline" size={64} color="#f59e0b" />
+          <Text style={styles.permissionTitle}>No script content found</Text>
+          <Text style={styles.permissionText}>
+            This script has no lines to display. Try re-uploading it.
+          </Text>
+          <TouchableOpacity style={styles.permissionButton} onPress={() => router.back()}>
+            <Text style={styles.permissionButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   // Calculate total scroll height based on lines
   const lineHeight = fontSize + 16;
   const totalContentHeight = lines.length * lineHeight;

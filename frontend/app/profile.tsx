@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
 import { useAuth } from '../contexts/AuthContext';
 import { useScriptStore } from '../store/scriptStore';
 import { isWatermarkEnabled, setWatermarkEnabled } from '../services/watermarkService';
@@ -290,6 +291,11 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
         </View>
+
+        {/* Build Stamp */}
+        <Text style={styles.buildStamp} data-testid="build-stamp">
+          ScriptM8 v{Constants.expoConfig?.version || '1.1.0'} ({Constants.expoConfig?.android?.versionCode || Constants.expoConfig?.ios?.buildNumber || '---'})
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -549,5 +555,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     overflow: 'hidden',
+  },
+  buildStamp: {
+    textAlign: 'center',
+    color: '#4b5563',
+    fontSize: 11,
+    marginTop: 24,
+    marginBottom: 16,
   },
 });
