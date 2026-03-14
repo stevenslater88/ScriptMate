@@ -1018,6 +1018,36 @@ Additionally, the file upload path (`handleFilePick`) never sent `user_id` at al
 | `store/scriptStore.ts` → `fetchScripts` | `get().deviceId \|\| 'default'` → `await getDeviceId()` |
 | `app/upload.tsx` → `handleFilePick` | Added `getDeviceId()` helper + `formData.append('user_id', userId)` + `user_id: userId` in base64 fallback |
 
+
+---
+
+## Stabilization: Teleprompter Fix + Build Stamp (Feb 2026)
+
+### Status: Complete & Tested (iteration_22.json — 21/21 pass)
+
+### 1. Root Cause Found
+`teleprompter.tsx` looked up the script via `scripts.find(s => s.id === params.scriptId)` but **never called `fetchScript()`**. If the script wasn't already in the Zustand store's `scripts[]` array (e.g., user navigated directly, app restarted, or script was loaded via a different path), the lookup returned `undefined`. With `script === undefined`, `lines` became `[]`, the camera rendered, but the teleprompter overlay had nothing to display → **blank screen**.
+
+### 2. Exact Fix Applied
+- Added `useEffect` that calls `fetchScript(scriptId)` when script is not in the store
+- Added `scriptLoading` state (initialized to `!script`) → shows "Loading script..." spinner
+- Added `scriptError` state → shows "Unable to load script for teleprompter" with Go Back button
+- Added empty content gate → shows "No script content found" if `lines.length === 0`
+- All three gates render BEFORE camera permission checks
+
+### 3. Files Changed
+| File | Change |
+|------|--------|
+| `frontend/app/selftape/teleprompter.tsx` | fetchScript call + loading/error/empty states |
+| `frontend/app/profile.tsx` | Build stamp: `ScriptM8 v1.1.0 (1041)` at bottom of profile |
+| `frontend/app.json` | versionCode bumped to 1041 |
+
+### 4. Build Stamp
+- Location: Bottom of **Profile** screen (scrollable, non-intrusive)
+- Format: `ScriptM8 v1.1.0 (1041)`
+- Reads version and versionCode from `expo-constants` → always matches the compiled build
+
+
 ### Why This Fixes It
 `getDeviceId()` reads directly from AsyncStorage (or generates and persists a new one). It works instantly without waiting for `initializeUser()`. Every script operation now uses the same consistent deviceId.
 
