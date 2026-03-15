@@ -1,10 +1,12 @@
 /**
- * API Configuration — HARDCODED production backend URL.
- * No process.env, no Constants.expoConfig, no resolve function.
- * This literal string is compiled directly into the JS bundle.
+ * API Configuration — Re-exports from appConfig for backward compatibility.
+ * 
+ * SINGLE SOURCE OF TRUTH: appConfig.ts
+ * All backend URL references now flow through AppConfig.BACKEND_URL
  */
+import { AppConfig } from './appConfig';
 
-export const API_BASE_URL = 'https://android-upload-test.preview.emergentagent.com';
+export const API_BASE_URL = AppConfig.BACKEND_URL;
 export const API_TIMEOUT = 15000;
 
 /**

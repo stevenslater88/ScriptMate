@@ -14,10 +14,11 @@ import {
   checkProductAvailability,
 } from '../services/diagnosticsService';
 import { initSentry, setSentryUserId, captureRevenueCatError } from '../services/sentryService';
+import { AppConfig } from '../services/appConfig';
 
 // BUILD FINGERPRINT — unique string to prove this code is in the compiled build.
 // If you see this on the debug screen, the code is present. If not, the build is stale.
-export const BUILD_FINGERPRINT = 'SM8-FIX-0315A';
+export const BUILD_FINGERPRINT = 'SM8-FIX-0316A';
 
 export default function RootLayout() {
   // Initialize Sentry for crash reporting
@@ -28,7 +29,7 @@ export default function RootLayout() {
   // Debug log on startup — includes fingerprint to verify code is present
   useEffect(() => {
     console.log(`[ScriptM8] BUILD_FINGERPRINT: ${BUILD_FINGERPRINT}`);
-    console.log(`[ScriptM8] Backend URL: https://android-upload-test.preview.emergentagent.com`);
+    console.log(`[ScriptM8] Backend URL: ${AppConfig.BACKEND_URL}`);
     isDevTestMode().then(dm => console.log(`[ScriptM8] Dev Test Mode: ${dm}`));
   }, []);
 
