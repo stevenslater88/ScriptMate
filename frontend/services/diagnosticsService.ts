@@ -13,7 +13,7 @@ export const BUILD_FINGERPRINT = 'SM8-FIX-0315A';
 // Feature Flags - HARDCODED for stabilization mode
 export const FeatureFlags = {
   PREMIUM_ENABLED: true,
-  SHOW_LIFETIME: true,
+  SHOW_LIFETIME: false,
   PAYWALL_VARIANT: 'A',
 };
 

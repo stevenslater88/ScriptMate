@@ -60,7 +60,7 @@ module.exports = ({ config }) => {
       ELEVENLABS_API_KEY: ELEVENLABS_API_KEY,
       // Feature flags
       PREMIUM_ENABLED: process.env.EXPO_PUBLIC_PREMIUM_ENABLED !== 'false',
-      SHOW_LIFETIME: process.env.EXPO_PUBLIC_SHOW_LIFETIME !== 'false',
+      SHOW_LIFETIME: process.env.EXPO_PUBLIC_SHOW_LIFETIME === 'true',
       PAYWALL_VARIANT: process.env.EXPO_PUBLIC_PAYWALL_VARIANT || 'A',
     },
   };

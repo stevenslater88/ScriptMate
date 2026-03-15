@@ -45,9 +45,14 @@ export default function DailyDrillScreen() {
       console.log(`[Drill] Loaded: ${drillRes.data?.prompt?.substring(0, 40)}`);
     } catch (error: any) {
       const errMsg = error?.message || 'Unknown error';
+      const status = error?.response?.status;
       const serverMsg = error?.response?.data?.detail;
-      console.error(`[Drill] Failed: ${errMsg}, server=${serverMsg}, url=${API_BASE_URL || 'MISSING'}`);
-      setLoadError(serverMsg || errMsg);
+      console.error(`[Drill] Failed: status=${status}, msg=${errMsg}, server=${serverMsg}, url=${API_BASE_URL || 'MISSING'}`);
+      if (status) {
+        setLoadError(`Request failed (${status}): ${serverMsg || errMsg}`);
+      } else {
+        setLoadError(`Unable to reach server: ${errMsg}`);
+      }
     } finally {
       setLoading(false);
     }
