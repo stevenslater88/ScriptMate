@@ -10,14 +10,16 @@ import Purchases, {
 import Constants from 'expo-constants';
 
 // RevenueCat API Keys — process.env (build-time) then Constants.extra (runtime fallback)
+// RevenueCat API Keys — process.env (build-time) then Constants.extra (runtime fallback)
+// then hardcoded fallback (ensures key is NEVER empty in any build profile)
 const REVENUECAT_APPLE_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY ||
   (Constants.expoConfig?.extra?.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY as string) ||
-  '';
+  'appl_YOUR_IOS_KEY_HERE';
 const REVENUECAT_GOOGLE_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY ||
   (Constants.expoConfig?.extra?.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY as string) ||
-  '';
+  'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT';
 
 // Entitlement identifier that unlocks premium features
 export const PREMIUM_ENTITLEMENT_ID = 'ScriptM8 Pro';

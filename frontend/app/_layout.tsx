@@ -19,14 +19,15 @@ import {
 import { initSentry, setSentryUserId, captureRevenueCatError } from '../services/sentryService';
 
 // RevenueCat API Keys — read from process.env (build-time) then Constants.extra (runtime fallback)
+// then hardcoded fallback (same pattern as apiConfig.ts PRODUCTION_FALLBACK)
 const REVENUECAT_IOS_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY ||
   (Constants.expoConfig?.extra?.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY as string) ||
-  '';
+  'appl_YOUR_IOS_KEY_HERE';
 const REVENUECAT_ANDROID_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY ||
   (Constants.expoConfig?.extra?.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY as string) ||
-  '';
+  'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT';
 
 export default function RootLayout() {
   // Initialize Sentry for crash reporting
