@@ -88,7 +88,8 @@ function resolveBoolean(envKey: string, hardcoded: boolean): boolean {
 }
 
 // ─── Resolve all config values at module load time ─────────────────────────
-const _backendUrl = resolve('EXPO_PUBLIC_BACKEND_URL', DEFAULTS.BACKEND_URL);
+// BACKEND_URL: HARDCODED ONLY — no env resolution to prevent stale env overrides
+const _backendUrl = { value: DEFAULTS.BACKEND_URL, source: 'hardcoded' as ConfigSource };
 const _rcGoogleKey = resolve('EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY', DEFAULTS.REVENUECAT_GOOGLE_API_KEY);
 const _rcAppleKey = resolve('EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY', DEFAULTS.REVENUECAT_APPLE_API_KEY);
 const _sentryDsn = resolve('EXPO_PUBLIC_SENTRY_DSN', DEFAULTS.SENTRY_DSN);
