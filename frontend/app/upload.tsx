@@ -274,10 +274,13 @@ export default function UploadScreen() {
       console.error('[Upload] Full error:', error);
 
       let msg = 'Failed to upload file';
+      const endpoint = `${API_BASE_URL}/api/scripts/upload`;
       if (error?.code === 'ECONNABORTED' || errMsg.includes('timeout')) {
         msg = 'Upload timed out. Please check your connection and try again.';
       } else if (errMsg === 'Network Error' || !error?.response) {
-        msg = `Unable to reach server (${API_BASE_URL ? 'URL set' : 'URL MISSING'}).\n\nURL: ${API_BASE_URL}/api/scripts/upload\nError: ${errMsg}\n\nCheck your internet connection.`;
+        msg = `Unable to reach server.\n\nEndpoint: ${endpoint}\nError: ${errMsg}\n\nCheck your internet connection.`;
+      } else if (status === 404) {
+        msg = `Endpoint not found (404).\n\nURL: ${endpoint}\n\nThis may indicate a backend/URL mismatch.`;
       } else if (status === 413) {
         msg = 'File is too large. Please try a smaller file.';
       } else if (status === 415) {
@@ -287,7 +290,7 @@ export default function UploadScreen() {
       } else if (serverMsg) {
         msg = serverMsg;
       } else {
-        msg = `Upload failed (${status || 'no status'}): ${errMsg}`;
+        msg = `Upload failed (${status || 'no status'}): ${errMsg}\n\nEndpoint: ${endpoint}`;
       }
       Alert.alert('Upload Failed', msg);
     }
