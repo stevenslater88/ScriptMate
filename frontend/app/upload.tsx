@@ -49,6 +49,7 @@ export default function UploadScreen() {
 
   const handleFilePick = async () => {
     try {
+      console.log('[Upload] Opening document picker...');
       const result = await DocumentPicker.getDocumentAsync({
         type: [
           'application/pdf',
@@ -60,25 +61,40 @@ export default function UploadScreen() {
         copyToCacheDirectory: true,
       });
 
-      if (result.canceled) return;
+      if (result.canceled) {
+        console.log('[Upload] Picker cancelled by user');
+        return;
+      }
 
       const file = result.assets[0];
+      if (!file || !file.uri) {
+        Alert.alert('Error', 'No file was returned from the file picker. Please try again.');
+        return;
+      }
       const filename = file.name.toLowerCase();
+      console.log(`[Upload] File picked: name=${file.name}, mime=${file.mimeType}, size=${file.size}, uri=${file.uri.substring(0, 80)}`);
       setLoading(true);
 
       // Text files can be read directly
       if (filename.endsWith('.txt') || filename.endsWith('.text')) {
         try {
           const content = await FileSystem.readAsStringAsync(file.uri);
+          if (!content || content.trim().length === 0) {
+            Alert.alert('Empty File', 'The selected file appears to be empty.');
+            setLoading(false);
+            return;
+          }
           setScriptText(content);
           if (!title) {
             setTitle(file.name.replace(/\.[^/.]+$/, ''));
           }
+          setLoading(false);
+          Alert.alert('File Loaded', `"${file.name}" loaded. Review the text below and tap Save Script.`);
         } catch (readErr: any) {
           console.error(`[Upload] Failed to read text file: ${readErr?.message}`);
           Alert.alert('Error', `Could not read file: ${readErr?.message || 'Unknown error'}`);
+          setLoading(false);
         }
-        setLoading(false);
       } else {
         // PDF, Word docs, and other files - upload to backend for parsing
         const formData = new FormData();
@@ -189,9 +205,12 @@ export default function UploadScreen() {
       return;
     }
 
+    console.log(`[Upload] handleSubmit: title="${title.trim().substring(0, 30)}", textLength=${scriptText.trim().length}`);
     setLoading(true);
     try {
+      console.log('[Upload] Calling createScript...');
       const script = await createScript(title.trim(), scriptText.trim());
+      console.log(`[Upload] createScript returned: ${script ? `id=${script.id}` : 'null'}`);
       if (script) {
         Alert.alert('Success', 'Script created and parsed successfully!', [
           {
@@ -199,6 +218,14 @@ export default function UploadScreen() {
             onPress: () => router.replace(`/script/${script.id}`),
           },
         ]);
+      } else {
+        // createScript catches errors internally and returns null — surface this to user
+        const storeError = useScriptStore.getState().error;
+        console.error(`[Upload] createScript returned null, store error: ${storeError}`);
+        Alert.alert(
+          'Save Failed',
+          storeError || 'Could not save script. Please check your internet connection and try again.'
+        );
       }
     } catch (error: any) {
       const errMsg = error?.message || 'Unknown error';
