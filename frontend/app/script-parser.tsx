@@ -75,6 +75,7 @@ export default function ScriptParserScreen() {
       return;
     }
 
+    console.log(`[ScriptParser] handleSave: title="${title?.substring(0, 30)}", char="${myCharacter}", textLen=${rawText?.length || 0}`);
     setSaving(true);
     try {
       // Save parser preferences
@@ -85,7 +86,10 @@ export default function ScriptParserScreen() {
       }));
 
       // Convert parsed lines to the backend format and create script
+      console.log('[ScriptParser] Calling createScript...');
       const script = await createScript(title, rawText);
+      console.log(`[ScriptParser] createScript returned: ${script ? `id=${script.id}` : 'null'}`);
+
       if (script) {
         // Update with the user character selection
         const { updateScript } = useScriptStore.getState();
@@ -94,8 +98,13 @@ export default function ScriptParserScreen() {
         Alert.alert('Script Ready!', `"${title}" saved with ${myCharacter} as your character.`, [
           { text: 'Start Rehearsal', onPress: () => router.replace(`/script/${script.id}`) },
         ]);
+      } else {
+        const storeError = useScriptStore.getState().error;
+        console.error(`[ScriptParser] createScript returned null. Store error: ${storeError}`);
+        Alert.alert('Save Failed', storeError || 'Could not save script. Please check your connection and try again.');
       }
     } catch (err: any) {
+      console.error(`[ScriptParser] handleSave error: ${err?.message || err}`);
       Alert.alert('Error', err.message || 'Failed to save script');
     } finally {
       setSaving(false);
