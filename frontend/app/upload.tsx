@@ -210,11 +210,14 @@ export default function UploadScreen() {
         formData.append('user_id', userId);
 
         console.log('[Upload] Sending FormData to server...');
+        const uploadUrl = `${API_BASE_URL}/api/scripts/upload`;
+        const base64Url = `${API_BASE_URL}/api/scripts/upload-base64`;
+        console.log(`[Upload] Target URL: ${uploadUrl}`);
         
         let response;
         try {
           response = await axios.post(
-            `${API_BASE_URL}/api/scripts/upload`,
+            uploadUrl,
             formData,
             {
               timeout: UPLOAD_TIMEOUT,
@@ -223,9 +226,10 @@ export default function UploadScreen() {
           );
           console.log('[Upload] FormData upload succeeded');
         } catch (formDataError: any) {
+          console.log(`[Upload] FormData failed: ${formDataError?.response?.status || 'no status'} - ${formDataError?.message}`);
           // Fallback: if FormData upload fails on Android, try base64 upload
           if (Platform.OS === 'android') {
-            console.log('[Upload] FormData failed, trying base64 fallback...', formDataError?.message);
+            console.log(`[Upload] Trying base64 fallback to: ${base64Url}`);
             try {
               const base64Data = await withTimeout(
                 FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 }),
@@ -234,7 +238,7 @@ export default function UploadScreen() {
               );
               console.log(`[Upload] Read ${base64Data?.length || 0} base64 chars, posting to upload-base64...`);
               response = await axios.post(
-                `${API_BASE_URL}/api/scripts/upload-base64`,
+                base64Url,
                 {
                   title: title || (file.name || 'Untitled').replace(/\.[^/.]+$/, ''),
                   filename: file.name || 'uploaded_file',
@@ -270,17 +274,17 @@ export default function UploadScreen() {
       const status = error?.response?.status;
       const serverMsg = error?.response?.data?.detail;
       const errMsg = error?.message || 'Unknown error';
-      console.error(`[Upload] Failed: status=${status}, msg=${errMsg}, server=${serverMsg}, url=${API_BASE_URL}/api/scripts/upload`);
+      const requestUrl = error?.config?.url || `${API_BASE_URL}/api/scripts/upload`;
+      console.error(`[Upload] Failed: status=${status}, msg=${errMsg}, server=${serverMsg}, requestUrl=${requestUrl}`);
       console.error('[Upload] Full error:', error);
 
       let msg = 'Failed to upload file';
-      const endpoint = `${API_BASE_URL}/api/scripts/upload`;
       if (error?.code === 'ECONNABORTED' || errMsg.includes('timeout')) {
         msg = 'Upload timed out. Please check your connection and try again.';
       } else if (errMsg === 'Network Error' || !error?.response) {
-        msg = `Unable to reach server.\n\nEndpoint: ${endpoint}\nError: ${errMsg}\n\nCheck your internet connection.`;
+        msg = `Unable to reach server.\n\nEndpoint: ${requestUrl}\nError: ${errMsg}\n\nCheck your internet connection.`;
       } else if (status === 404) {
-        msg = `Endpoint not found (404).\n\nURL: ${endpoint}\n\nThis may indicate a backend/URL mismatch.`;
+        msg = `Endpoint not found (404).\n\nURL: ${requestUrl}\n\nBackend may not have this route.`;
       } else if (status === 413) {
         msg = 'File is too large. Please try a smaller file.';
       } else if (status === 415) {
@@ -290,7 +294,7 @@ export default function UploadScreen() {
       } else if (serverMsg) {
         msg = serverMsg;
       } else {
-        msg = `Upload failed (${status || 'no status'}): ${errMsg}\n\nEndpoint: ${endpoint}`;
+        msg = `Upload failed (${status || 'no status'}): ${errMsg}\n\nEndpoint: ${requestUrl}`;
       }
       Alert.alert('Upload Failed', msg);
     }
