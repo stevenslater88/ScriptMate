@@ -286,7 +286,8 @@ export default function SupportScreen() {
         <>
           {/* App Info */}
           <View style={styles.diagSection}>
-            <Text style={styles.diagSectionTitle}>📱 App Info</Text>
+            <Text style={styles.diagSectionTitle}>App Info</Text>
+            <DiagRow label="Build Fingerprint" value={'SM8-FIX-0315A'} />
             <DiagRow label="Version" value={diagnostics.appVersion} />
             <DiagRow label="Build" value={diagnostics.buildNumber} />
             <DiagRow label="Bundle ID" value={diagnostics.bundleId} />
