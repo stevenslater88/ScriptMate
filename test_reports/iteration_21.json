@@ -26,7 +26,7 @@
   "seed_data_creation": "Test scripts created and cleaned up automatically",
   "retest_needed": false,
   "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "deviceId race condition fix verified. Expo React Native app (not browser-testable). Backend APIs functional at https://upload-drill-pay.preview.emergentagent.com. All script CRUD operations now properly use getDeviceId() directly from AsyncStorage.",
+  "context_for_next_testing_agent": "deviceId race condition fix verified. Expo React Native app (not browser-testable). Backend APIs functional at https://device-validation.preview.emergentagent.com. All script CRUD operations now properly use getDeviceId() directly from AsyncStorage.",
   "fix_verification": {
     "CRITICAL_FIX_1_createScript": {
       "file": "frontend/store/scriptStore.ts",

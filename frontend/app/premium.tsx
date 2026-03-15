@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { AppConfig } from '../services/appConfig';
 import { useScriptStore } from '../store/scriptStore';
 import { useRevenueCat } from '../hooks/useRevenueCat';
 import * as Localization from 'expo-localization';
@@ -100,8 +101,8 @@ export default function PremiumScreen() {
   const monthlyPlan = subscriptionPlans?.monthly;
   const yearlyPlan = subscriptionPlans?.yearly;
 
-  // Show lifetime option based on env config
-  const showLifetime = process.env.EXPO_PUBLIC_SHOW_LIFETIME === 'true';
+  // Show lifetime option based on centralized config
+  const showLifetime = AppConfig.SHOW_LIFETIME;
 
   // Check if offerings are available (crash-safe check)
   const hasOfferings = isNative 

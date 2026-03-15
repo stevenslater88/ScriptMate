@@ -6,28 +6,15 @@ import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { AuthProvider } from '../contexts/AuthContext';
 import { logError } from '../services/debugService';
 import { markRevenueCatConfigured } from '../services/revenuecat';
-import { API_BASE_URL } from '../services/apiConfig';
 import { isDevTestMode } from '../services/devTestMode';
-import Constants from 'expo-constants';
+import { AppConfig } from '../services/appConfig';
 import { 
   logRevenueCatInitError, 
   updateOfferingsCache, 
   updateCustomerInfoCache,
   checkProductAvailability,
-  FeatureFlags 
 } from '../services/diagnosticsService';
 import { initSentry, setSentryUserId, captureRevenueCatError } from '../services/sentryService';
-
-// RevenueCat API Keys — read from process.env (build-time) then Constants.extra (runtime fallback)
-// then hardcoded fallback (same pattern as apiConfig.ts PRODUCTION_FALLBACK)
-const REVENUECAT_IOS_API_KEY =
-  process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY ||
-  (Constants.expoConfig?.extra?.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY as string) ||
-  'appl_YOUR_IOS_KEY_HERE';
-const REVENUECAT_ANDROID_API_KEY =
-  process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY ||
-  (Constants.expoConfig?.extra?.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY as string) ||
-  'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT';
 
 export default function RootLayout() {
   // Initialize Sentry for crash reporting
@@ -37,7 +24,7 @@ export default function RootLayout() {
 
   // Debug log: backend URL and dev mode on startup
   useEffect(() => {
-    console.log(`[ScriptM8] Backend URL: ${API_BASE_URL}`);
+    console.log(`[ScriptM8] Backend URL: ${AppConfig.BACKEND_URL}`);
     isDevTestMode().then(dm => console.log(`[ScriptM8] Dev Test Mode: ${dm}`));
   }, []);
 
@@ -51,7 +38,7 @@ export default function RootLayout() {
       }
 
       // Check feature flag
-      if (!FeatureFlags.PREMIUM_ENABLED) {
+      if (!AppConfig.PREMIUM_ENABLED) {
         console.log('[RevenueCat] Premium disabled via feature flag');
         return;
       }
@@ -67,7 +54,7 @@ export default function RootLayout() {
         }
 
         // Platform-specific configuration with crash protection
-        const apiKey = Platform.OS === 'ios' ? REVENUECAT_IOS_API_KEY : REVENUECAT_ANDROID_API_KEY;
+        const apiKey = AppConfig.REVENUECAT_API_KEY;
         
         console.log(`[RevenueCat] Platform: ${Platform.OS}, Key prefix: ${apiKey ? apiKey.substring(0, 5) + '***' : 'EMPTY'}, Key length: ${apiKey.length}`);
 

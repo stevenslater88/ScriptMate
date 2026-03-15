@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import { Platform } from 'react-native';
+import { AppConfig } from './appConfig';
 
 // Initialize Sentry - with full crash protection
 export const initSentry = () => {
@@ -10,7 +11,7 @@ export const initSentry = () => {
   }
 
   try {
-    const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+    const dsn = AppConfig.SENTRY_DSN;
     
     // Skip if no DSN configured
     if (!dsn) {

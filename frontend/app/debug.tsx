@@ -172,6 +172,22 @@ export default function DebugScreen() {
           <InfoRow label="Premium" value={rcDiag?.isPremium ? 'Yes' : 'No'} />
         </View>
 
+        {/* Config Audit — shows where each critical value was resolved from */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Config Audit</Text>
+          <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 8 }}>
+            Source: env = Metro build-time | extra = app.config/app.json | hardcoded = fallback
+          </Text>
+          {rcDiag?.configAudit?.map((item, idx) => (
+            <InfoRow
+              key={idx}
+              label={`${item.key} [${item.source}]`}
+              value={item.resolved}
+              isError={!item.present}
+            />
+          ))}
+        </View>
+
         {/* Dev Test Mode */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Dev Test Mode</Text>

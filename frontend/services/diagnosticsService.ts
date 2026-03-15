@@ -4,13 +4,13 @@ import * as Device from 'expo-device';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import Purchases, { PurchasesOfferings, CustomerInfo } from 'react-native-purchases';
-import Constants from 'expo-constants';
+import { AppConfig, getConfigAudit, ConfigAudit } from './appConfig';
 
-// Feature Flags - controlled via environment variables
+// Feature Flags - resolved from centralized config (env → extra → hardcoded)
 export const FeatureFlags = {
-  PREMIUM_ENABLED: process.env.EXPO_PUBLIC_PREMIUM_ENABLED !== 'false', // Default true
-  SHOW_LIFETIME: process.env.EXPO_PUBLIC_SHOW_LIFETIME !== 'false', // Default true
-  PAYWALL_VARIANT: process.env.EXPO_PUBLIC_PAYWALL_VARIANT || 'A',
+  PREMIUM_ENABLED: AppConfig.PREMIUM_ENABLED,
+  SHOW_LIFETIME: AppConfig.SHOW_LIFETIME,
+  PAYWALL_VARIANT: AppConfig.PAYWALL_VARIANT,
 };
 
 // Expected product IDs
@@ -85,14 +85,11 @@ export const updateCustomerInfoCache = (info: CustomerInfo | null) => {
   diagnosticsState.customerInfo = info;
 };
 
-// Get API key prefix (safe to show)
+// Get API key prefix (safe to show) — uses centralized AppConfig
 const getApiKeyPrefix = (): string => {
-  const extra = Constants.expoConfig?.extra || {};
-  const iosKey = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || (extra.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY as string) || '';
-  const androidKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || (extra.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY as string) || '';
-  const key = Platform.OS === 'ios' ? iosKey : androidKey;
+  const key = AppConfig.REVENUECAT_API_KEY;
   
-  if (!key) return 'Not configured';
+  if (!key || key.length < 5) return 'Not configured';
   if (key.startsWith('goog_')) return `goog_${'*'.repeat(8)}`;
   if (key.startsWith('appl_')) return `appl_${'*'.repeat(8)}`;
   if (key.startsWith('test_')) return `test_${'*'.repeat(8)}`;
@@ -178,6 +175,9 @@ export interface DiagnosticsInfo {
   // Entitlements
   isPremium: boolean;
   activeEntitlements: string[];
+
+  // Config Audit
+  configAudit: ConfigAudit[];
 }
 
 // Get full diagnostics
@@ -241,6 +241,9 @@ export const getDiagnostics = async (): Promise<DiagnosticsInfo> => {
     // Entitlements
     isPremium,
     activeEntitlements,
+
+    // Config Audit
+    configAudit: getConfigAudit(),
   };
 };
 
@@ -303,6 +306,9 @@ export const formatDiagnosticsText = async (): Promise<string> => {
     `  PREMIUM_ENABLED: ${diag.featureFlags.PREMIUM_ENABLED}`,
     `  SHOW_LIFETIME: ${diag.featureFlags.SHOW_LIFETIME}`,
     `  PAYWALL_VARIANT: ${diag.featureFlags.PAYWALL_VARIANT}`,
+    '',
+    '--- Config Audit ---',
+    ...diag.configAudit.map(c => `  ${c.key}: ${c.resolved} [source: ${c.source}] ${c.present ? '' : 'MISSING'}`),
     '',
     '=== End Diagnostics ===',
   ];

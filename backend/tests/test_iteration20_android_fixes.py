@@ -12,7 +12,7 @@ import os
 import uuid
 
 # Get base URL from environment
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://upload-drill-pay.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://device-validation.preview.emergentagent.com').rstrip('/')
 
 # Test prefix for isolation
 TEST_PREFIX = f"TEST_iteration20_{uuid.uuid4().hex[:8]}"
