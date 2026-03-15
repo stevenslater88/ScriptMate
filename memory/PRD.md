@@ -1,60 +1,36 @@
 # ScriptM8 — Product Requirements Document
 
+## Status: STABILIZATION MODE
+
 ## Original Problem Statement
-ScriptM8 is an AI-powered script learning app for actors (Expo/React Native + FastAPI). The app is in **stabilization mode** — core features (script upload, save, teleprompter, premium access) are broken on installed Android builds due to environment variables not being compiled into the production EAS build.
+ScriptM8 is an AI-powered script learning app for actors (Expo SDK 54 / React Native 0.81.5 + FastAPI). Core features are broken on installed Android builds because environment variables are not being compiled into the production build.
 
 ## Root Cause (Confirmed)
-**Expo SDK 54 known regression** (GitHub #36503, #23812): `process.env.EXPO_PUBLIC_*` variables fail to inline correctly during Metro bundling in production builds. Metro replaces references with broken code like `_env2.env.EXPO_PUBLIC_*` that evaluates to `undefined` at runtime.
+1. **Expo SDK 54 `process.env.EXPO_PUBLIC_*` regression** (GitHub #36503): Metro bundler fails to inline env vars in production builds.
+2. **`Constants.expoConfig.extra` delivery broken**: Config generated correctly at build time (verified via `getConfig()`), but at runtime only `["eas","router"]` keys are present — custom keys are stripped during delivery.
+3. **Previous `||` fallback chains with hardcoded defaults**: Should have worked but 3 builds (1046, 1047, 1056) all still failed. Build fingerprint was added to definitively prove whether new code is in the build.
 
-Additionally, `Constants.expoConfig.extra` is unreliable — in the web preview it only contains `["eas","router"]` keys, not the custom config values from `app.json`. The Emergent platform may also modify `app.json` during builds (confirmed: package name is platform-generated).
-
-Previous fix attempts using `||` fallback chains (`process.env || Constants.extra || hardcoded`) failed because both `process.env` AND `Constants.extra` returned non-string/empty values that bypassed simple `||` truthiness checks.
-
-## Architecture
-- **Frontend**: Expo SDK 54 (React Native 0.81.5), TypeScript, Expo Router, Zustand
-- **Backend**: FastAPI, MongoDB
-- **Builds**: Expo Application Services (EAS)
-- **Subscriptions**: RevenueCat (react-native-purchases ^9.7.6)
-- **Crash Reporting**: Sentry
-- **TTS**: ElevenLabs
-
-## What's Been Implemented
-
-### Current Session — Config Centralization Fix
-**Root cause**: Expo SDK 54 `process.env.EXPO_PUBLIC_*` inlining regression + unreliable `Constants.expoConfig.extra`
-
-**Fix (3-layer defense)**:
-1. **`app.config.js` (NEW)** — Runs at build time in Node.js context during `expo prebuild`. Reads real OS env vars (set by EAS `env` block) with hardcoded fallbacks. Embeds values into `Constants.expoConfig.extra` under both full and short key names.
-2. **`services/appConfig.ts` (NEW)** — Single source of truth for ALL config. Resolution: `Constants.expoConfig.extra` (most reliable) → `process.env` (unreliable SDK 53+) → hardcoded literal. Uses strict `typeof === 'string'` validation, not `||` truthiness. Fires startup CONFIG AUDIT log showing resolved values and sources.
-3. **All 10 consumer files migrated** to use `AppConfig` instead of scattered `process.env` calls.
+## Current Fix (Build fingerprint SM8-FIX-0315A, versionCode 1060)
+**Approach**: Zero abstraction. All critical config values are literal strings in source files. No `process.env`, no `Constants.expoConfig`, no resolve functions, no import chains for the critical path.
 
 **Files changed**:
-| File | Change |
-|------|--------|
-| `services/appConfig.ts` | **NEW** — Centralized config with 3-layer resolution |
-| `app.config.js` | **NEW** — Build-time config embedding |
-| `services/apiConfig.ts` | Delegates to `AppConfig.BACKEND_URL` |
-| `contexts/AuthContext.tsx` | Fixed: was missing backend URL fallback entirely |
-| `app/_layout.tsx` | Uses `AppConfig.REVENUECAT_API_KEY` and `AppConfig.PREMIUM_ENABLED` |
-| `services/revenuecat.ts` | Uses `AppConfig` for RC keys |
-| `app/premium.tsx` | Fixed: `SHOW_LIFETIME` was using broken `=== 'true'` check |
-| `services/sentryService.ts` | Uses `AppConfig.SENTRY_DSN` |
-| `services/elevenLabsService.ts` | Uses `AppConfig.ELEVENLABS_API_KEY` |
-| `services/diagnosticsService.ts` | Uses `AppConfig` for flags + RC display, added Config Audit |
-| `app/debug.tsx` | Added Config Audit section showing resolution sources |
-| `app.json` | Bumped versionCode to 1050 |
+- `app/_layout.tsx` — RC key is inline string `'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT'`, build fingerprint `SM8-FIX-0315A`
+- `services/apiConfig.ts` — Backend URL is inline string, no imports
+- `contexts/AuthContext.tsx` — Backend URL is inline string, no imports  
+- `services/diagnosticsService.ts` — Build fingerprint, hardcoded RC key display
+- `app/debug.tsx` — Shows build fingerprint prominently
+- `metro.config.js` — Removed persistent FileStore cache
+- `app.json` — versionCode 1060
 
 ## Pending — User Device Verification (P0)
-Build from current code → install on Android → verify:
-1. Build stamp shows `1050` (confirms new code)
-2. Debug screen → Config Audit shows values with `[source]` — none "MISSING"
-3. Logcat shows `[AppConfig] ===== CONFIG AUDIT =====` at startup
-4. RevenueCat shows `goog_****` (not "Not configured")
-5. File upload works
-6. Save & Start works
+Build from current code and check:
+1. Debug screen shows `Build Fingerprint: SM8-FIX-0315A`
+2. If fingerprint is present → code IS in the build
+3. If fingerprint is absent → code is NOT in the build (build pipeline issue)
+4. If fingerprint present AND RC still fails → runtime issue beyond config injection
 
 ## Upcoming Tasks (P1)
-- Stabilize Self-Tape feature (camera init, recording, saving)
+- Stabilize Self-Tape feature
 
 ## Future / Backlog
 - Password protection for shared casting links

@@ -7,7 +7,6 @@ import { AuthProvider } from '../contexts/AuthContext';
 import { logError } from '../services/debugService';
 import { markRevenueCatConfigured } from '../services/revenuecat';
 import { isDevTestMode } from '../services/devTestMode';
-import { AppConfig } from '../services/appConfig';
 import { 
   logRevenueCatInitError, 
   updateOfferingsCache, 
@@ -16,19 +15,26 @@ import {
 } from '../services/diagnosticsService';
 import { initSentry, setSentryUserId, captureRevenueCatError } from '../services/sentryService';
 
+// BUILD FINGERPRINT — unique string to prove this code is in the compiled build.
+// If you see this on the debug screen, the code is present. If not, the build is stale.
+export const BUILD_FINGERPRINT = 'SM8-FIX-0315A';
+
 export default function RootLayout() {
   // Initialize Sentry for crash reporting
   useEffect(() => {
     initSentry();
   }, []);
 
-  // Debug log: backend URL and dev mode on startup
+  // Debug log on startup — includes fingerprint to verify code is present
   useEffect(() => {
-    console.log(`[ScriptM8] Backend URL: ${AppConfig.BACKEND_URL}`);
+    console.log(`[ScriptM8] BUILD_FINGERPRINT: ${BUILD_FINGERPRINT}`);
+    console.log(`[ScriptM8] Backend URL: https://device-validation.preview.emergentagent.com`);
     isDevTestMode().then(dm => console.log(`[ScriptM8] Dev Test Mode: ${dm}`));
   }, []);
 
-  // Initialize RevenueCat on app start - with crash protection
+  // Initialize RevenueCat on app start
+  // ZERO ABSTRACTION: API key is a literal string in this function body.
+  // No imports, no resolution functions, no process.env, no Constants.expoConfig.
   useEffect(() => {
     const initRevenueCat = async () => {
       // Skip on web
@@ -37,34 +43,28 @@ export default function RootLayout() {
         return;
       }
 
-      // Check feature flag
-      if (!AppConfig.PREMIUM_ENABLED) {
-        console.log('[RevenueCat] Premium disabled via feature flag');
-        return;
-      }
-
       try {
-        // IMPORTANT: Only enable verbose logging in true development
-        // In release builds (including closed testing), use ERROR level to prevent debug dialogs
         if (__DEV__) {
           Purchases.setLogLevel(LOG_LEVEL.DEBUG);
         } else {
-          // Production/closed testing: minimal logging, no debug UI
           Purchases.setLogLevel(LOG_LEVEL.ERROR);
         }
 
-        // Platform-specific configuration with crash protection
-        const apiKey = AppConfig.REVENUECAT_API_KEY;
+        // HARDCODED API KEY — no env var, no Constants, no resolve function.
+        // This string literal is compiled directly into the JS bundle by Metro.
+        const apiKey = Platform.OS === 'ios'
+          ? 'appl_YOUR_IOS_KEY_HERE'
+          : 'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT';
         
-        console.log(`[RevenueCat] Platform: ${Platform.OS}, Key prefix: ${apiKey ? apiKey.substring(0, 5) + '***' : 'EMPTY'}, Key length: ${apiKey.length}`);
+        console.log(`[RevenueCat] Platform: ${Platform.OS}, Key: ${apiKey.substring(0, 5)}***, Length: ${apiKey.length}, Fingerprint: ${BUILD_FINGERPRINT}`);
 
         if (!apiKey || apiKey.length < 10) {
-          console.warn('[RevenueCat] Invalid or missing API key - subscriptions will be unavailable');
+          console.warn('[RevenueCat] Invalid or missing API key');
           logRevenueCatInitError('Invalid or missing API key');
           return;
         }
 
-        // Configure with production settings
+        // Configure RevenueCat
         await Purchases.configure({ apiKey });
         markRevenueCatConfigured();
         

@@ -2,9 +2,9 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { syncAllDataToServer, pullAllDataFromServer } from '../services/syncService';
-import { AppConfig } from '../services/appConfig';
 
-const BACKEND_URL = AppConfig.BACKEND_URL;
+// HARDCODED — no env var resolution
+const BACKEND_URL = 'https://device-validation.preview.emergentagent.com';
 
 // Storage keys
 const AUTH_USER_KEY = '@scriptmate_auth_user';

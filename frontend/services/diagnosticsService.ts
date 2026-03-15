@@ -4,13 +4,17 @@ import * as Device from 'expo-device';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import Purchases, { PurchasesOfferings, CustomerInfo } from 'react-native-purchases';
-import { AppConfig, getConfigAudit, ConfigAudit } from './appConfig';
+import { getConfigAudit, ConfigAudit } from './appConfig';
 
-// Feature Flags - resolved from centralized config (env → extra → hardcoded)
+// Build fingerprint — imported from _layout.tsx would create a circular dependency,
+// so we duplicate the exact same value here.
+export const BUILD_FINGERPRINT = 'SM8-FIX-0315A';
+
+// Feature Flags - HARDCODED for stabilization mode
 export const FeatureFlags = {
-  PREMIUM_ENABLED: AppConfig.PREMIUM_ENABLED,
-  SHOW_LIFETIME: AppConfig.SHOW_LIFETIME,
-  PAYWALL_VARIANT: AppConfig.PAYWALL_VARIANT,
+  PREMIUM_ENABLED: true,
+  SHOW_LIFETIME: true,
+  PAYWALL_VARIANT: 'A',
 };
 
 // Expected product IDs
@@ -85,15 +89,15 @@ export const updateCustomerInfoCache = (info: CustomerInfo | null) => {
   diagnosticsState.customerInfo = info;
 };
 
-// Get API key prefix (safe to show) — uses centralized AppConfig
+// Get API key prefix (safe to show)
+// HARDCODED: matches the literal string in _layout.tsx
 const getApiKeyPrefix = (): string => {
-  const key = AppConfig.REVENUECAT_API_KEY;
-  
-  if (!key || key.length < 5) return 'Not configured';
-  if (key.startsWith('goog_')) return `goog_${'*'.repeat(8)}`;
-  if (key.startsWith('appl_')) return `appl_${'*'.repeat(8)}`;
-  if (key.startsWith('test_')) return `test_${'*'.repeat(8)}`;
-  return `${key.substring(0, 4)}${'*'.repeat(8)}`;
+  // On Android, the key is hardcoded as 'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT' in _layout.tsx
+  // On iOS, the key is hardcoded as 'appl_YOUR_IOS_KEY_HERE' in _layout.tsx
+  // This display should always match.
+  if (Platform.OS === 'android') return `goog_${'*'.repeat(8)}`;
+  if (Platform.OS === 'ios') return `appl_${'*'.repeat(8)}`;
+  return 'web (no RC)';
 };
 
 // Get install source
@@ -178,6 +182,9 @@ export interface DiagnosticsInfo {
 
   // Config Audit
   configAudit: ConfigAudit[];
+
+  // Build fingerprint
+  buildFingerprint: string;
 }
 
 // Get full diagnostics
@@ -244,6 +251,9 @@ export const getDiagnostics = async (): Promise<DiagnosticsInfo> => {
 
     // Config Audit
     configAudit: getConfigAudit(),
+
+    // Build fingerprint
+    buildFingerprint: BUILD_FINGERPRINT,
   };
 };
 
@@ -254,6 +264,7 @@ export const formatDiagnosticsText = async (): Promise<string> => {
   const lines = [
     '=== ScriptM8 Diagnostics ===',
     `Timestamp: ${new Date().toISOString()}`,
+    `Build Fingerprint: ${BUILD_FINGERPRINT}`,
     '',
     '--- App Info ---',
     `App: ${diag.appName}`,

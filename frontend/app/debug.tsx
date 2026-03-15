@@ -102,7 +102,8 @@ export default function DebugScreen() {
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* App Info Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📱 App Info</Text>
+          <Text style={styles.sectionTitle}>App Info</Text>
+          <InfoRow label="Build Fingerprint" value={'SM8-FIX-0315A'} />
           <InfoRow label="App Version" value={debugInfo.appVersion} />
           <InfoRow label="Build Number" value={debugInfo.buildNumber} />
           <InfoRow label="Environment" value={debugInfo.environment} />
