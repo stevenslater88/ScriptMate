@@ -35,7 +35,7 @@ import os
 import time
 import json
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://device-validation.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://android-upload-test.preview.emergentagent.com')
 
 # Test user prefix for cleanup
 TEST_USER_ID = f"TEST_crash_audit_{int(time.time())}"

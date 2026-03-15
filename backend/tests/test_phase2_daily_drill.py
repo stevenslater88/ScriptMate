@@ -13,7 +13,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://device-validation.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://android-upload-test.preview.emergentagent.com')
 
 # Test user prefix for cleanup
 TEST_USER_ID = f"test-drill-user-{int(time.time())}"

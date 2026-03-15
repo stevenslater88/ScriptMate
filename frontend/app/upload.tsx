@@ -25,6 +25,25 @@ import { useScriptStore } from '../store/scriptStore';
 import { API_BASE_URL } from '../services/apiConfig';
 
 const UPLOAD_TIMEOUT = 30000; // 30s for file uploads
+const FILE_OP_TIMEOUT = 15000; // 15s for file system operations
+
+// Helper to wrap async operations with a timeout
+const withTimeout = <T,>(promise: Promise<T>, ms: number, operation: string): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${operation} timed out after ${ms / 1000}s`));
+    }, ms);
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+};
 
 // Get device ID directly — same logic as store, ensures it's always available
 const getDeviceId = async (): Promise<string> => {
@@ -61,24 +80,69 @@ export default function UploadScreen() {
         copyToCacheDirectory: true,
       });
 
+      console.log('[Upload] Picker result type:', result.canceled ? 'canceled' : 'success');
+
       if (result.canceled) {
         console.log('[Upload] Picker cancelled by user');
         return;
       }
 
-      const file = result.assets[0];
-      if (!file || !file.uri) {
+      // Validate assets array exists and has items
+      if (!result.assets || result.assets.length === 0) {
+        console.error('[Upload] No assets in picker result');
         Alert.alert('Error', 'No file was returned from the file picker. Please try again.');
         return;
       }
-      const filename = file.name.toLowerCase();
-      console.log(`[Upload] File picked: name=${file.name}, mime=${file.mimeType}, size=${file.size}, uri=${file.uri.substring(0, 80)}`);
+
+      const file = result.assets[0];
+      console.log('[Upload] File object keys:', Object.keys(file || {}).join(', '));
+      
+      if (!file) {
+        console.error('[Upload] File object is null/undefined');
+        Alert.alert('Error', 'File selection failed. Please try again.');
+        return;
+      }
+      
+      if (!file.uri) {
+        console.error('[Upload] File URI is missing. File object:', JSON.stringify(file));
+        Alert.alert('Error', 'File URI is missing. Please try selecting the file again.');
+        return;
+      }
+
+      const filename = (file.name || 'unknown').toLowerCase();
+      console.log(`[Upload] File picked: name=${file.name}, mime=${file.mimeType}, size=${file.size}, uri=${file.uri.substring(0, 100)}`);
       setLoading(true);
 
       // Text files can be read directly
       if (filename.endsWith('.txt') || filename.endsWith('.text')) {
+        console.log('[Upload] Processing as text file...');
         try {
-          const content = await FileSystem.readAsStringAsync(file.uri);
+          // Copy to cache first to ensure we have a readable URI
+          let readableUri = file.uri;
+          if (Platform.OS === 'android') {
+            console.log('[Upload] Android: copying text file to cache...');
+            const cacheUri = `${FileSystem.cacheDirectory}text_${Date.now()}_${file.name || 'file.txt'}`;
+            try {
+              await withTimeout(
+                FileSystem.copyAsync({ from: file.uri, to: cacheUri }),
+                FILE_OP_TIMEOUT,
+                'Text file copy to cache'
+              );
+              readableUri = cacheUri;
+              console.log('[Upload] Copied to:', readableUri);
+            } catch (copyErr: any) {
+              console.log('[Upload] Copy failed, using original URI:', copyErr?.message);
+            }
+          }
+          
+          console.log('[Upload] Reading text content from:', readableUri.substring(0, 80));
+          const content = await withTimeout(
+            FileSystem.readAsStringAsync(readableUri),
+            FILE_OP_TIMEOUT,
+            'Text file read'
+          );
+          console.log(`[Upload] Read ${content?.length || 0} characters`);
+          
           if (!content || content.trim().length === 0) {
             Alert.alert('Empty File', 'The selected file appears to be empty.');
             setLoading(false);
@@ -86,17 +150,18 @@ export default function UploadScreen() {
           }
           setScriptText(content);
           if (!title) {
-            setTitle(file.name.replace(/\.[^/.]+$/, ''));
+            setTitle((file.name || 'Untitled').replace(/\.[^/.]+$/, ''));
           }
           setLoading(false);
           Alert.alert('File Loaded', `"${file.name}" loaded. Review the text below and tap Save Script.`);
         } catch (readErr: any) {
-          console.error(`[Upload] Failed to read text file: ${readErr?.message}`);
+          console.error(`[Upload] Failed to read text file: ${readErr?.message}`, readErr);
           Alert.alert('Error', `Could not read file: ${readErr?.message || 'Unknown error'}`);
           setLoading(false);
         }
       } else {
         // PDF, Word docs, and other files - upload to backend for parsing
+        console.log('[Upload] Processing as binary file (PDF/DOCX)...');
         const formData = new FormData();
         
         // Determine MIME type
@@ -113,53 +178,85 @@ export default function UploadScreen() {
         let fileUri = file.uri;
         if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
           // If URI is not file://, read to cache first
-          const cacheUri = `${FileSystem.cacheDirectory}upload_${Date.now()}_${file.name}`;
-          await FileSystem.copyAsync({ from: file.uri, to: cacheUri });
-          fileUri = cacheUri;
+          console.log('[Upload] Android: copying binary file to cache...');
+          const cacheUri = `${FileSystem.cacheDirectory}upload_${Date.now()}_${file.name || 'file'}`;
+          try {
+            await withTimeout(
+              FileSystem.copyAsync({ from: file.uri, to: cacheUri }),
+              FILE_OP_TIMEOUT,
+              'File copy to cache'
+            );
+            fileUri = cacheUri;
+            console.log('[Upload] Copied to:', fileUri);
+          } catch (copyErr: any) {
+            console.error('[Upload] Copy failed:', copyErr?.message);
+            // If copy fails, try using the original URI anyway
+            console.log('[Upload] Attempting upload with original URI...');
+          }
         }
 
         console.log(`[Upload] Uploading file: name=${file.name}, mime=${mimeType}, uri=${fileUri.substring(0, 80)}`);
         
         // Get device ID for user association
         const userId = await getDeviceId();
+        console.log('[Upload] User ID:', userId.substring(0, 20) + '...');
         
         formData.append('file', {
           uri: fileUri,
           type: mimeType,
-          name: file.name,
+          name: file.name || 'uploaded_file',
         } as any);
-        formData.append('title', title || file.name.replace(/\.[^/.]+$/, ''));
+        formData.append('title', title || (file.name || 'Untitled').replace(/\.[^/.]+$/, ''));
         formData.append('user_id', userId);
 
-        const response = await axios.post(
-          `${API_BASE_URL}/api/scripts/upload`,
-          formData,
-          {
-            timeout: UPLOAD_TIMEOUT,
-            // Do NOT set Content-Type manually — axios/RN must set it with the correct multipart boundary
-          }
-        ).catch(async (formDataError: any) => {
+        console.log('[Upload] Sending FormData to server...');
+        
+        let response;
+        try {
+          response = await axios.post(
+            `${API_BASE_URL}/api/scripts/upload`,
+            formData,
+            {
+              timeout: UPLOAD_TIMEOUT,
+              // Do NOT set Content-Type manually — axios/RN must set it with the correct multipart boundary
+            }
+          );
+          console.log('[Upload] FormData upload succeeded');
+        } catch (formDataError: any) {
           // Fallback: if FormData upload fails on Android, try base64 upload
           if (Platform.OS === 'android') {
-            console.log('[Upload] FormData failed, trying base64 fallback...');
-            const base64Data = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
-            return axios.post(
-              `${API_BASE_URL}/api/scripts/upload-base64`,
-              {
-                title: title || file.name.replace(/\.[^/.]+$/, ''),
-                filename: file.name,
-                file_data: base64Data,
-                user_id: userId,
-              },
-              {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: UPLOAD_TIMEOUT,
-              }
-            );
+            console.log('[Upload] FormData failed, trying base64 fallback...', formDataError?.message);
+            try {
+              const base64Data = await withTimeout(
+                FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 }),
+                FILE_OP_TIMEOUT,
+                'Base64 file read'
+              );
+              console.log(`[Upload] Read ${base64Data?.length || 0} base64 chars, posting to upload-base64...`);
+              response = await axios.post(
+                `${API_BASE_URL}/api/scripts/upload-base64`,
+                {
+                  title: title || (file.name || 'Untitled').replace(/\.[^/.]+$/, ''),
+                  filename: file.name || 'uploaded_file',
+                  file_data: base64Data,
+                  user_id: userId,
+                },
+                {
+                  headers: { 'Content-Type': 'application/json' },
+                  timeout: UPLOAD_TIMEOUT,
+                }
+              );
+              console.log('[Upload] Base64 upload succeeded');
+            } catch (base64Err: any) {
+              console.error('[Upload] Base64 fallback also failed:', base64Err?.message);
+              throw base64Err;
+            }
+          } else {
+            throw formDataError;
           }
-          throw formDataError;
-        });
+        }
 
+        console.log('[Upload] Server response received, id:', response?.data?.id);
         setLoading(false);
         Alert.alert('Success', 'Script uploaded and parsed successfully!', [
           {
@@ -174,6 +271,7 @@ export default function UploadScreen() {
       const serverMsg = error?.response?.data?.detail;
       const errMsg = error?.message || 'Unknown error';
       console.error(`[Upload] Failed: status=${status}, msg=${errMsg}, server=${serverMsg}, url=${API_BASE_URL}/api/scripts/upload`);
+      console.error('[Upload] Full error:', error);
 
       let msg = 'Failed to upload file';
       if (error?.code === 'ECONNABORTED' || errMsg.includes('timeout')) {

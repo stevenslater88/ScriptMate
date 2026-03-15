@@ -28,7 +28,7 @@ export default function RootLayout() {
   // Debug log on startup — includes fingerprint to verify code is present
   useEffect(() => {
     console.log(`[ScriptM8] BUILD_FINGERPRINT: ${BUILD_FINGERPRINT}`);
-    console.log(`[ScriptM8] Backend URL: https://device-validation.preview.emergentagent.com`);
+    console.log(`[ScriptM8] Backend URL: https://android-upload-test.preview.emergentagent.com`);
     isDevTestMode().then(dm => console.log(`[ScriptM8] Dev Test Mode: ${dm}`));
   }, []);
 

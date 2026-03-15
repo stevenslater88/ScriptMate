@@ -4,7 +4,7 @@
  * This literal string is compiled directly into the JS bundle.
  */
 
-export const API_BASE_URL = 'https://device-validation.preview.emergentagent.com';
+export const API_BASE_URL = 'https://android-upload-test.preview.emergentagent.com';
 export const API_TIMEOUT = 15000;
 
 /**

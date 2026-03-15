@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import { syncAllDataToServer, pullAllDataFromServer } from '../services/syncService';
 
 // HARDCODED — no env var resolution
-const BACKEND_URL = 'https://device-validation.preview.emergentagent.com';
+const BACKEND_URL = 'https://android-upload-test.preview.emergentagent.com';
 
 // Storage keys
 const AUTH_USER_KEY = '@scriptmate_auth_user';

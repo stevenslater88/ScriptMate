@@ -118,7 +118,7 @@
       "eas": {
         "projectId": "a2f8beb4-8c5b-4fea-8650-ea7986c2e78c"
       },
-      "EXPO_PUBLIC_BACKEND_URL": "https://device-validation.preview.emergentagent.com",
+      "EXPO_PUBLIC_BACKEND_URL": "https://android-upload-test.preview.emergentagent.com",
       "EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY": "goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT",
       "EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY": "appl_YOUR_IOS_KEY_HERE",
       "router": {}

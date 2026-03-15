@@ -13,7 +13,7 @@
 
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL ||
-  'https://device-validation.preview.emergentagent.com';
+  'https://android-upload-test.preview.emergentagent.com';
 
 const REVENUECAT_GOOGLE_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY ||

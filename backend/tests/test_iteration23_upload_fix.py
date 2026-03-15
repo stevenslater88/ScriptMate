@@ -12,7 +12,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://device-validation.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://android-upload-test.preview.emergentagent.com').rstrip('/')
 
 # Test prefix for cleanup isolation
 TEST_PREFIX = f"TEST_upload_fix_{uuid.uuid4().hex[:8]}"
