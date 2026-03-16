@@ -276,36 +276,58 @@ export default function RehearsalScreen() {
 
   useSpeechRecognitionEvent('result', (event: any) => {
     if (!speechRecognitionImported) return;
-    const transcript = event.results[0]?.transcript || '';
-    debugLog(`SR Event: result - "${transcript.substring(0, 30)}..."`);
-    setRecognizedText(transcript);
     
-    // Calculate and update accuracy in real-time
-    if (state === 'user_turn' && transcript.length > 0) {
-      const lines = currentScript?.lines || [];
-      const currentLine = lines[currentLineIndex];
-      const expectedText = currentLine?.text || '';
+    try {
+      // Safely extract transcript with multiple fallbacks
+      const transcript = event?.results?.[0]?.transcript || event?.results?.[0] || '';
+      const safeTranscript = typeof transcript === 'string' ? transcript : String(transcript || '');
       
-      const similarity = calculateSimilarity(transcript, expectedText);
-      setCurrentAccuracy(similarity);
-      debugLog(`SR: accuracy=${(similarity * 100).toFixed(0)}%, autoAdv=${autoAdvanceEnabled}`);
+      debugLog(`SR Event: result - "${safeTranscript.substring(0, 30)}..."`);
+      setRecognizedText(safeTranscript);
       
-      // Auto-advance when accuracy is high enough
-      if (autoAdvanceEnabled && similarity >= 0.65 && transcript.length > 5) {
-        // Success feedback
-        debugLog('SR: Auto-advancing now!');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        stopListening();
-        onUserLineDone(false, similarity);
+      // Calculate and update accuracy in real-time
+      if (state === 'user_turn' && safeTranscript.length > 0) {
+        const lines = currentScript?.lines || [];
+        const currentLine = lines[currentLineIndex];
+        const expectedText = currentLine?.text || '';
+        
+        const similarity = calculateSimilarity(safeTranscript, expectedText);
+        setCurrentAccuracy(similarity);
+        debugLog(`SR: accuracy=${(similarity * 100).toFixed(0)}%, autoAdv=${autoAdvanceEnabled}`);
+        
+        // Auto-advance when accuracy is high enough
+        if (autoAdvanceEnabled && similarity >= 0.65 && safeTranscript.length > 5) {
+          // Success feedback
+          debugLog('SR: Auto-advancing now!');
+          try {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (hapticErr) {
+            console.log('[Rehearsal] Haptic feedback unavailable');
+          }
+          stopListening();
+          onUserLineDone(false, similarity);
+        }
       }
+    } catch (err: any) {
+      console.error('[Rehearsal] SR result handler error:', err?.message || err);
+      debugLog(`SR Error: ${err?.message || 'unknown'}`);
     }
   });
 
   useSpeechRecognitionEvent('error', (event: any) => {
     if (!speechRecognitionImported) return;
-    debugLog(`SR Event: error - ${event.error}`);
-    setIsListening(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    try {
+      const errorMsg = event?.error || 'unknown error';
+      debugLog(`SR Event: error - ${errorMsg}`);
+      setIsListening(false);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } catch (hapticErr) {
+        // Haptics may not be available
+      }
+    } catch (err: any) {
+      console.error('[Rehearsal] SR error handler crashed:', err?.message || err);
+    }
   });
 
   // Start listening for user's line
@@ -547,41 +569,48 @@ export default function RehearsalScreen() {
 
   // Advance to next line
   const advanceToNextLine = useCallback(() => {
-    if (isPaused) return;
+    try {
+      if (isPaused) return;
 
-    const currentIdx = currentLineIndexRef.current;
-    const nextIndex = currentIdx + 1;
-    console.log('[Rehearsal] Advancing from line:', currentIdx, 'to line:', nextIndex, 'of', lines.length);
-    
-    if (nextIndex >= lines.length) {
-      console.log('[Rehearsal] Finished!');
-      setState('finished');
-      saveProgress(nextIndex);
-      return;
-    }
-
-    // Update completed lines and current index
-    setCompletedLines((prev) => [...prev, currentIdx]);
-    setCurrentLineIndex(nextIndex);
-    currentLineIndexRef.current = nextIndex;
-    
-    // Reset speaking state for next line - IMPORTANT: clear before deciding to speak
-    speakingLineIndexRef.current = null;
-    advanceProcessedRef.current = false;
-    isSpeakingRef.current = false;
-
-    const nextLine = lines[nextIndex];
-    console.log('[Rehearsal] Next line character:', nextLine?.character, 'User:', userCharacter);
-    
-    if (nextLine?.character === userCharacter) {
-      setState('user_turn');
-      setLineStartTime(Date.now());
-      if (mode === 'cue_only' || mode === 'performance') {
-        setUserLineVisible(false);
-      } else {
-        setUserLineVisible(true);
+      const currentIdx = currentLineIndexRef.current;
+      const nextIndex = currentIdx + 1;
+      console.log('[Rehearsal] Advancing from line:', currentIdx, 'to line:', nextIndex, 'of', lines.length);
+      
+      if (nextIndex >= lines.length) {
+        console.log('[Rehearsal] Finished!');
+        setState('finished');
+        saveProgress(nextIndex);
+        return;
       }
-    } else if (!nextLine?.is_stage_direction) {
+
+      // Update completed lines and current index
+      setCompletedLines((prev) => [...prev, currentIdx]);
+      setCurrentLineIndex(nextIndex);
+      currentLineIndexRef.current = nextIndex;
+      
+      // Reset speaking state for next line - IMPORTANT: clear before deciding to speak
+      speakingLineIndexRef.current = null;
+      advanceProcessedRef.current = false;
+      isSpeakingRef.current = false;
+
+      const nextLine = lines[nextIndex];
+      console.log('[Rehearsal] Next line character:', nextLine?.character, 'User:', userCharacter);
+      
+      if (!nextLine) {
+        console.error('[Rehearsal] nextLine is undefined at index:', nextIndex);
+        setState('finished');
+        return;
+      }
+      
+      if (nextLine.character === userCharacter) {
+        setState('user_turn');
+        setLineStartTime(Date.now());
+        if (mode === 'cue_only' || mode === 'performance') {
+          setUserLineVisible(false);
+        } else {
+          setUserLineVisible(true);
+        }
+      } else if (!nextLine.is_stage_direction) {
       // AI line - speak it after a short delay
       // Use a flag to prevent double-triggering
       const lineToSpeak = nextIndex;
@@ -597,6 +626,10 @@ export default function RehearsalScreen() {
     } else {
       // Stage direction - skip
       setTimeout(() => advanceToNextLine(), 300);
+    }
+    } catch (err: any) {
+      console.error('[Rehearsal] advanceToNextLine error:', err?.message || err);
+      debugLog(`Advance Error: ${err?.message || 'unknown'}`);
     }
   }, [lines, userCharacter, isPaused, mode, speakLine, saveProgress]);
 
