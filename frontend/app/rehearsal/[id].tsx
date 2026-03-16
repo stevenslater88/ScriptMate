@@ -237,16 +237,18 @@ export default function RehearsalScreen() {
         setSpeechRecognitionAvailable(false);
         return;
       }
+      
+      // If the module is imported, consider it available
+      // The actual start() call will handle permissions
+      debugLog('SR Module imported successfully');
+      setSpeechRecognitionAvailable(true);
+      
+      // Try to get current state for logging only
       try {
         const status = await ExpoSpeechRecognitionModule.getStateAsync();
-        debugLog(`SR status: ${status}`);
-        const available = status !== 'inactive';
-        setSpeechRecognitionAvailable(available);
-        debugLog(`SR available: ${available}`);
+        debugLog(`SR current state: ${status}`);
       } catch (err: any) {
-        // On web or unsupported devices, speech recognition won't be available
-        debugLog(`SR check error: ${err?.message || 'unknown'}`);
-        setSpeechRecognitionAvailable(false);
+        debugLog(`SR state check skipped: ${err?.message || 'ok'}`);
       }
     };
     checkAvailability();
