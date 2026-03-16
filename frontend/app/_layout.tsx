@@ -18,7 +18,7 @@ import { AppConfig } from '../services/appConfig';
 
 // BUILD FINGERPRINT — unique string to prove this code is in the compiled build.
 // If you see this on the debug screen, the code is present. If not, the build is stale.
-export const BUILD_FINGERPRINT = 'SM8-0316C-UPLOAD';
+export const BUILD_FINGERPRINT = 'SM8-0316D-REHEARSE';
 
 export default function RootLayout() {
   // Initialize Sentry for crash reporting

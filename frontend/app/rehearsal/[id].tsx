@@ -574,6 +574,22 @@ export default function RehearsalScreen() {
     advanceToNextLineRef.current = advanceToNextLine;
   }, [advanceToNextLine]);
 
+  // Auto-start listening when it's the user's turn (if speech recognition is available and enabled)
+  useEffect(() => {
+    if (state === 'user_turn' && 
+        speechRecognitionAvailable && 
+        autoAdvanceEnabled && 
+        !isListening && 
+        !isPaused) {
+      // Small delay to let UI settle before starting recognition
+      const timer = setTimeout(() => {
+        console.log('[Rehearsal] Auto-starting speech recognition for user turn');
+        startListening();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [state, speechRecognitionAvailable, autoAdvanceEnabled, isListening, isPaused]);
+
   // Start rehearsal
   const startRehearsal = () => {
     if (lines.length === 0) {
