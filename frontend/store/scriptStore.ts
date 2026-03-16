@@ -347,6 +347,18 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       const url = `${API_BASE_URL}/api/scripts`;
       console.log(`[ScriptStore] createScript: POST ${url}`);
       console.log(`[ScriptStore] API_BASE_URL = "${API_BASE_URL}"`);
+      console.log(`[ScriptStore] deviceId = "${deviceId}"`);
+      console.log(`[ScriptStore] title = "${title?.substring(0, 50)}"`);
+      console.log(`[ScriptStore] rawText length = ${rawText?.length || 0}`);
+      
+      // Validate inputs before request
+      if (!url || url.includes('undefined')) {
+        throw new Error(`Invalid URL: ${url}`);
+      }
+      if (!deviceId) {
+        throw new Error('No device ID available');
+      }
+      
       const response = await axios.post(url, {
         title,
         raw_text: rawText,
@@ -363,18 +375,39 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     } catch (error: any) {
       const errorMsg = getErrorMessage(error);
       const requestUrl = error?.config?.url || 'unknown';
-      console.error(`[ScriptStore] createScript error: ${errorMsg}, URL: ${requestUrl}`);
-      set({ error: errorMsg, loading: false });
+      const status = error?.response?.status || 'no status';
+      const responseData = JSON.stringify(error?.response?.data || {});
+      console.error(`[ScriptStore] createScript FAILED:`);
+      console.error(`  URL: ${requestUrl}`);
+      console.error(`  Status: ${status}`);
+      console.error(`  Response: ${responseData}`);
+      console.error(`  Error: ${errorMsg}`);
+      set({ error: `${errorMsg} [URL: ${requestUrl}, Status: ${status}]`, loading: false });
       return null;
     }
   },
 
   updateScript: async (id: string, data) => {
     set({ loading: true, error: null });
+    
+    // Validate ID before making request
+    if (!id || id === 'undefined' || id === 'null') {
+      console.error(`[ScriptStore] updateScript INVALID ID: "${id}"`);
+      set({ error: `Invalid script ID: ${id}`, loading: false });
+      return;
+    }
+    
     try {
       const url = `${API_BASE_URL}/api/scripts/${id}`;
       console.log(`[ScriptStore] updateScript: PUT ${url}`);
-      console.log(`[ScriptStore] updateScript data:`, JSON.stringify(data));
+      console.log(`[ScriptStore] updateScript id="${id}" (type: ${typeof id})`);
+      console.log(`[ScriptStore] updateScript data: ${JSON.stringify(data)}`);
+      
+      // Check for undefined in URL
+      if (url.includes('undefined')) {
+        throw new Error(`URL contains undefined: ${url}`);
+      }
+      
       const response = await axios.put(url, data, { timeout: API_TIMEOUT });
       console.log(`[ScriptStore] updateScript success for id=${id}`);
       set((state) => ({
@@ -385,8 +418,15 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     } catch (error: any) {
       const errorMsg = getErrorMessage(error);
       const requestUrl = error?.config?.url || 'unknown';
-      console.error(`[ScriptStore] updateScript error: ${errorMsg}, URL: ${requestUrl}`);
-      set({ error: errorMsg, loading: false });
+      const status = error?.response?.status || 'no status';
+      const responseData = JSON.stringify(error?.response?.data || {});
+      console.error(`[ScriptStore] updateScript FAILED:`);
+      console.error(`  ID: ${id}`);
+      console.error(`  URL: ${requestUrl}`);
+      console.error(`  Status: ${status}`);
+      console.error(`  Response: ${responseData}`);
+      console.error(`  Error: ${errorMsg}`);
+      set({ error: `${errorMsg} [URL: ${requestUrl}, Status: ${status}]`, loading: false });
     }
   },
 
