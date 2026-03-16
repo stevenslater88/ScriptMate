@@ -28,7 +28,7 @@ const UPLOAD_TIMEOUT = 30000; // 30s for file uploads
 const FILE_OP_TIMEOUT = 15000; // 15s for file system operations
 
 // Helper to wrap async operations with a timeout
-const withTimeout = <T,>(promise: Promise<T>, ms: number, operation: string): Promise<T> => {
+function withTimeout(promise, ms, operation) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`${operation} timed out after ${ms / 1000}s`));

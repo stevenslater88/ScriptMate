@@ -1,12 +1,12 @@
 /**
- * API Configuration — Re-exports from appConfig for backward compatibility.
+ * API Configuration — HARDCODED production backend URL.
  * 
- * SINGLE SOURCE OF TRUTH: appConfig.ts
- * All backend URL references now flow through AppConfig.BACKEND_URL
+ * IMPORTANT: This is the single source of truth for the backend URL.
+ * Do NOT use environment variables or dynamic resolution here.
+ * This ensures the URL is always available at module load time.
  */
-import { AppConfig } from './appConfig';
 
-export const API_BASE_URL = AppConfig.BACKEND_URL;
+export const API_BASE_URL = 'https://android-upload-test.preview.emergentagent.com';
 export const API_TIMEOUT = 15000;
 
 /**
