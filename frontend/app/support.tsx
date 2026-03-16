@@ -20,6 +20,7 @@ import {
   copyDiagnosticsToClipboard,
   sendDiagnosticsEmail,
   checkProductAvailability,
+  updateCustomerInfoCache,
   FeatureFlags,
   DiagnosticsInfo,
 } from '../services/diagnosticsService';
@@ -119,11 +120,22 @@ export default function SupportScreen() {
     
     setRefreshingPurchases(true);
     try {
-      await Purchases.restorePurchases();
+      // restorePurchases returns updated CustomerInfo
+      const customerInfo = await Purchases.restorePurchases();
+      // Update the diagnostics cache with fresh customer info
+      updateCustomerInfoCache(customerInfo);
       await loadDiagnostics();
-      Alert.alert('Success', 'Purchases restored successfully');
+      
+      // Check if premium was restored
+      const hasPremium = customerInfo.entitlements.active['ScriptM8 Pro'] !== undefined;
+      if (hasPremium) {
+        Alert.alert('Success', 'Premium access restored!');
+      } else {
+        Alert.alert('Restored', 'No active subscriptions found for this account.');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to restore purchases');
+      console.error('[Support] Restore error:', error);
+      Alert.alert('Error', 'Failed to restore purchases. Please try again.');
     } finally {
       setRefreshingPurchases(false);
     }
@@ -138,10 +150,22 @@ export default function SupportScreen() {
     setRefreshingPurchases(true);
     try {
       await Purchases.syncPurchases();
+      // After sync, fetch fresh customer info
+      const customerInfo = await Purchases.getCustomerInfo();
+      // Update the diagnostics cache
+      updateCustomerInfoCache(customerInfo);
       await loadDiagnostics();
-      Alert.alert('Success', 'Purchases synced successfully');
+      
+      // Check if premium is active
+      const hasPremium = customerInfo.entitlements.active['ScriptM8 Pro'] !== undefined;
+      if (hasPremium) {
+        Alert.alert('Success', 'Premium access synced successfully!');
+      } else {
+        Alert.alert('Synced', 'Purchases synced. No active subscriptions found.');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to sync purchases');
+      console.error('[Support] Sync error:', error);
+      Alert.alert('Error', 'Failed to sync purchases. Please try again.');
     } finally {
       setRefreshingPurchases(false);
     }
