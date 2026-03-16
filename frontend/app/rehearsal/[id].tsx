@@ -192,6 +192,13 @@ export default function RehearsalScreen() {
   const [currentAccuracy, setCurrentAccuracy] = useState(0);
   const [showAccuracyFeedback, setShowAccuracyFeedback] = useState(false);
   
+  // Diagnostic state for debugging speech recognition flow
+  const [debugInfo, setDebugInfo] = useState<string>('Init');
+  const debugLog = (msg: string) => {
+    console.log(`[Rehearsal-Debug] ${msg}`);
+    setDebugInfo(msg);
+  };
+  
   // Animation refs
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -224,11 +231,21 @@ export default function RehearsalScreen() {
   // Check speech recognition availability
   useEffect(() => {
     const checkAvailability = async () => {
+      debugLog('Checking SR availability...');
+      if (!ExpoSpeechRecognitionModule) {
+        debugLog('SR Module not imported');
+        setSpeechRecognitionAvailable(false);
+        return;
+      }
       try {
         const status = await ExpoSpeechRecognitionModule.getStateAsync();
-        setSpeechRecognitionAvailable(status !== 'inactive');
-      } catch {
+        debugLog(`SR status: ${status}`);
+        const available = status !== 'inactive';
+        setSpeechRecognitionAvailable(available);
+        debugLog(`SR available: ${available}`);
+      } catch (err: any) {
         // On web or unsupported devices, speech recognition won't be available
+        debugLog(`SR check error: ${err?.message || 'unknown'}`);
         setSpeechRecognitionAvailable(false);
       }
     };
@@ -238,6 +255,7 @@ export default function RehearsalScreen() {
   // Speech recognition event handlers (safely wrapped)
   useSpeechRecognitionEvent('start', () => {
     if (!speechRecognitionImported) return;
+    debugLog('SR Event: start');
     setIsListening(true);
     setCurrentAccuracy(0);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -245,6 +263,7 @@ export default function RehearsalScreen() {
 
   useSpeechRecognitionEvent('end', () => {
     if (!speechRecognitionImported) return;
+    debugLog('SR Event: end');
     setIsListening(false);
     // Show accuracy feedback briefly after listening ends
     if (currentAccuracy > 0) {
@@ -256,6 +275,7 @@ export default function RehearsalScreen() {
   useSpeechRecognitionEvent('result', (event: any) => {
     if (!speechRecognitionImported) return;
     const transcript = event.results[0]?.transcript || '';
+    debugLog(`SR Event: result - "${transcript.substring(0, 30)}..."`);
     setRecognizedText(transcript);
     
     // Calculate and update accuracy in real-time
@@ -266,10 +286,12 @@ export default function RehearsalScreen() {
       
       const similarity = calculateSimilarity(transcript, expectedText);
       setCurrentAccuracy(similarity);
+      debugLog(`SR: accuracy=${(similarity * 100).toFixed(0)}%, autoAdv=${autoAdvanceEnabled}`);
       
       // Auto-advance when accuracy is high enough
       if (autoAdvanceEnabled && similarity >= 0.65 && transcript.length > 5) {
         // Success feedback
+        debugLog('SR: Auto-advancing now!');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         stopListening();
         onUserLineDone(false, similarity);
@@ -279,32 +301,39 @@ export default function RehearsalScreen() {
 
   useSpeechRecognitionEvent('error', (event: any) => {
     if (!speechRecognitionImported) return;
-    console.log('Speech recognition error:', event.error);
+    debugLog(`SR Event: error - ${event.error}`);
     setIsListening(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
   });
 
   // Start listening for user's line
   const startListening = async () => {
+    debugLog('startListening called');
     if (!speechRecognitionAvailable) {
+      debugLog('startListening: SR not available');
       Alert.alert('Not Available', 'Speech recognition is not available on this device.');
       return;
     }
 
     try {
+      debugLog('startListening: Requesting permissions...');
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      debugLog(`startListening: Permission result - ${result.granted ? 'granted' : 'denied'}`);
       if (!result.granted) {
         Alert.alert('Permission Required', 'Please grant microphone permission for speech recognition.');
         return;
       }
 
       setRecognizedText('');
+      debugLog('startListening: Starting SR module...');
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
         continuous: false,
       });
-    } catch (error) {
+      debugLog('startListening: SR module started');
+    } catch (error: any) {
+      debugLog(`startListening: Error - ${error?.message || 'unknown'}`);
       console.error('Failed to start speech recognition:', error);
     }
   };
@@ -576,14 +605,16 @@ export default function RehearsalScreen() {
 
   // Auto-start listening when it's the user's turn (if speech recognition is available and enabled)
   useEffect(() => {
+    debugLog(`AutoStart check: state=${state}, srAvail=${speechRecognitionAvailable}, autoAdv=${autoAdvanceEnabled}, listening=${isListening}, paused=${isPaused}`);
     if (state === 'user_turn' && 
         speechRecognitionAvailable && 
         autoAdvanceEnabled && 
         !isListening && 
         !isPaused) {
       // Small delay to let UI settle before starting recognition
+      debugLog('AutoStart: Will start listening in 500ms');
       const timer = setTimeout(() => {
-        console.log('[Rehearsal] Auto-starting speech recognition for user turn');
+        debugLog('AutoStart: Starting listening now');
         startListening();
       }, 500);
       return () => clearTimeout(timer);
@@ -881,6 +912,16 @@ export default function RehearsalScreen() {
           <Text style={styles.recordingText}>Recording...</Text>
         </View>
       )}
+
+      {/* DEBUG BANNER - Shows speech recognition state on device */}
+      <View style={{ backgroundColor: '#1a1a2e', padding: 8, borderBottomWidth: 1, borderBottomColor: '#333' }}>
+        <Text style={{ color: '#f59e0b', fontSize: 11, fontFamily: 'monospace' }} numberOfLines={2}>
+          [DEBUG] {debugInfo}
+        </Text>
+        <Text style={{ color: '#6b7280', fontSize: 10 }}>
+          SR:{speechRecognitionAvailable ? 'Y' : 'N'} | Auto:{autoAdvanceEnabled ? 'Y' : 'N'} | Listen:{isListening ? 'Y' : 'N'} | State:{state}
+        </Text>
+      </View>
 
       {/* Current Line Display */}
       <View style={styles.currentLineContainer}>
