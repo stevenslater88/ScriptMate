@@ -33,6 +33,27 @@ export default function ScriptParserScreen() {
   const rawText = params.rawText || '';
   const { createScript } = useScriptStore();
 
+  // Guard: If no rawText provided, redirect to upload screen
+  // This happens when user taps "New Script" directly
+  React.useEffect(() => {
+    if (!rawText || rawText.trim().length === 0) {
+      console.log('[ScriptParser] No rawText provided, redirecting to upload');
+      router.replace('/upload');
+    }
+  }, []);
+
+  // If no rawText, show loading while redirect happens
+  if (!rawText || rawText.trim().length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#a78bfa" />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const [step, setStep] = useState<Step>('characters');
   const [myCharacter, setMyCharacter] = useState<string | null>(null);
   const [includeHeadings, setIncludeHeadings] = useState(false);
@@ -522,4 +543,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12,
   },
   saveBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  
+  // Loading state
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#a78bfa' },
 });
