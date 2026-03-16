@@ -282,7 +282,10 @@ export default function RehearsalScreen() {
       const transcript = event?.results?.[0]?.transcript || event?.results?.[0] || '';
       const safeTranscript = typeof transcript === 'string' ? transcript : String(transcript || '');
       
-      debugLog(`SR Event: result - "${safeTranscript.substring(0, 30)}..."`);
+      // Check if this is a final result (not interim/partial)
+      const isFinal = event?.isFinal || event?.results?.[0]?.isFinal || false;
+      
+      debugLog(`SR: "${safeTranscript.substring(0, 25)}..." final=${isFinal}`);
       setRecognizedText(safeTranscript);
       
       // Calculate and update accuracy in real-time
@@ -290,15 +293,33 @@ export default function RehearsalScreen() {
         const lines = currentScript?.lines || [];
         const currentLine = lines[currentLineIndex];
         const expectedText = currentLine?.text || '';
+        const expectedLength = expectedText.length;
         
         const similarity = calculateSimilarity(safeTranscript, expectedText);
         setCurrentAccuracy(similarity);
-        debugLog(`SR: accuracy=${(similarity * 100).toFixed(0)}%, autoAdv=${autoAdvanceEnabled}`);
         
-        // Auto-advance when accuracy is high enough
-        if (autoAdvanceEnabled && similarity >= 0.65 && safeTranscript.length > 5) {
-          // Success feedback
-          debugLog('SR: Auto-advancing now!');
+        // Calculate how much of the line has been spoken (by length)
+        const spokenRatio = expectedLength > 0 ? safeTranscript.length / expectedLength : 0;
+        
+        debugLog(`SR: acc=${(similarity * 100).toFixed(0)}% ratio=${(spokenRatio * 100).toFixed(0)}% final=${isFinal}`);
+        
+        // Auto-advance ONLY when:
+        // 1. Auto-advance is enabled
+        // 2. This is a FINAL result (not interim), OR similarity is very high (>85%)
+        // 3. Similarity is good enough (>65%)
+        // 4. User has spoken at least 60% of the expected line length
+        // 5. Transcript is reasonably long (>10 chars or >50% of expected)
+        const minLengthMet = safeTranscript.length > 10 || spokenRatio > 0.5;
+        const similarityThresholdMet = similarity >= 0.65;
+        const completenessThresholdMet = spokenRatio >= 0.6;
+        const shouldAdvance = autoAdvanceEnabled && 
+                             similarityThresholdMet && 
+                             minLengthMet &&
+                             completenessThresholdMet &&
+                             (isFinal || similarity >= 0.85);
+        
+        if (shouldAdvance) {
+          debugLog('SR: Auto-advancing - line complete!');
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch (hapticErr) {
