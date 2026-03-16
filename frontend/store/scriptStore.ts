@@ -344,12 +344,16 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     const deviceId = await getDeviceId();
     set({ loading: true, error: null });
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/scripts`, {
+      const url = `${API_BASE_URL}/api/scripts`;
+      console.log(`[ScriptStore] createScript: POST ${url}`);
+      console.log(`[ScriptStore] API_BASE_URL = "${API_BASE_URL}"`);
+      const response = await axios.post(url, {
         title,
         raw_text: rawText,
         user_id: deviceId,
       }, { timeout: API_TIMEOUT });
       const newScript = response.data;
+      console.log(`[ScriptStore] createScript success: id=${newScript?.id}`);
       set((state) => ({
         scripts: [newScript, ...state.scripts],
         currentScript: newScript,
@@ -358,8 +362,9 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       return newScript;
     } catch (error: any) {
       const errorMsg = getErrorMessage(error);
+      const requestUrl = error?.config?.url || 'unknown';
+      console.error(`[ScriptStore] createScript error: ${errorMsg}, URL: ${requestUrl}`);
       set({ error: errorMsg, loading: false });
-      console.error('Error creating script:', error);
       return null;
     }
   },
@@ -367,15 +372,21 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   updateScript: async (id: string, data) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.put(`${API_BASE_URL}/api/scripts/${id}`, data, { timeout: API_TIMEOUT });
+      const url = `${API_BASE_URL}/api/scripts/${id}`;
+      console.log(`[ScriptStore] updateScript: PUT ${url}`);
+      console.log(`[ScriptStore] updateScript data:`, JSON.stringify(data));
+      const response = await axios.put(url, data, { timeout: API_TIMEOUT });
+      console.log(`[ScriptStore] updateScript success for id=${id}`);
       set((state) => ({
         scripts: state.scripts.map((s) => (s.id === id ? response.data : s)),
         currentScript: state.currentScript?.id === id ? response.data : state.currentScript,
         loading: false,
       }));
     } catch (error: any) {
-      set({ error: getErrorMessage(error), loading: false });
-      console.error('Error updating script:', error);
+      const errorMsg = getErrorMessage(error);
+      const requestUrl = error?.config?.url || 'unknown';
+      console.error(`[ScriptStore] updateScript error: ${errorMsg}, URL: ${requestUrl}`);
+      set({ error: errorMsg, loading: false });
     }
   },
 

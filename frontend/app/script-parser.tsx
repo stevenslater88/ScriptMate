@@ -93,7 +93,9 @@ export default function ScriptParserScreen() {
       if (script) {
         // Update with the user character selection
         const { updateScript } = useScriptStore.getState();
+        console.log(`[ScriptParser] Calling updateScript for id=${script.id} with character=${myCharacter}`);
         await updateScript(script.id, { user_character: myCharacter });
+        console.log(`[ScriptParser] updateScript completed`);
 
         Alert.alert('Script Ready!', `"${title}" saved with ${myCharacter} as your character.`, [
           { text: 'Start Rehearsal', onPress: () => router.replace(`/script/${script.id}`) },
