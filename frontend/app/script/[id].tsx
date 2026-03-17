@@ -387,7 +387,7 @@ export default function ScriptDetailScreen() {
         <View style={styles.section}>
           <VoiceAssignment
             scriptId={id!}
-            characters={currentScript.characters || []}
+            characters={currentScript.characters}
             userCharacter={selectedCharacter}
             isPremium={isPremium}
             onUpgradePress={async () => {
@@ -412,7 +412,7 @@ export default function ScriptDetailScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.previewContainer}>
-            {(currentScript.lines || []).slice(0, 10).map((line, index) => (
+            {currentScript.lines.slice(0, 10).map((line, index) => (
               <View
                 key={line.id}
                 style={[
@@ -438,9 +438,9 @@ export default function ScriptDetailScreen() {
                 )}
               </View>
             ))}
-            {(currentScript.lines || []).length > 10 && (
+            {currentScript.lines.length > 10 && (
               <Text style={styles.previewMore}>
-                + {(currentScript.lines || []).length - 10} more lines...
+                + {currentScript.lines.length - 10} more lines...
               </Text>
             )}
           </View>
