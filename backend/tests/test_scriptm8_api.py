@@ -7,7 +7,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://android-upload-test.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://script-recovery-1.preview.emergentagent.com')
 
 class TestHealthEndpoint:
     """Test backend health check"""

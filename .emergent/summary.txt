@@ -1,155 +1,119 @@
 <analysis>**original_problem_statement:**
-The user's application, ScriptM8, is in a strict stabilization mode. The primary goal is to fix critical bugs in the core user journey (upload, save, use teleprompter) that only appear on real Android device builds. The user has mandated a highly structured, one-bug-at-a-time workflow, where fixes are validated through new device builds, not local testing.
+The application, ScriptM8, is in a strict stabilization mode. The primary goal is to establish a stable baseline and then fix bugs one at a time, in a specific order, without introducing regressions. All fixes must be validated on a real Android device.
 
 **PRODUCT REQUIREMENTS**:
-1.  **Fix Core User Journey on Android**: The immediate goal is to fix bugs preventing the core flows from working on a real Android device.
-2.  **Stabilization Mode Rules**:
-    *   Do not add new features or refactor code.
-    *   Fix only the single, proven root cause of the highest-priority bug.
-    *   Make the smallest targeted change possible.
-    *   Add diagnostics/logging to expose silent failures.
-    *   Trust only real device test results, not local/preview environment behavior.
-3.  **Current Highest-Priority Bug**: On the Upload File screen, after a file is selected, the app shows an infinite loading spinner, and the file content never populates the input form.
+1.  **Restore Baseline**: The immediate priority is to fix the crash that occurs when reopening a saved script. This is a core foundation phase feature.
+2.  **Stabilization Workflow**:
+    *   Fix only one bug at a time.
+    *   After each fix, the entire protected foundation (core working features) must be re-tested by the user to ensure no regressions were introduced.
+    *   Trust only real Android device test results.
+3.  **Protected Foundation (from Build 1089)**:
+    *   Script saving must work.
+    *   My Scripts list must work.
+    *   Backend config must be correct.
+    *   RevenueCat must initialize correctly.
+4.  **Current Highest-Priority Bug**: Tapping a saved script in the My Scripts list crashes the app.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application with a React Native (Expo SDK 54) frontend and a FastAPI backend. The project has just emerged from a lengthy and difficult series of fixes for build and environment configuration issues that plagued multiple Android builds. Core configuration (backend URL, RevenueCat keys) is now correctly injected into the build. The current focus has shifted to fixing runtime logic bugs that were previously hidden by the config failures. The agent has just begun investigating the infinite spinner bug on the file upload screen.
+The project is a React Native (Expo) and FastAPI application. The codebase has been reverted to a baseline state (approximating build 1089) where core features like saving scripts and RevenueCat initialization were confirmed to be working. However, the known bug where reopening a saved script causes a crash persists. The agent was in the middle of applying a minimal, targeted fix for this crash.
 
 **Last working item**:
--   **Last item agent was working**: Investigating the infinite spinner bug on the file upload screen. The agent started by viewing the  file to trace the logic after a file is selected from the document picker.
+-   **Last item agent was working**: Fixing a crash that occurs when a user taps on a saved script from the My Scripts list. The root cause was identified as unsafe access to  and  in  when these fields are missing from the fetched script data. The agent was applying minimal, inline null/undefined guards.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: Manual testing by the user. The agent must provide clear instructions for the user to build and test on a physical Android device, as this bug is not reproducible in the preview environment.
+-   **Which testing method agent to use?**: Manual testing by the user on a real Android device.
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1**: File upload screen shows an infinite loading spinner after file selection (P0)
--   **Issue 2**: Paste + save functionality fails with a 404 error (P1)
--   **Issue 3**: Daily drill feature fails with a 404 error (P1)
+-   **Issue 1 (P0)**: Reopening a saved script crashes the app.
+-   **Issue 2 (P1)**: Premium entitlement is not restored/activated after a successful purchase/restore action.
+-   **Issue 3 (P2)**: Speech recognition in rehearse mode advances to the next line too early.
+-   **Issue 4 (P3)**: AI Parse V2 feature fails with a network error.
 
 **Issues Detail**:
--   **Issue 1**: File upload screen shows an infinite loading spinner after file selection
-    -   **Attempted fixes**: None yet. The agent has just begun the investigation by examining .
+-   **Issue 1**: Reopening a saved script crashes the app.
+    -   **Attempted fixes**: A previous attempt to fix this by wrapping the component's render method in an IIFE caused major regressions and was reverted. The current approach is to add targeted, inline null-coalescing () and optional chaining () operators.
     -   **Next debug checklist**:
-        1.  Analyze the  function inside .
-        2.  Trace the logic that processes the result from .
-        3.  Verify the structure of the returned file object and ensure properties like , , etc., are correctly accessed.
-        4.  Check the  block to confirm that the loading state () is cleared on all code paths (success, error, or cancellation).
-        5.  Add logging to view the contents of the selected file object and trace the file-reading process.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is the highest-priority bug blocking the core user journey of adding a new script to the app.
+        1.  Verify that all , , and  calls on  and  within  are safely guarded.
+        2.  Ensure the file is syntactically correct after all the search-and-replace edits.
+        3.  Hand over for the user to build and test, reminding them to also re-verify the protected foundation features (save, list, config, RevenueCat init).
+    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical foundation phase bug. Users must be able to access their saved work.
     -   **Status**: IN PROGRESS
-    -   **Is recurring issue?**: N (This specific spinner bug is new, but it's part of the previously buggy upload flow).
-    -   **Should Test frontend/backend/both after fix?**: Frontend (Manual user testing on a device).
+    -   **Is recurring issue?**: Y
+    -   **Should Test frontend/backend/both after fix?**: Frontend (Manual user testing on device).
     -   **Blocked on other issue**: None.
 
--   **Issue 2**: Paste + save functionality fails with a 404 error
-    -   **Attempted fixes**: None. The user has explicitly deprioritized this.
-    -   **Status**: NOT STARTED
-
--   **Issue 3**: Daily drill feature fails with a 404 error
-    -   **Attempted fixes**: None. The user has explicitly deprioritized this.
-    -   **Status**: NOT STARTED
-
 **In progress Task List**:
--   None.
+-   **Task 1**: Complete the application of null/undefined guards in .
+    -   **Where to resume**: The previous agent had executed several  commands to add guards. The next agent must verify that all access points to  and  are now safe, then prepare for a user test build.
+    -   **What will be achieved with this?**: The app will no longer crash when opening a saved script that has missing data fields.
+    -   **Status**: IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?**: Frontend.
+    -   **Blocked on something**: No.
 
 **Upcoming and Future Tasks**
--   **Upcoming Tasks**:
-    -   (P1) Fix broken  import in , , , and .
-    -   (P1) Stabilize the Self-Tape feature (camera initialization, video recording, and saving).
+-   **Upcoming Tasks (Stabilization Priority Order)**:
+    -   **(P1) Fix Premium Entitlement**: Investigate why a successful purchase/restore action doesn't update the app's state to reflect Premium: Yes. The issue is likely in  or related state management logic.
+    -   **(P2) Tune Rehearse Mode Auto-Advance**: Modify the logic in  to prevent it from advancing to the next line on partial speech recognition results.
+    -   **(P3) Fix AI Parse V2**: Diagnose the network failure for this feature.
 -   **Future Tasks**:
     -   Add optional password protection for shared casting links.
     -   Introduce a Director Mode with on-screen framing guides.
-    -   Upgrade Scene Partner mode to use ElevenLabs voices for premium users.
+    -   Upgrade Scene Partner mode to use ElevenLabs voices.
 
 **Completed work in this session**
--   **Fixed  Crash on Upload**: Resolved a runtime crash by changing the  import to  in , as the default API was deprecated in Expo SDK 54.
--   **Fixed Build Failures**:
-    -   Resolved a  missing dependency error by adding it to .
-    -   Fixed a yarn install v1.22.22
-[1/4] Resolving packages...
-success Already up-to-date.
-Done in 0.36s. error by regenerating  to sync with .
-    -   Fixed a Node.js version incompatibility by updating the version in  from  to .
--   **Fixed Backend URL Configuration**: Corrected a hardcoded fallback URL that was pointing to the wrong server, resolving persistent 404 errors for multiple features.
--   **Fixed RevenueCat Configuration**: Corrected a mismatch where a lifetime purchase option was shown in the UI despite no corresponding product in RevenueCat.
--   **Improved Error Messaging**: Enhanced error alerts in  and  to display the exact URL, status, and error message, aiding in debugging.
-
-**Earlier issues found/mentioned but not fixed**
--   **Platform Overrides Blocking Deployment**: A potential Emergent platform-level issue where the Android package name might be forcefully overridden, which could block Google Play Store uploads. Status: BLOCKED.
+-   **Reverted Regression**: Rolled back a faulty fix in  that had broken core saving and premium features, successfully restoring the protected foundation of build 1089.
+-   **Managed Build Version**: Updated  to set the  to 1089, ensuring a linear build history for user testing.
+-   **Diagnosed Multiple Issues**: Through a series of diagnostic builds, identified root causes for several issues, including build dependency failures, incorrect backend URLs, and crashes, adding detailed logging to aid future debugging.
 
 **Known issue recurrence from previous fork**
--   **Issue recurrence in previous fork**: Build and environment configuration failures in the Expo/EAS environment.
--   **Recurrence count**: 10+
--   **Status**: RESOLVED. The primary causes (stale Metro cache, incorrect Node version, deprecated APIs, out-of-sync lockfiles) have been addressed. The focus has now shifted from build-time issues to runtime application logic bugs.
+-   **Issue recurrence in previous fork**: Build and environment configuration issues (stale cache, dependency mismatches, incorrect URLs) have been a recurring theme, causing regressions. This led to the user mandating the current re-test the baseline rule.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Frontend**: Expo (React Native, SDK 54), TypeScript, Expo Router
+-   **Frontend**: Expo (React Native, SDK 54), Expo Router, TypeScript
 -   **Backend**: FastAPI, MongoDB
--   **Builds & CI/CD**: Expo Application Services (EAS)
--   **Core Problem**: The application is in a stabilization mode where the primary challenge is identifying and fixing discrepancies between the development/preview environment and the final compiled production Android build.
+-   **Builds**: Expo Application Services (EAS)
+-   **Methodology**: Strict, iterative stabilization focused on real-device testing and protecting a working baseline to prevent regressions.
 
 **key DB schema**
--   No changes.
-
-**changes in tech stack**
--   No changes.
+-   **scripts**: The documents in this collection may or may not contain  and  fields. This is the source of the crash being fixed.
 
 **All files of reference**
--   : This is the file containing the current bug. The fix will likely be within the  function.
--   : Contains all backend routes, useful for verifying any API endpoint paths.
-
-**Areas that need refactoring**:
--   The backend  file is monolithic.
--   Four files still use a broken, non-legacy  import path, which will cause them to crash at runtime:
-    -   
-    -   
-    -   
-    -   
-
-**key api endpoints**
--   
--    (for pasted text)
+-   : The file being actively modified to fix the reopen crash.
+-   : The My Scripts list screen, from which the user navigates to the crashing screen.
+-   : Manages the Android .
 
 **Critical Info for New Agent**
-1.  **MANDATORY WORKFLOW**: You are in a strict stabilization mode. The user requires a specific, formatted response for every fix (, , , etc.). You must identify the single root cause, apply the smallest possible fix, and then report back in that format. Do not combine fixes or refactor code.
-2.  **CURRENT BUG (P0)**: Your only task is to fix the infinite loading spinner on the  screen, which occurs after a file is selected. The issue is in .
-3.  **USER IS THE TESTER**: No fix is considered complete until the user confirms it works on a real Android device build. Do not rely on local or preview environment testing for validation.
-4.  **LOWER PRIORITY BUGS**: Do not work on the paste save or daily drill 404 errors. The user has explicitly stated to fix only the file upload spinner bug in this pass.
-
-**documents and test reports created in this job**
--   
+1.  **STRICT STABILIZATION MODE**: Your only task is to fix the saved-script reopen crash. Do not work on any other bugs (premium, speech timing, etc.).
+2.  **PROTECT THE BASELINE**: The fix must not break the currently working features from build 1089 (saving scripts, listing scripts, backend config, RevenueCat init). The user will test for regressions.
+3.  **CURRENT FIX IN PROGRESS**: The previous agent was adding minimal null guards ( and ) to . Your job is to complete and verify this targeted fix. Do not introduce broad changes like the previously reverted IIFE wrapper.
+4.  **USER IS THE TESTER**: No fix is complete until the user confirms it works on a new APK built for a real Android device.
 
 **Last 10 User Messages and any pending HUMAN messages**
-The user has been providing highly specific, structured feedback from real Android device builds. This iterative process has successfully resolved numerous build/config failures. The most recent messages have:
-1.  Confirmed build 1066 fixes the previous  crash.
-2.  Reported the new infinite spinner bug on the same screen.
-3.  Provided clear instructions to investigate the file selection-to-form population path only.
-4.  Reiterated the strict stabilization mode rules.
+-   User confirmed that build 1089 restored core functionality (save works) but the reopen-crash persists.
+-   User explicitly prioritized fixing the reopen-crash and de-prioritized the premium and speech recognition issues for this pass.
+-   User established a CRITICAL BASELINE PROTECTION RULE: any change must be tested against the working foundation of build 1089, and regressions will be rejected.
+-   The user is waiting for a new build with the targeted fix for the reopen crash.
 
 **Project Health Check:**
--   **Broken**: Yes. The core file upload flow, a primary user journey, is non-functional on the latest Android build.
--   **Mocked**: A  flag exists to bypass the paywall for internal testing.
+-   **Broken**: Yes. A foundational user flow—reopening a saved script—is crashing the app, blocking further progress.
+-   **Mocked**: A  flag exists for bypassing the paywall.
 
 **3rd Party Integrations**
--   **OpenAI GPT-4o**: AI coaching and feedback — uses Emergent LLM Key.
--   **OpenAI Whisper**: Speech-to-Text — uses Emergent LLM Key.
--   **RevenueCat**: In-app purchases — requires User API Key.
--   **Sentry**: Crash and error reporting — requires User API Key (DSN).
--   **ElevenLabs**: Multi-voice TTS — requires User API Key.
+-   **OpenAI GPT-4o**: AI coaching and feedback.
+-   **OpenAI Whisper**: Speech-to-Text.
+-   **RevenueCat**: In-app purchases.
+-   **Sentry**: Crash and error reporting.
+-   **ElevenLabs**: Multi-voice TTS.
 
 **Testing status**
--   **Testing agent used after significant changes**: NO. All testing is performed manually by the user on a real Android device, as the bugs are specific to the production build environment.
--   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**: None.
--   **Known regressions**: None in this pass, but the upload flow has regressed from a crash to an infinite spinner.
-
-**Credentials to test flow:**
--   Not applicable. The agent cannot test the flow where the bug occurs.
+-   **Testing agent used after significant changes**: NO. All testing is manual by the user on a real device.
+-   **Known regressions**: The project has a history of regressions when fixes are not carefully targeted, which is why the user has enforced the current strict stabilization mode.
 
 **What agent forgot to execute**
--   The previous agent correctly followed the user's strict, one-bug-at-a-time process. Nothing was forgotten; the current task is the logical next step in debugging the upload flow.</analysis>
+-   The previous agent correctly followed the user's strict instructions to revert a bad fix and start a new, more targeted one. Nothing was forgotten; the current task is to complete the in-progress fix.</analysis>

@@ -103,7 +103,8 @@ export default function ScriptDetailScreen() {
 
   useEffect(() => {
     if (currentScript) {
-      const userChar = currentScript.characters.find((c) => c.is_user_character);
+      const characters = currentScript.characters || [];
+      const userChar = characters.find((c) => c.is_user_character);
       if (userChar) {
         setSelectedCharacter(userChar.name);
       }
@@ -185,7 +186,7 @@ export default function ScriptDetailScreen() {
           <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {currentScript.title}
+          {currentScript?.title || 'Untitled'}
         </Text>
         <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.settingsButton}>
           <Ionicons name="settings-outline" size={24} color="#6366f1" />
@@ -198,19 +199,19 @@ export default function ScriptDetailScreen() {
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Ionicons name="people" size={24} color="#6366f1" />
-              <Text style={styles.infoValue}>{currentScript.characters.length}</Text>
+              <Text style={styles.infoValue}>{(currentScript?.characters || []).length}</Text>
               <Text style={styles.infoLabel}>Characters</Text>
             </View>
             <View style={styles.infoSeparator} />
             <View style={styles.infoItem}>
               <Ionicons name="chatbubble" size={24} color="#10b981" />
-              <Text style={styles.infoValue}>{currentScript.lines.filter((l) => !l.is_stage_direction).length}</Text>
+              <Text style={styles.infoValue}>{(currentScript?.lines || []).filter((l) => !l.is_stage_direction).length}</Text>
               <Text style={styles.infoLabel}>Lines</Text>
             </View>
             <View style={styles.infoSeparator} />
             <View style={styles.infoItem}>
               <Ionicons name="text" size={24} color="#f59e0b" />
-              <Text style={styles.infoValue}>{currentScript.lines.filter((l) => l.is_stage_direction).length}</Text>
+              <Text style={styles.infoValue}>{(currentScript?.lines || []).filter((l) => l.is_stage_direction).length}</Text>
               <Text style={styles.infoLabel}>Directions</Text>
             </View>
           </View>
@@ -221,7 +222,7 @@ export default function ScriptDetailScreen() {
           <Text style={styles.sectionTitle}>Select Your Character</Text>
           <Text style={styles.sectionSubtitle}>AI will read all other characters</Text>
           <View style={styles.characterList}>
-            {currentScript.characters.map((character) => (
+            {(currentScript?.characters || []).map((character) => (
               <TouchableOpacity
                 key={character.id}
                 style={[
@@ -386,7 +387,7 @@ export default function ScriptDetailScreen() {
         <View style={styles.section}>
           <VoiceAssignment
             scriptId={id!}
-            characters={currentScript.characters}
+            characters={currentScript.characters || []}
             userCharacter={selectedCharacter}
             isPremium={isPremium}
             onUpgradePress={async () => {
@@ -411,7 +412,7 @@ export default function ScriptDetailScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.previewContainer}>
-            {currentScript.lines.slice(0, 10).map((line, index) => (
+            {(currentScript.lines || []).slice(0, 10).map((line, index) => (
               <View
                 key={line.id}
                 style={[
@@ -437,9 +438,9 @@ export default function ScriptDetailScreen() {
                 )}
               </View>
             ))}
-            {currentScript.lines.length > 10 && (
+            {(currentScript.lines || []).length > 10 && (
               <Text style={styles.previewMore}>
-                + {currentScript.lines.length - 10} more lines...
+                + {(currentScript.lines || []).length - 10} more lines...
               </Text>
             )}
           </View>

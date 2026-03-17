@@ -6,7 +6,7 @@
  * This ensures the URL is always available at module load time.
  */
 
-export const API_BASE_URL = 'https://android-upload-test.preview.emergentagent.com';
+export const API_BASE_URL = 'https://script-recovery-1.preview.emergentagent.com';
 export const API_TIMEOUT = 15000;
 
 /**

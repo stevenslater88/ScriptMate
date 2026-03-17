@@ -8,7 +8,7 @@ import requests
 import os
 import base64
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://android-upload-test.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://script-recovery-1.preview.emergentagent.com').rstrip('/')
 
 class TestHealthAndBasicAPIs:
     """Health check and basic API verification"""
