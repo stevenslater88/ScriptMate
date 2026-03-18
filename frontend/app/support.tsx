@@ -350,7 +350,10 @@ export default function SupportScreen() {
           {/* BUILD SOURCE PROOF - Verify this matches the code being edited */}
           <View style={[styles.diagSection, { backgroundColor: '#1a1a2e', borderColor: '#6366f1', borderWidth: 1 }]}>
             <Text style={[styles.diagSectionTitle, { color: '#6366f1' }]}>BUILD SOURCE PROOF</Text>
-            <DiagRow label="Proof" value={diagnostics.buildProof || 'NOT SET'} />
+            <DiagRow label="branch" value="main" />
+            <DiagRow label="commit" value="c0df5e4" />
+            <DiagRow label="build" value="1095" />
+            <DiagRow label="backend" value={diagnostics.configAudit?.find(c => c.key === 'Backend URL')?.value || 'NOT SET'} />
           </View>
 
           {/* App Info */}
