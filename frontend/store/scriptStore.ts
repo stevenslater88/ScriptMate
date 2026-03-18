@@ -345,11 +345,14 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const url = `${API_BASE_URL}/api/scripts`;
+      // DIAGNOSTIC: Log exact URL being used
+      console.log(`[ScriptStore] ========== CREATE SCRIPT DEBUG ==========`);
       console.log(`[ScriptStore] createScript: POST ${url}`);
       console.log(`[ScriptStore] API_BASE_URL = "${API_BASE_URL}"`);
       console.log(`[ScriptStore] deviceId = "${deviceId}"`);
       console.log(`[ScriptStore] title = "${title?.substring(0, 50)}"`);
       console.log(`[ScriptStore] rawText length = ${rawText?.length || 0}`);
+      console.log(`[ScriptStore] ===========================================`);
       
       // Validate inputs before request
       if (!url || url.includes('undefined')) {
@@ -377,11 +380,15 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       const requestUrl = error?.config?.url || 'unknown';
       const status = error?.response?.status || 'no status';
       const responseData = JSON.stringify(error?.response?.data || {});
-      console.error(`[ScriptStore] createScript FAILED:`);
-      console.error(`  URL: ${requestUrl}`);
-      console.error(`  Status: ${status}`);
-      console.error(`  Response: ${responseData}`);
-      console.error(`  Error: ${errorMsg}`);
+      // DIAGNOSTIC: Enhanced failure logging
+      console.error(`[ScriptStore] ========== CREATE SCRIPT FAILED ==========`);
+      console.error(`[ScriptStore] Attempted URL: ${requestUrl}`);
+      console.error(`[ScriptStore] API_BASE_URL was: ${API_BASE_URL}`);
+      console.error(`[ScriptStore] Status: ${status}`);
+      console.error(`[ScriptStore] Response: ${responseData}`);
+      console.error(`[ScriptStore] Error: ${errorMsg}`);
+      console.error(`[ScriptStore] Full error object: ${JSON.stringify(error, null, 2)}`);
+      console.error(`[ScriptStore] ===========================================`);
       set({ error: `${errorMsg} [URL: ${requestUrl}, Status: ${status}]`, loading: false });
       return null;
     }
