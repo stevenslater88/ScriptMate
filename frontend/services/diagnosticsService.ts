@@ -10,6 +10,16 @@ import { getConfigAudit, ConfigAudit } from './appConfig';
 // so we duplicate the exact same value here.
 export const BUILD_FINGERPRINT = 'SM8-FIX-0315A';
 
+// BUILD SOURCE VERIFICATION - This proves which code was actually built
+// If device shows different values, the build is from different code
+export const BUILD_PROOF = {
+  branch: 'main',
+  commit: 'c0df5e4',
+  build: 1094,
+  timestamp: '2026-03-18T22:00:00Z',
+  marker: 'BUILD_PROOF: branch=main commit=c0df5e4 build=1094',
+};
+
 // Feature Flags - HARDCODED for stabilization mode
 export const FeatureFlags = {
   PREMIUM_ENABLED: true,
@@ -185,6 +195,9 @@ export interface DiagnosticsInfo {
 
   // Build fingerprint
   buildFingerprint: string;
+
+  // Build source proof
+  buildProof: string;
 }
 
 // Get full diagnostics
@@ -254,6 +267,9 @@ export const getDiagnostics = async (): Promise<DiagnosticsInfo> => {
 
     // Build fingerprint
     buildFingerprint: BUILD_FINGERPRINT,
+
+    // BUILD SOURCE PROOF - Verify this matches the code being edited
+    buildProof: BUILD_PROOF.marker,
   };
 };
 
@@ -265,6 +281,9 @@ export const formatDiagnosticsText = async (): Promise<string> => {
     '=== ScriptM8 Diagnostics ===',
     `Timestamp: ${new Date().toISOString()}`,
     `Build Fingerprint: ${BUILD_FINGERPRINT}`,
+    '',
+    '=== BUILD SOURCE PROOF ===',
+    BUILD_PROOF.marker,
     '',
     '--- App Info ---',
     `App: ${diag.appName}`,

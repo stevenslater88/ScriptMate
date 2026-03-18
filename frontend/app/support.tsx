@@ -308,6 +308,12 @@ export default function SupportScreen() {
         <ActivityIndicator color="#6366f1" size="large" style={{ marginTop: 40 }} />
       ) : diagnostics ? (
         <>
+          {/* BUILD SOURCE PROOF - Verify this matches the code being edited */}
+          <View style={[styles.diagSection, { backgroundColor: '#1a1a2e', borderColor: '#6366f1', borderWidth: 1 }]}>
+            <Text style={[styles.diagSectionTitle, { color: '#6366f1' }]}>BUILD SOURCE PROOF</Text>
+            <DiagRow label="Proof" value={diagnostics.buildProof || 'NOT SET'} />
+          </View>
+
           {/* App Info */}
           <View style={styles.diagSection}>
             <Text style={styles.diagSectionTitle}>App Info</Text>
