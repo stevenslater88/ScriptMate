@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { parseScript, ParsedLine, DetectedCharacter, ParseResult, LineType } from '../services/smartScriptParser';
 import { useScriptStore } from '../store/scriptStore';
+import { DebugLog } from '../services/debugLogService';
 
 type Step = 'characters' | 'preview' | 'assign';
 
@@ -33,11 +34,21 @@ export default function ScriptParserScreen() {
   const rawText = params.rawText || '';
   const { createScript } = useScriptStore();
 
+  // FORENSIC: Track screen view
+  useEffect(() => {
+    DebugLog.setScreen('ScriptParserScreen');
+    DebugLog.log('SCREEN_VIEW', 'ScriptParserScreen', 'Entered script parser', {
+      titleLength: title.length,
+      rawTextLength: rawText.length,
+    });
+  }, []);
+
   // Guard: If no rawText provided, redirect to upload screen
   // This happens when user taps "New Script" directly
   React.useEffect(() => {
     if (!rawText || rawText.trim().length === 0) {
       console.log('[ScriptParser] No rawText provided, redirecting to upload');
+      DebugLog.navigation('ScriptParserScreen', 'upload', { reason: 'no rawText' });
       router.replace('/upload');
     }
   }, []);
@@ -91,7 +102,16 @@ export default function ScriptParserScreen() {
 
   // Save to backend
   const handleSave = async () => {
+    // FORENSIC: Log Save & Start button press
+    DebugLog.buttonPress('save-script-btn', 'ScriptParserScreen');
+    DebugLog.functionStart('handleSave', { 
+      title: title?.substring(0, 30), 
+      character: myCharacter,
+      rawTextLength: rawText?.length || 0 
+    });
+    
     if (!myCharacter) {
+      DebugLog.alertShown('Select Character', 'Please choose your character first.');
       Alert.alert('Select Character', 'Please choose your character first.');
       return;
     }
@@ -118,16 +138,25 @@ export default function ScriptParserScreen() {
         await updateScript(script.id, { user_character: myCharacter });
         console.log(`[ScriptParser] updateScript completed`);
 
+        DebugLog.functionSuccess('handleSave', { scriptId: script.id, character: myCharacter });
+        DebugLog.alertShown('Script Ready!', `"${title}" saved with ${myCharacter} as your character.`);
         Alert.alert('Script Ready!', `"${title}" saved with ${myCharacter} as your character.`, [
-          { text: 'Start Rehearsal', onPress: () => router.replace(`/script/${script.id}`) },
+          { text: 'Start Rehearsal', onPress: () => {
+            DebugLog.navigation('ScriptParserScreen', `script/${script.id}`);
+            router.replace(`/script/${script.id}`);
+          }},
         ]);
       } else {
         const storeError = useScriptStore.getState().error;
         console.error(`[ScriptParser] createScript returned null. Store error: ${storeError}`);
+        DebugLog.functionError('handleSave', new Error(storeError || 'createScript returned null'));
+        DebugLog.alertShown('Save Failed', storeError || 'Could not save script');
         Alert.alert('Save Failed', storeError || 'Could not save script. Please check your connection and try again.');
       }
     } catch (err: any) {
       console.error(`[ScriptParser] handleSave error: ${err?.message || err}`);
+      DebugLog.functionError('handleSave', err);
+      DebugLog.alertShown('Error', err.message || 'Failed to save script');
       Alert.alert('Error', err.message || 'Failed to save script');
     } finally {
       setSaving(false);

@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import { useScriptStore } from '../store/scriptStore';
 import {
   getDiagnostics,
@@ -24,6 +25,7 @@ import {
   FeatureFlags,
   DiagnosticsInfo,
 } from '../services/diagnosticsService';
+import { DebugLog, DebugLogEntry } from '../services/debugLogService';
 import { resetOnboarding } from '../components/OnboardingTutorial';
 import Purchases from 'react-native-purchases';
 
@@ -61,13 +63,50 @@ export default function SupportScreen() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsInfo | null>(null);
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
   const [refreshingPurchases, setRefreshingPurchases] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
+  const [showDebugLogs, setShowDebugLogs] = useState(false);
+
+  // FORENSIC: Track screen view
+  useEffect(() => {
+    DebugLog.setScreen('SupportScreen');
+  }, []);
 
   // Load diagnostics when tab is selected
   useEffect(() => {
     if (activeTab === 'diagnostics') {
       loadDiagnostics();
+      loadDebugLogs();
     }
   }, [activeTab]);
+
+  const loadDebugLogs = () => {
+    setDebugLogs(DebugLog.getLogs());
+  };
+
+  const handleCopyDebugLogs = async () => {
+    const logText = DebugLog.exportAsText();
+    await Clipboard.setStringAsync(logText);
+    Alert.alert('Copied!', `${debugLogs.length} log entries copied to clipboard`);
+  };
+
+  const handleClearDebugLogs = async () => {
+    Alert.alert(
+      'Clear Debug Logs',
+      'This will clear all forensic logs. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear', 
+          style: 'destructive',
+          onPress: async () => {
+            await DebugLog.clearLogs();
+            loadDebugLogs();
+            Alert.alert('Cleared', 'Debug logs cleared');
+          }
+        },
+      ]
+    );
+  };
 
   const loadDiagnostics = async () => {
     setLoadingDiagnostics(true);
@@ -439,6 +478,92 @@ export default function SupportScreen() {
             <Ionicons name="refresh" size={20} color="#6b7280" />
             <Text style={styles.refreshDiagText}>Refresh Diagnostics</Text>
           </TouchableOpacity>
+
+          {/* FULL DEBUG LOG SECTION */}
+          <View style={[styles.diagSection, { marginTop: 16 }]}>
+            <TouchableOpacity 
+              style={styles.debugLogHeader}
+              onPress={() => {
+                setShowDebugLogs(!showDebugLogs);
+                if (!showDebugLogs) loadDebugLogs();
+              }}
+            >
+              <Text style={[styles.diagSectionTitle, { color: '#f59e0b' }]}>
+                FULL DEBUG LOG ({debugLogs.length} entries)
+              </Text>
+              <Ionicons 
+                name={showDebugLogs ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color="#f59e0b" 
+              />
+            </TouchableOpacity>
+
+            {showDebugLogs && (
+              <>
+                {/* Debug Log Actions */}
+                <View style={styles.debugLogActions}>
+                  <TouchableOpacity 
+                    style={styles.debugLogBtn} 
+                    onPress={handleCopyDebugLogs}
+                  >
+                    <Ionicons name="copy" size={16} color="#fff" />
+                    <Text style={styles.debugLogBtnText}>Copy All</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.debugLogBtn, { backgroundColor: '#dc2626' }]} 
+                    onPress={handleClearDebugLogs}
+                  >
+                    <Ionicons name="trash" size={16} color="#fff" />
+                    <Text style={styles.debugLogBtnText}>Clear</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.debugLogBtn, { backgroundColor: '#059669' }]} 
+                    onPress={loadDebugLogs}
+                  >
+                    <Ionicons name="refresh" size={16} color="#fff" />
+                    <Text style={styles.debugLogBtnText}>Refresh</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Log Entries */}
+                {debugLogs.length === 0 ? (
+                  <Text style={styles.diagValue}>No logs yet. Use the app to generate logs.</Text>
+                ) : (
+                  <View style={styles.debugLogList}>
+                    {debugLogs.slice(0, 50).map((log, index) => (
+                      <View key={log.id} style={styles.debugLogEntry}>
+                        <View style={styles.debugLogRow}>
+                          <Text style={[
+                            styles.debugLogType,
+                            log.eventType.includes('ERROR') && { color: '#ef4444' },
+                            log.eventType.includes('SUCCESS') && { color: '#10b981' },
+                            log.eventType.includes('API') && { color: '#3b82f6' },
+                          ]}>
+                            [{log.eventType}]
+                          </Text>
+                          <Text style={styles.debugLogTime}>
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </Text>
+                        </View>
+                        <Text style={styles.debugLogSource}>{log.source}</Text>
+                        <Text style={styles.debugLogMessage}>{log.message}</Text>
+                        {log.metadata && (
+                          <Text style={styles.debugLogMeta}>
+                            {JSON.stringify(log.metadata, null, 1).substring(0, 200)}
+                          </Text>
+                        )}
+                      </View>
+                    ))}
+                    {debugLogs.length > 50 && (
+                      <Text style={styles.diagValue}>
+                        ...and {debugLogs.length - 50} more entries (use Copy All)
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </>
+            )}
+          </View>
         </>
       ) : (
         <Text style={styles.diagNoData}>Failed to load diagnostics</Text>
@@ -709,5 +834,72 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9ca3af',
     marginTop: 2,
+  },
+  // Debug Log styles
+  debugLogHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  debugLogActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 12,
+  },
+  debugLogBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  debugLogBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  debugLogList: {
+    gap: 8,
+  },
+  debugLogEntry: {
+    backgroundColor: '#1e1e2e',
+    borderRadius: 8,
+    padding: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#6b7280',
+  },
+  debugLogRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  debugLogType: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#f59e0b',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  debugLogTime: {
+    fontSize: 10,
+    color: '#6b7280',
+  },
+  debugLogSource: {
+    fontSize: 11,
+    color: '#a78bfa',
+    marginTop: 2,
+  },
+  debugLogMessage: {
+    fontSize: 12,
+    color: '#e2e8f0',
+    marginTop: 4,
+  },
+  debugLogMeta: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });

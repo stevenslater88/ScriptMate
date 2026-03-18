@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import * as Device from 'expo-device';
 import axios from 'axios';
 
 import { useScriptStore } from '../store/scriptStore';
+import { DebugLog } from '../services/debugLogService';
 
 // HARDCODED backend URL - do not use env vars or dynamic resolution
 const API_BASE_URL = 'https://script-recovery-1.preview.emergentagent.com';
@@ -67,7 +68,13 @@ export default function UploadScreen() {
   const [uploadMethod, setUploadMethod] = useState<'paste' | 'file'>('paste');
   const { createScript } = useScriptStore();
 
+  // FORENSIC: Track screen view
+  useEffect(() => {
+    DebugLog.setScreen('UploadScreen');
+  }, []);
+
   const handleFilePick = async () => {
+    DebugLog.buttonPress('file-pick-btn', 'UploadScreen');
     try {
       console.log('[Upload] Opening document picker...');
       const result = await DocumentPicker.getDocumentAsync({
@@ -302,11 +309,20 @@ export default function UploadScreen() {
   };
 
   const handleSubmit = async () => {
+    // FORENSIC: Log Parse with AI button press
+    DebugLog.buttonPress('parse-ai-btn', 'UploadScreen');
+    DebugLog.functionStart('handleSubmit', { 
+      titleLength: title.trim().length, 
+      textLength: scriptText.trim().length 
+    });
+    
     if (!title.trim()) {
+      DebugLog.alertShown('Error', 'Please enter a script title');
       Alert.alert('Error', 'Please enter a script title');
       return;
     }
     if (!scriptText.trim()) {
+      DebugLog.alertShown('Error', 'Please paste your script text');
       Alert.alert('Error', 'Please paste your script text');
       return;
     }
@@ -318,16 +334,23 @@ export default function UploadScreen() {
       const script = await createScript(title.trim(), scriptText.trim());
       console.log(`[Upload] createScript returned: ${script ? `id=${script.id}` : 'null'}`);
       if (script) {
+        DebugLog.functionSuccess('handleSubmit', { scriptId: script.id });
+        DebugLog.alertShown('Success', 'Script created and parsed successfully!');
         Alert.alert('Success', 'Script created and parsed successfully!', [
           {
             text: 'View Script',
-            onPress: () => router.replace(`/script/${script.id}`),
+            onPress: () => {
+              DebugLog.navigation('UploadScreen', `script/${script.id}`);
+              router.replace(`/script/${script.id}`);
+            },
           },
         ]);
       } else {
         // createScript catches errors internally and returns null — surface this to user
         const storeError = useScriptStore.getState().error;
         console.error(`[Upload] createScript returned null, store error: ${storeError}`);
+        DebugLog.functionError('handleSubmit', new Error(storeError || 'createScript returned null'));
+        DebugLog.alertShown('Save Failed', storeError || 'Could not save script');
         Alert.alert(
           'Save Failed',
           storeError || 'Could not save script. Please check your internet connection and try again.'
@@ -337,6 +360,7 @@ export default function UploadScreen() {
       const errMsg = error?.message || 'Unknown error';
       const serverMsg = error?.response?.data?.detail;
       console.error(`[Upload] Submit failed: msg=${errMsg}, server=${serverMsg}`);
+      DebugLog.functionError('handleSubmit', error);
 
       let msg = 'Failed to create script';
       if (error?.message?.includes('timeout') || error?.code === 'ECONNABORTED') {
@@ -348,6 +372,7 @@ export default function UploadScreen() {
       } else {
         msg = `Upload failed: ${errMsg}`;
       }
+      DebugLog.alertShown('Error', msg);
       Alert.alert('Error', msg);
     } finally {
       setLoading(false);
@@ -512,9 +537,16 @@ Then I guess this is goodbye.`;
                   style={[styles.smartParseButton, (!title.trim() || !scriptText.trim()) && styles.submitButtonDisabled]}
                   onPress={() => {
                     if (!title.trim() || !scriptText.trim()) {
+                      DebugLog.alertShown('Error', 'Enter a title and paste script text first');
                       Alert.alert('Error', 'Enter a title and paste script text first');
                       return;
                     }
+                    // FORENSIC: Log Smart Parse V2 navigation
+                    DebugLog.buttonPress('parse-smart-btn', 'UploadScreen');
+                    DebugLog.navigation('UploadScreen', 'script-parser', { 
+                      titleLength: title.trim().length, 
+                      rawTextLength: scriptText.trim().length 
+                    });
                     router.push({
                       pathname: '/script-parser',
                       params: { title: title.trim(), rawText: scriptText.trim() },

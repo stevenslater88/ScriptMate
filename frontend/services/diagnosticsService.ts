@@ -15,9 +15,9 @@ export const BUILD_FINGERPRINT = 'SM8-FIX-0315A';
 export const BUILD_PROOF = {
   branch: 'main',
   commit: 'c0df5e4',
-  build: 1094,
-  timestamp: '2026-03-18T22:00:00Z',
-  marker: 'BUILD_PROOF: branch=main commit=c0df5e4 build=1094',
+  build: 1095,
+  timestamp: '2026-03-18T23:00:00Z',
+  marker: 'BUILD_PROOF: branch=main commit=c0df5e4 build=1095',
 };
 
 // Feature Flags - HARDCODED for stabilization mode

@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, API_TIMEOUT } from '../services/apiConfig';
 import { isDevTestMode } from '../services/devTestMode';
 import { checkPremiumAccess } from '../services/revenuecat';
+import { DebugLog } from '../services/debugLogService';
 
 function getErrorMessage(error: any): string {
   if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
@@ -343,8 +344,23 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   createScript: async (title: string, rawText: string) => {
     const deviceId = await getDeviceId();
     set({ loading: true, error: null });
+    
+    // FORENSIC: Log function start
+    DebugLog.functionStart('createScript', { 
+      title: title?.substring(0, 50), 
+      rawTextLength: rawText?.length || 0,
+      deviceId: deviceId?.substring(0, 20),
+    });
+    
+    const startTime = Date.now();
+    const endpoint = '/api/scripts';
+    const url = `${API_BASE_URL}${endpoint}`;
+    
+    // FORENSIC: Log API request
+    const requestId = DebugLog.apiRequest('POST', API_BASE_URL, endpoint, 
+      `title=${title?.substring(0, 30)}, textLen=${rawText?.length}`);
+    
     try {
-      const url = `${API_BASE_URL}/api/scripts`;
       // DIAGNOSTIC: Log exact URL being used
       console.log(`[ScriptStore] ========== CREATE SCRIPT DEBUG ==========`);
       console.log(`[ScriptStore] createScript: POST ${url}`);
@@ -367,7 +383,15 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         raw_text: rawText,
         user_id: deviceId,
       }, { timeout: API_TIMEOUT });
+      
+      const durationMs = Date.now() - startTime;
       const newScript = response.data;
+      
+      // FORENSIC: Log API success
+      DebugLog.apiResponse(requestId, 'POST', endpoint, response.status, durationMs, 
+        `id=${newScript?.id}`);
+      DebugLog.functionSuccess('createScript', { scriptId: newScript?.id });
+      
       console.log(`[ScriptStore] createScript success: id=${newScript?.id}`);
       set((state) => ({
         scripts: [newScript, ...state.scripts],
@@ -376,10 +400,16 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       }));
       return newScript;
     } catch (error: any) {
+      const durationMs = Date.now() - startTime;
       const errorMsg = getErrorMessage(error);
       const requestUrl = error?.config?.url || 'unknown';
       const status = error?.response?.status || 'no status';
       const responseData = JSON.stringify(error?.response?.data || {});
+      
+      // FORENSIC: Log API error
+      DebugLog.apiError(requestId, 'POST', endpoint, status, errorMsg, durationMs);
+      DebugLog.functionError('createScript', error);
+      
       // DIAGNOSTIC: Enhanced failure logging
       console.error(`[ScriptStore] ========== CREATE SCRIPT FAILED ==========`);
       console.error(`[ScriptStore] Attempted URL: ${requestUrl}`);
