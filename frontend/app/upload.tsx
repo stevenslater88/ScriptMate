@@ -65,7 +65,8 @@ export default function UploadScreen() {
   const [scriptText, setScriptText] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadMethod, setUploadMethod] = useState<'paste' | 'file'>('paste');
-  const { createScript } = useScriptStore();
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const { createScript, createRehearsal } = useScriptStore();
 
   const handleFilePick = async () => {
     try {
@@ -354,6 +355,69 @@ export default function UploadScreen() {
     }
   };
 
+  // Quick Rehearse: Fastest path to rehearsal
+  const handleQuickRehearse = async () => {
+    if (!title.trim()) {
+      Alert.alert('Error', 'Please enter a script title');
+      return;
+    }
+    if (!scriptText.trim()) {
+      Alert.alert('Error', 'Please paste your script text');
+      return;
+    }
+
+    console.log('[Upload] Quick Rehearse starting...');
+    setLoading(true);
+    try {
+      // Step 1: Create the script using existing logic
+      const script = await createScript(title.trim(), scriptText.trim());
+      
+      if (!script) {
+        const storeError = useScriptStore.getState().error;
+        Alert.alert('Save Failed', storeError || 'Could not save script.');
+        return;
+      }
+
+      console.log(`[Upload] Script created: ${script.id}`);
+      
+      // Step 2: Auto-select character (most lines, or first available)
+      const characters = script.characters || [];
+      if (characters.length === 0) {
+        Alert.alert('No Characters Found', 'Could not detect characters in script. Try Advanced Options.');
+        router.replace(`/script/${script.id}`);
+        return;
+      }
+
+      // Pick character with most lines
+      const sortedChars = [...characters].sort((a, b) => (b.line_count || 0) - (a.line_count || 0));
+      const selectedChar = sortedChars[0].name;
+      console.log(`[Upload] Auto-selected character: ${selectedChar}`);
+
+      // Step 3: Create rehearsal session with defaults
+      const rehearsal = await createRehearsal(
+        script.id,
+        selectedChar,
+        'full_read', // Default mode
+        'alloy'      // Default voice
+      );
+
+      if (rehearsal) {
+        console.log(`[Upload] Rehearsal created: ${rehearsal.id}, starting...`);
+        router.replace(`/rehearsal/${rehearsal.id}`);
+      } else {
+        // Fallback: go to script detail if rehearsal creation fails
+        Alert.alert('Note', `Script saved! Playing as ${selectedChar}.`, [
+          { text: 'Continue', onPress: () => router.replace(`/script/${script.id}?autoStart=true`) }
+        ]);
+      }
+    } catch (error: any) {
+      console.error('[Upload] Quick Rehearse error:', error);
+      Alert.alert('Error', error?.message || 'Quick rehearse failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sampleScript = `SARAH
 I can't believe you're leaving tomorrow.
 
@@ -491,42 +555,83 @@ Then I guess this is goodbye.`;
                 </Text>
               </View>
 
-              {/* Submit Buttons */}
-              <View style={styles.parseOptions}>
-                <TouchableOpacity
-                  style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                  onPress={handleSubmit}
-                  disabled={loading}
-                  testID="parse-ai-btn"
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <Ionicons name="sparkles" size={20} color="#fff" />
-                      <Text style={styles.submitButtonText}>Parse with AI</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.smartParseButton, (!title.trim() || !scriptText.trim()) && styles.submitButtonDisabled]}
-                  onPress={() => {
-                    if (!title.trim() || !scriptText.trim()) {
-                      Alert.alert('Error', 'Enter a title and paste script text first');
-                      return;
-                    }
-                    router.push({
-                      pathname: '/script-parser',
-                      params: { title: title.trim(), rawText: scriptText.trim() },
-                    });
-                  }}
-                  disabled={!title.trim() || !scriptText.trim()}
-                  testID="parse-smart-btn"
-                >
-                  <Ionicons name="flash" size={20} color="#fff" />
-                  <Text style={styles.submitButtonText}>Smart Parse V2</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Primary Action: Quick Rehearse */}
+              <TouchableOpacity
+                style={[styles.quickRehearse, loading && styles.submitButtonDisabled]}
+                onPress={handleQuickRehearse}
+                disabled={loading || !title.trim() || !scriptText.trim()}
+                testID="quick-rehearse-btn"
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="play-circle" size={24} color="#fff" />
+                    <Text style={styles.quickRehearseText}>Auto Start Rehearsal</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <Text style={styles.quickRehearseHint}>
+                Saves script and starts rehearsal instantly
+              </Text>
+
+              {/* Advanced Options Toggle */}
+              <TouchableOpacity
+                style={styles.advancedToggle}
+                onPress={() => setShowAdvanced(!showAdvanced)}
+                testID="advanced-options-toggle"
+              >
+                <Text style={styles.advancedToggleText}>Advanced Options</Text>
+                <Ionicons 
+                  name={showAdvanced ? "chevron-up" : "chevron-down"} 
+                  size={18} 
+                  color="#6b7280" 
+                />
+              </TouchableOpacity>
+
+              {/* Advanced Options (collapsible) */}
+              {showAdvanced && (
+                <View style={styles.advancedSection}>
+                  <Text style={styles.advancedHint}>
+                    Use these for more control over parsing and setup
+                  </Text>
+                  <View style={styles.parseOptions}>
+                    <TouchableOpacity
+                      style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                      onPress={handleSubmit}
+                      disabled={loading}
+                      testID="parse-ai-btn"
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <>
+                          <Ionicons name="sparkles" size={20} color="#fff" />
+                          <Text style={styles.submitButtonText}>Parse with AI</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.smartParseButton, (!title.trim() || !scriptText.trim()) && styles.submitButtonDisabled]}
+                      onPress={() => {
+                        if (!title.trim() || !scriptText.trim()) {
+                          Alert.alert('Error', 'Enter a title and paste script text first');
+                          return;
+                        }
+                        router.push({
+                          pathname: '/script-parser',
+                          params: { title: title.trim(), rawText: scriptText.trim() },
+                        });
+                      }}
+                      disabled={!title.trim() || !scriptText.trim()}
+                      testID="parse-smart-btn"
+                    >
+                      <Ionicons name="flash" size={20} color="#fff" />
+                      <Text style={styles.submitButtonText}>Smart Parse V2</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </>
           ) : (
             <>
@@ -746,5 +851,51 @@ const styles = StyleSheet.create({
   uploadSubtitle: {
     fontSize: 14,
     color: '#6b7280',
+  },
+  // Quick Rehearse styles
+  quickRehearse: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10b981',
+    paddingVertical: 18,
+    borderRadius: 14,
+    gap: 12,
+    marginBottom: 8,
+  },
+  quickRehearseText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  quickRehearseHint: {
+    textAlign: 'center',
+    color: '#6b7280',
+    fontSize: 13,
+    marginBottom: 20,
+  },
+  advancedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 6,
+  },
+  advancedToggleText: {
+    color: '#6b7280',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  advancedSection: {
+    marginTop: 8,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#2a2a3e',
+  },
+  advancedHint: {
+    color: '#6b7280',
+    fontSize: 13,
+    marginBottom: 12,
+    textAlign: 'center',
   },
 });
