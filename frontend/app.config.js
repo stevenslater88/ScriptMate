@@ -1,19 +1,13 @@
 /**
  * Dynamic Expo config — runs at BUILD TIME during `expo prebuild` / `eas build`.
  *
- * This runs in a Node.js context on the build machine, NOT in the Metro bundler.
- * So `process.env` here reads real OS environment variables set by the EAS `env` block.
- * This makes it immune to the Metro SDK 53+ EXPO_PUBLIC_* inlining regression.
- *
- * The returned config is serialized and embedded into the native app.
- * At runtime, the app reads `Constants.expoConfig.extra.*`.
- *
- * Every value has a hardcoded fallback that matches production config.
+ * BACKEND URL IS HARDCODED - NO ENV OVERRIDE ALLOWED
+ * The single source of truth is apiConfig.ts for runtime code.
+ * This file only provides the value for Constants.expoConfig.extra for reference.
  */
 
-const BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL ||
-  'https://script-recovery-1.preview.emergentagent.com';
+// HARDCODED - DO NOT USE process.env FOR BACKEND URL
+const BACKEND_URL = 'https://script-recovery-1.preview.emergentagent.com';
 
 const REVENUECAT_GOOGLE_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY ||
@@ -32,9 +26,9 @@ const ELEVENLABS_API_KEY =
   'c73f5731f01c8a7070b87d37254eaa611b68c803168c0d0999654b3bc1becbeb';
 
 module.exports = ({ config }) => {
-  // Log during prebuild so we can verify env var resolution in the build logs
+  // Log during prebuild so we can verify in the build logs
   console.log('[app.config.js] Building with config:');
-  console.log(`  BACKEND_URL: ${BACKEND_URL}`);
+  console.log(`  BACKEND_URL: ${BACKEND_URL} (HARDCODED - NOT FROM ENV)`);
   console.log(`  RC_GOOGLE: ${REVENUECAT_GOOGLE_API_KEY.substring(0, 5)}***`);
   console.log(`  RC_APPLE: ${REVENUECAT_APPLE_API_KEY.substring(0, 5)}***`);
   console.log(`  SENTRY: ${SENTRY_DSN ? 'Set' : 'MISSING'}`);
@@ -45,15 +39,14 @@ module.exports = ({ config }) => {
     extra: {
       // Preserve existing extra (eas.projectId, router, etc.)
       ...(config.extra || {}),
-      // Add config values with BOTH full and short key names for maximum compatibility
-      // Full keys (match what was previously in app.json extra)
+      // BACKEND_URL is HARDCODED - single source of truth
       EXPO_PUBLIC_BACKEND_URL: BACKEND_URL,
+      BACKEND_URL: BACKEND_URL,
+      // Other config values
       EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY: REVENUECAT_GOOGLE_API_KEY,
       EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY: REVENUECAT_APPLE_API_KEY,
       EXPO_PUBLIC_SENTRY_DSN: SENTRY_DSN,
       EXPO_PUBLIC_ELEVENLABS_API_KEY: ELEVENLABS_API_KEY,
-      // Short keys (used by appConfig.ts resolve function)
-      BACKEND_URL: BACKEND_URL,
       REVENUECAT_GOOGLE_API_KEY: REVENUECAT_GOOGLE_API_KEY,
       REVENUECAT_APPLE_API_KEY: REVENUECAT_APPLE_API_KEY,
       SENTRY_DSN: SENTRY_DSN,

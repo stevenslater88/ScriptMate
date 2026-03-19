@@ -5,6 +5,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import Purchases, { PurchasesOfferings, CustomerInfo } from 'react-native-purchases';
 import { getConfigAudit, ConfigAudit } from './appConfig';
+import { API_BASE_URL, API_CONFIG_SOURCE } from './apiConfig';
 
 // Build fingerprint — imported from _layout.tsx would create a circular dependency,
 // so we duplicate the exact same value here.
@@ -14,10 +15,12 @@ export const BUILD_FINGERPRINT = 'SM8-FIX-0315A';
 // If device shows different values, the build is from different code
 export const BUILD_PROOF = {
   branch: 'main',
-  commit: 'c0df5e4',
-  build: 1095,
-  timestamp: '2026-03-18T23:00:00Z',
-  marker: 'BUILD_PROOF: branch=main commit=c0df5e4 build=1095',
+  commit: 'pending', // Will be set after GitHub push
+  build: 1102,
+  backendUrl: API_BASE_URL,
+  configSource: API_CONFIG_SOURCE,
+  timestamp: '2026-03-19T00:00:00Z',
+  marker: `BUILD_PROOF: branch=main build=1102 backend=${API_BASE_URL}`,
 };
 
 // Feature Flags - HARDCODED for stabilization mode

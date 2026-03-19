@@ -351,9 +351,9 @@ export default function SupportScreen() {
           <View style={[styles.diagSection, { backgroundColor: '#1a1a2e', borderColor: '#6366f1', borderWidth: 1 }]}>
             <Text style={[styles.diagSectionTitle, { color: '#6366f1' }]}>BUILD SOURCE PROOF</Text>
             <DiagRow label="branch" value="main" />
-            <DiagRow label="commit" value="c0df5e4" />
-            <DiagRow label="build" value="1095" />
-            <DiagRow label="backend" value={diagnostics.configAudit?.find(c => c.key === 'Backend URL')?.value || 'NOT SET'} />
+            <DiagRow label="build" value="1102" />
+            <DiagRow label="backend" value="https://script-recovery-1.preview.emergentagent.com" />
+            <DiagRow label="config_source" value="apiConfig.ts (hardcoded)" />
           </View>
 
           {/* App Info */}
