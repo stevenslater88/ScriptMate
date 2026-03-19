@@ -10,6 +10,11 @@ web-build/
 expo-env.d.ts
 
 # Native
+<<<<<<< HEAD
+=======
+ios/
+android/
+>>>>>>> conflict_170326_0314
 .kotlin/
 *.orig.*
 *.jks
@@ -20,12 +25,22 @@ expo-env.d.ts
 
 # Metro
 .metro-health-check*
+<<<<<<< HEAD
+=======
+.metro-cache/
+>>>>>>> conflict_170326_0314
 
 # debug
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+<<<<<<< HEAD
+=======
+# Force yarn-only dependency management
+package-lock.json
+
+>>>>>>> conflict_170326_0314
 # macOS
 .DS_Store
 *.pem
@@ -36,4 +51,16 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+<<<<<<< HEAD
 app-example
+=======
+# Corrupted/binary files
+# (removed overly broad pattern that was blocking source files)
+
+app-example
+
+# Android signing credentials
+*.keystore
+*.jks
+credentials.json
+>>>>>>> conflict_170326_0314

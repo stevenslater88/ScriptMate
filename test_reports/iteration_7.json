@@ -1,0 +1,91 @@
+{
+  "summary": "Completed Phase 1+2 testing for ScriptM8: Home screen redesign with Quick Actions, Daily Actor Drill, reorganized sections (Training, Rehearsal, Recording, Tools). Backend Daily Drill and Streak APIs fully functional. Fixed LlmChat API call issue.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase2_daily_drill.py",
+    "/app/test_reports/pytest/phase2_drill_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ Fixed: server.py line 2548 - Changed send_message_async to send_message and added .with_model() for LlmChat",
+    "✅ Home screen (index.tsx): Quick Rehearse (purple) and Quick Self Tape (red) buttons at top",
+    "✅ Home screen: Daily Actor Drill card with +25 XP badge, flame icon",
+    "✅ Home screen: 4 reorganized sections - Training, Rehearsal, Recording, Tools",
+    "✅ Home screen: NO 'Training Modes', 'AI Coaching', 'Script Tools' sections (correctly removed)",
+    "✅ Home screen: Streak row shows only when current_streak > 0 (correct behavior)",
+    "✅ Daily Drill screen: Streak banner (current streak, best streak, total XP)",
+    "✅ Daily Drill screen: Challenge card with prompt, duration (15s), XP reward (+25)",
+    "✅ Daily Drill screen: Complete button awards XP, shows success state",
+    "✅ Voice Studio screen: Coming soon placeholder with feature list",
+    "✅ Navigation: Quick Rehearse → /scripts (when no scripts) or /script/{id}",
+    "✅ Navigation: Quick Self Tape → /selftape",
+    "✅ Navigation: Daily Actor Drill → /daily-drill",
+    "✅ Navigation: Voice Studio → /voice-studio",
+    "✅ _layout.tsx: Routes for daily-drill and voice-studio properly registered",
+    "✅ API: GET /api/daily-drill/{user_id} - creates/returns daily drill with AI-generated or fallback prompts",
+    "✅ API: POST /api/daily-drill/{user_id}/complete - awards 25 XP, updates streak",
+    "✅ API: GET /api/streak/{user_id} - returns streak data (current, best, total_xp, activities_today)",
+    "✅ API: POST /api/streak/{user_id}/record - records activity, updates streak"
+  ],
+  "updated_files": [
+    "/app/backend/server.py (fixed LlmChat API call for daily drill generation)",
+    "/app/backend/tests/test_phase2_daily_drill.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 pytest tests passed)",
+    "frontend": "100% - All UI elements and navigation verified via Playwright"
+  },
+  "test_credentials": "No auth needed. Used device_id like 'test-drill-user-*' for API tests.",
+  "seed_data_creation": "Created TEST_* prefixed drill/streak records during testing (auto-cleanup not needed as unique IDs used)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Phase 1+2 testing complete. Home screen has new layout with Quick Actions at top, Daily Drill card, and 4 sections (Training, Rehearsal, Recording, Tools). Old sections removed. Daily Drill and Streak APIs working. Voice Studio is placeholder 'coming soon'. Fixed LlmChat.send_message_async to .send_message with .with_model().",
+  "tests_performed": [
+    {"test": "Health check API", "result": "PASS", "method": "pytest"},
+    {"test": "GET /api/daily-drill/{user_id} creates new drill", "result": "PASS", "method": "pytest"},
+    {"test": "GET /api/daily-drill returns same drill same day", "result": "PASS", "method": "pytest"},
+    {"test": "POST /api/daily-drill/{user_id}/complete awards XP", "result": "PASS", "method": "pytest"},
+    {"test": "POST /api/daily-drill already completed returns 0 XP", "result": "PASS", "method": "pytest"},
+    {"test": "POST /api/daily-drill nonexistent returns 404", "result": "PASS", "method": "pytest"},
+    {"test": "GET /api/streak/{user_id} new user returns zeros", "result": "PASS", "method": "pytest"},
+    {"test": "Streak updates after drill completion", "result": "PASS", "method": "pytest"},
+    {"test": "POST /api/streak/{user_id}/record records activity", "result": "PASS", "method": "pytest"},
+    {"test": "Multiple activities same day don't double count streak", "result": "PASS", "method": "pytest"},
+    {"test": "Drill has valid duration", "result": "PASS", "method": "pytest"},
+    {"test": "Drill prompt is not empty", "result": "PASS", "method": "pytest"},
+    {"test": "Home screen: Quick Rehearse button (purple, large)", "result": "PASS", "method": "playwright"},
+    {"test": "Home screen: Quick Self Tape button (red, large)", "result": "PASS", "method": "playwright"},
+    {"test": "Home screen: Daily Actor Drill card with +25 XP", "result": "PASS", "method": "playwright"},
+    {"test": "Home screen: Training section (Acting Coach, Dialect Coach)", "result": "PASS", "method": "playwright"},
+    {"test": "Home screen: Rehearsal section (Practice Scene, Scripts)", "result": "PASS", "method": "playwright"},
+    {"test": "Home screen: Recording section (Self Tape Studio, Voice Studio)", "result": "PASS", "method": "playwright"},
+    {"test": "Home screen: Tools section (Audition Tracker, My Scripts)", "result": "PASS", "method": "playwright"},
+    {"test": "Home screen: NO Training Modes section", "result": "PASS", "method": "playwright"},
+    {"test": "Home screen: NO old AI Coaching section", "result": "PASS", "method": "playwright"},
+    {"test": "Home screen: NO old Script Tools section", "result": "PASS", "method": "playwright"},
+    {"test": "Navigation: Quick Rehearse → /scripts", "result": "PASS", "method": "playwright"},
+    {"test": "Navigation: Quick Self Tape → /selftape", "result": "PASS", "method": "playwright"},
+    {"test": "Navigation: Daily Actor Drill → /daily-drill", "result": "PASS", "method": "playwright"},
+    {"test": "Navigation: Voice Studio → /voice-studio", "result": "PASS", "method": "playwright"},
+    {"test": "Daily Drill screen: Streak banner visible", "result": "PASS", "method": "playwright"},
+    {"test": "Daily Drill screen: Challenge card with prompt", "result": "PASS", "method": "playwright"},
+    {"test": "Daily Drill screen: Complete button works", "result": "PASS", "method": "playwright"},
+    {"test": "Daily Drill screen: Shows success after completion", "result": "PASS", "method": "playwright"},
+    {"test": "Voice Studio screen: Coming soon placeholder", "result": "PASS", "method": "playwright"},
+    {"test": "Voice Studio screen: Feature list visible", "result": "PASS", "method": "playwright"}
+  ],
+  "bug_fix_applied": {
+    "file": "/app/backend/server.py",
+    "line": "2548",
+    "issue": "LlmChat was using send_message_async() which doesn't exist; also missing .with_model()",
+    "fix": "Changed to .with_model('openai', 'gpt-4o') and send_message() for async context"
+  }
+}

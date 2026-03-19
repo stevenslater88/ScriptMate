@@ -9,10 +9,15 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useScriptStore, Script, Character } from '../../store/scriptStore';
+import { getSettings, saveSettings } from '../../services/syncService';
+import useRevenueCat from '../../hooks/useRevenueCat';
+import { trackUpgradeTriggered } from '../../services/analyticsService';
+import VoiceAssignment from '../../components/VoiceAssignment';
 
 const VOICE_OPTIONS = [
   { id: 'alloy', name: 'Alloy', description: 'Neutral, balanced' },
@@ -23,20 +28,72 @@ const VOICE_OPTIONS = [
   { id: 'shimmer', name: 'Shimmer', description: 'Female, soft' },
 ];
 
-const MODE_OPTIONS = [
-  { id: 'full_read', name: 'Full Read', icon: 'chatbubbles', description: 'Practice with AI partner reading all other lines' },
-  { id: 'cue_only', name: 'Cue Only', icon: 'flash', description: 'Only hear the line before yours' },
-  { id: 'performance', name: 'Performance', icon: 'trophy', description: 'No prompts - simulate real audition' },
+const READER_STYLES = [
+  { id: 'neutral', name: 'Neutral', icon: 'person', color: '#6366f1', speed: 1.0, description: 'Calm, even delivery' },
+  { id: 'emotional', name: 'Emotional', icon: 'heart', color: '#ec4899', speed: 0.9, description: 'Expressive, feeling-driven' },
+  { id: 'aggressive', name: 'Intense', icon: 'flame', color: '#ef4444', speed: 1.1, description: 'High energy, forceful' },
+];
+
+interface ModeOption {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  navigable: boolean;
+  route?: string;
+  premium: boolean;
+}
+
+const MODE_OPTIONS: ModeOption[] = [
+  { id: 'full_read', name: 'Full Read', icon: 'chatbubbles', description: 'Practice the complete scene with prompts', navigable: false, premium: false },
+  { id: 'cue_only', name: 'Cue Only', icon: 'flash', description: 'Recall your lines from memory', navigable: false, premium: false },
+  { id: 'recall', name: 'Recall', icon: 'bulb', description: 'Test your memory with hidden lines', navigable: true, route: '/recall', premium: false },
+  { id: 'character', name: 'Character', icon: 'person', description: 'Focus on your character lines only', navigable: false, premium: false },
+  { id: 'performance', name: 'Performance', icon: 'trophy', description: 'No prompts — full performance mode', navigable: false, premium: true },
+  { id: 'loop', name: 'Loop', icon: 'repeat', description: 'Repeat weak lines until mastered', navigable: false, premium: true },
 ];
 
 export default function ScriptDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentScript, fetchScript, updateScript, createRehearsal, loading, isPremium } = useScriptStore();
+  const { id } = useLocalSearchParams<{ id: string; autoStart?: string }>();
+  const autoStart = useLocalSearchParams<{ autoStart?: string }>().autoStart === 'true';
+  const { currentScript, fetchScript, updateScript, createRehearsal, loading, isPremium: isPremiumFromStore } = useScriptStore();
+  const { isPremium: isPremiumFromRevenueCat } = useRevenueCat();
+  const isPremium = isPremiumFromStore || isPremiumFromRevenueCat;
+  
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
   const [selectedVoice, setSelectedVoice] = useState('alloy');
   const [selectedMode, setSelectedMode] = useState('full_read');
+  const [selectedReaderStyle, setSelectedReaderStyle] = useState('neutral');
+  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
   const [showSettings, setShowSettings] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [autoStartTriggered, setAutoStartTriggered] = useState(false);
+
+  const handleSelfTape = async () => {
+    if (!isPremium) {
+      trackUpgradeTriggered('script_detail_selftape');
+      router.push('/premium');
+      return;
+    }
+    router.push(`/selftape/prep?scriptId=${id}`);
+  };
+
+  // Load saved settings on mount
+  useEffect(() => {
+    const loadSavedSettings = async () => {
+      try {
+        const savedSettings = await getSettings();
+        setSelectedVoice(savedSettings.default_voice);
+        setVoiceSpeed(savedSettings.default_voice_speed);
+        setSettingsLoaded(true);
+      } catch (error) {
+        console.error('Error loading settings:', error);
+        setSettingsLoaded(true);
+      }
+    };
+    loadSavedSettings();
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -46,12 +103,29 @@ export default function ScriptDetailScreen() {
 
   useEffect(() => {
     if (currentScript) {
-      const userChar = currentScript.characters.find((c) => c.is_user_character);
+      const characters = currentScript.characters || [];
+      const userChar = characters.find((c) => c.is_user_character);
       if (userChar) {
         setSelectedCharacter(userChar.name);
       }
     }
   }, [currentScript]);
+
+  // Auto-start rehearsal when coming from Quick Rehearse
+  useEffect(() => {
+    if (autoStart && currentScript && selectedCharacter && !autoStartTriggered && settingsLoaded) {
+      setAutoStartTriggered(true);
+      handleStartRehearsal();
+    }
+  }, [autoStart, currentScript, selectedCharacter, settingsLoaded]);
+
+  const handleReaderStyleChange = (styleId: string) => {
+    setSelectedReaderStyle(styleId);
+    const style = READER_STYLES.find(s => s.id === styleId);
+    if (style) {
+      setVoiceSpeed(style.speed);
+    }
+  };
 
   const handleCharacterSelect = async (characterName: string) => {
     setSelectedCharacter(characterName);
@@ -112,7 +186,7 @@ export default function ScriptDetailScreen() {
           <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {currentScript.title}
+          {currentScript?.title || 'Untitled'}
         </Text>
         <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.settingsButton}>
           <Ionicons name="settings-outline" size={24} color="#6366f1" />
@@ -125,19 +199,19 @@ export default function ScriptDetailScreen() {
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Ionicons name="people" size={24} color="#6366f1" />
-              <Text style={styles.infoValue}>{currentScript.characters.length}</Text>
+              <Text style={styles.infoValue}>{(currentScript?.characters || []).length}</Text>
               <Text style={styles.infoLabel}>Characters</Text>
             </View>
             <View style={styles.infoSeparator} />
             <View style={styles.infoItem}>
               <Ionicons name="chatbubble" size={24} color="#10b981" />
-              <Text style={styles.infoValue}>{currentScript.lines.filter((l) => !l.is_stage_direction).length}</Text>
+              <Text style={styles.infoValue}>{(currentScript?.lines || []).filter((l) => !l.is_stage_direction).length}</Text>
               <Text style={styles.infoLabel}>Lines</Text>
             </View>
             <View style={styles.infoSeparator} />
             <View style={styles.infoItem}>
               <Ionicons name="text" size={24} color="#f59e0b" />
-              <Text style={styles.infoValue}>{currentScript.lines.filter((l) => l.is_stage_direction).length}</Text>
+              <Text style={styles.infoValue}>{(currentScript?.lines || []).filter((l) => l.is_stage_direction).length}</Text>
               <Text style={styles.infoLabel}>Directions</Text>
             </View>
           </View>
@@ -148,7 +222,7 @@ export default function ScriptDetailScreen() {
           <Text style={styles.sectionTitle}>Select Your Character</Text>
           <Text style={styles.sectionSubtitle}>AI will read all other characters</Text>
           <View style={styles.characterList}>
-            {currentScript.characters.map((character) => (
+            {(currentScript?.characters || []).map((character) => (
               <TouchableOpacity
                 key={character.id}
                 style={[
@@ -187,49 +261,156 @@ export default function ScriptDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Training Mode</Text>
           <View style={styles.modeList}>
-            {MODE_OPTIONS.map((mode) => (
-              <TouchableOpacity
-                key={mode.id}
-                style={[
-                  styles.modeCard,
-                  selectedMode === mode.id && styles.modeCardSelected,
-                ]}
-                onPress={() => setSelectedMode(mode.id)}
-              >
-                <View
+            {MODE_OPTIONS.map((mode) => {
+              const isLocked = mode.premium && !isPremium;
+              return (
+                <TouchableOpacity
+                  key={mode.id}
                   style={[
-                    styles.modeIconContainer,
-                    selectedMode === mode.id && styles.modeIconContainerSelected,
+                    styles.modeCard,
+                    selectedMode === mode.id && !isLocked && styles.modeCardSelected,
+                    isLocked && styles.modeCardLocked,
                   ]}
+                  onPress={() => {
+                    if (isLocked) {
+                      trackUpgradeTriggered('script_detail_mode_' + mode.id);
+                      router.push('/premium');
+                      return;
+                    }
+                    if (mode.navigable && mode.route) {
+                      router.push(`${mode.route}?scriptId=${id}&sceneIndex=0`);
+                    } else {
+                      setSelectedMode(mode.id);
+                    }
+                  }}
                 >
-                  <Ionicons
-                    name={mode.icon as any}
-                    size={24}
-                    color={selectedMode === mode.id ? '#fff' : '#6366f1'}
-                  />
-                </View>
-                <View style={styles.modeInfo}>
-                  <Text
+                  <View
                     style={[
-                      styles.modeName,
-                      selectedMode === mode.id && styles.modeNameSelected,
+                      styles.modeIconContainer,
+                      selectedMode === mode.id && !isLocked && styles.modeIconContainerSelected,
+                      isLocked && styles.modeIconContainerLocked,
                     ]}
                   >
-                    {mode.name}
-                  </Text>
-                  <Text style={styles.modeDescription}>{mode.description}</Text>
-                </View>
-                {selectedMode === mode.id && (
-                  <Ionicons name="checkmark-circle" size={20} color="#6366f1" />
+                    <Ionicons
+                      name={mode.icon as any}
+                      size={24}
+                      color={isLocked ? '#4a4a5e' : selectedMode === mode.id ? '#fff' : '#6366f1'}
+                    />
+                    {isLocked && (
+                      <Ionicons name="lock-closed" size={12} color="#f59e0b" style={{ position: 'absolute', top: -2, right: -2 }} />
+                    )}
+                  </View>
+                  <View style={styles.modeInfo}>
+                    <Text
+                      style={[
+                        styles.modeName,
+                        selectedMode === mode.id && !isLocked && styles.modeNameSelected,
+                        isLocked && styles.modeNameLocked,
+                      ]}
+                    >
+                      {mode.name}
+                    </Text>
+                    <Text style={styles.modeDescription}>
+                      {isLocked ? 'Premium' : mode.description}
+                    </Text>
+                  </View>
+                  {isLocked ? (
+                    <Ionicons name="lock-closed" size={16} color="#f59e0b" />
+                  ) : mode.navigable ? (
+                    <Ionicons name="chevron-forward" size={20} color="#6366f1" />
+                  ) : selectedMode === mode.id ? (
+                    <Ionicons name="checkmark-circle" size={20} color="#6366f1" />
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* AI Reader Style */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>AI Reader Style</Text>
+          <Text style={styles.sectionSubtitle}>How other characters sound</Text>
+          <View style={styles.readerStyleRow}>
+            {READER_STYLES.map((style) => (
+              <TouchableOpacity
+                key={style.id}
+                style={[
+                  styles.readerStyleCard,
+                  selectedReaderStyle === style.id && { borderColor: style.color },
+                ]}
+                onPress={() => handleReaderStyleChange(style.id)}
+                testID={`reader-style-${style.id}`}
+              >
+                <Ionicons
+                  name={style.icon as any}
+                  size={24}
+                  color={selectedReaderStyle === style.id ? style.color : '#6b7280'}
+                />
+                <Text style={[
+                  styles.readerStyleName,
+                  selectedReaderStyle === style.id && { color: style.color },
+                ]}>
+                  {style.name}
+                </Text>
+                <Text style={styles.readerStyleDesc}>{style.description}</Text>
+                {selectedReaderStyle === style.id && (
+                  <Ionicons name="checkmark-circle" size={16} color={style.color} style={{ marginTop: 4 }} />
                 )}
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
+        {/* Pacing Control */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Pacing</Text>
+          <View style={styles.pacingRow}>
+            <Text style={styles.pacingLabel}>Slow</Text>
+            <Slider
+              style={{ flex: 1, height: 40 }}
+              minimumValue={0.5}
+              maximumValue={1.5}
+              step={0.1}
+              value={voiceSpeed}
+              onValueChange={setVoiceSpeed}
+              minimumTrackTintColor="#6366f1"
+              maximumTrackTintColor="#2a2a3e"
+              thumbTintColor="#6366f1"
+            />
+            <Text style={styles.pacingLabel}>Fast</Text>
+            <Text style={styles.pacingValue}>{voiceSpeed.toFixed(1)}x</Text>
+          </View>
+        </View>
+
+        {/* Multi-Voice Assignment (Premium) */}
+        <View style={styles.section}>
+          <VoiceAssignment
+            scriptId={id!}
+            characters={currentScript.characters}
+            userCharacter={selectedCharacter}
+            isPremium={isPremium}
+            onUpgradePress={async () => {
+              trackUpgradeTriggered('script_detail_multivoice');
+              router.push('/premium');
+            }}
+          />
+        </View>
+
         {/* Preview Script */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Script Preview</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Script Preview</Text>
+            {/* Director Notes Button */}
+            <TouchableOpacity 
+              style={styles.directorNotesButton}
+              onPress={() => router.push(`/script/notes/${id}`)}
+            >
+              <Ionicons name="pencil" size={16} color="#f59e0b" />
+              <Text style={styles.directorNotesText}>Director Notes</Text>
+              {!isPremium && <Ionicons name="lock-closed" size={12} color="#f59e0b" />}
+            </TouchableOpacity>
+          </View>
           <View style={styles.previewContainer}>
             {currentScript.lines.slice(0, 10).map((line, index) => (
               <View
@@ -266,22 +447,53 @@ export default function ScriptDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Start Button */}
+      {/* Bottom Action Buttons */}
       <View style={styles.bottomBar}>
+        {/* Practice Mode Button */}
         <TouchableOpacity
-          style={[styles.startButton, (!selectedCharacter || starting) && styles.startButtonDisabled]}
-          onPress={handleStartRehearsal}
-          disabled={!selectedCharacter || starting}
+          style={styles.practiceButton}
+          onPress={() => router.push(`/recall?scriptId=${id}&sceneIndex=0`)}
         >
-          {starting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="play-circle" size={24} color="#fff" />
-              <Text style={styles.startButtonText}>Start Rehearsal</Text>
-            </>
-          )}
+          <Ionicons name="flash" size={18} color="#10b981" />
+          <Text style={styles.practiceButtonText}>Practice Mode</Text>
         </TouchableOpacity>
+        
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.scenePartnerButton}
+            onPress={() => router.push(`/scene-partner?scriptId=${id}`)}
+            data-testid="scene-partner-btn"
+          >
+            <Ionicons name="people" size={20} color="#f59e0b" />
+            <Text style={styles.scenePartnerButtonText}>Scene Partner</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.selfTapeButton}
+            onPress={handleSelfTape}
+          >
+            <Ionicons name="videocam" size={22} color="#fff" />
+            <Text style={styles.selfTapeButtonText}>Self Tape</Text>
+            {!isPremium && (
+              <Ionicons name="lock-closed" size={14} color="rgba(255,255,255,0.7)" />
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.startButton, (!selectedCharacter || starting) && styles.startButtonDisabled]}
+            onPress={handleStartRehearsal}
+            disabled={!selectedCharacter || starting}
+          >
+            {starting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="play-circle" size={22} color="#fff" />
+                <Text style={styles.startButtonText}>Rehearse</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Settings Modal */}
@@ -295,6 +507,50 @@ export default function ScriptDetailScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalScroll}>
+              {/* Voice Speed Slider */}
+              <View style={styles.speedSection}>
+                <View style={styles.speedHeader}>
+                  <Text style={styles.modalSectionTitle}>Voice Speed</Text>
+                  <View style={styles.speedBadge}>
+                    <Text style={styles.speedValue}>{voiceSpeed.toFixed(1)}x</Text>
+                  </View>
+                </View>
+                <View style={styles.speedSliderContainer}>
+                  <Text style={styles.speedLabel}>0.5x</Text>
+                  <Slider
+                    style={styles.speedSlider}
+                    minimumValue={0.5}
+                    maximumValue={2.0}
+                    step={0.1}
+                    value={voiceSpeed}
+                    onValueChange={setVoiceSpeed}
+                    minimumTrackTintColor="#6366f1"
+                    maximumTrackTintColor="#2a2a3e"
+                    thumbTintColor="#6366f1"
+                  />
+                  <Text style={styles.speedLabel}>2.0x</Text>
+                </View>
+                <View style={styles.speedPresets}>
+                  {[0.75, 1.0, 1.25, 1.5].map((speed) => (
+                    <TouchableOpacity
+                      key={speed}
+                      style={[
+                        styles.speedPresetButton,
+                        voiceSpeed === speed && styles.speedPresetButtonActive,
+                      ]}
+                      onPress={() => setVoiceSpeed(speed)}
+                    >
+                      <Text style={[
+                        styles.speedPresetText,
+                        voiceSpeed === speed && styles.speedPresetTextActive,
+                      ]}>
+                        {speed}x
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
               <Text style={styles.modalSectionTitle}>AI Voice</Text>
               {VOICE_OPTIONS.map((voice) => (
                 <TouchableOpacity
@@ -317,7 +573,18 @@ export default function ScriptDetailScreen() {
             </ScrollView>
             <TouchableOpacity
               style={styles.modalDoneButton}
-              onPress={() => setShowSettings(false)}
+              onPress={async () => {
+                // Save settings when closing the modal
+                try {
+                  await saveSettings({
+                    default_voice: selectedVoice,
+                    default_voice_speed: voiceSpeed,
+                  });
+                } catch (error) {
+                  console.error('Error saving settings:', error);
+                }
+                setShowSettings(false);
+              }}
             >
               <Text style={styles.modalDoneText}>Done</Text>
             </TouchableOpacity>
@@ -431,11 +698,36 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 24,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#fff',
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 2,
     marginBottom: 4,
+  },
+  directorNotesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  directorNotesText: {
+    color: '#f59e0b',
+    fontSize: 13,
+    fontWeight: '600',
   },
   sectionSubtitle: {
     fontSize: 14,
@@ -521,10 +813,69 @@ const styles = StyleSheet.create({
   modeNameSelected: {
     color: '#6366f1',
   },
+  modeCardLocked: {
+    opacity: 0.6,
+    borderColor: '#2a2a3e',
+  },
+  modeIconContainerLocked: {
+    backgroundColor: '#1a1a2e',
+  },
+  modeNameLocked: {
+    color: '#4a4a5e',
+  },
   modeDescription: {
     fontSize: 13,
     color: '#6b7280',
     marginTop: 2,
+  },
+  // Reader Style
+  readerStyleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  readerStyleCard: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#2a2a3e',
+  },
+  readerStyleName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#9ca3af',
+    marginTop: 6,
+  },
+  readerStyleDesc: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  // Pacing
+  pacingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+    gap: 8,
+  },
+  pacingLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  pacingValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6366f1',
+    minWidth: 36,
+    textAlign: 'right',
   },
   previewContainer: {
     backgroundColor: '#1a1a2e',
@@ -583,21 +934,75 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#1a1a2e',
   },
+  practiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  practiceButtonText: {
+    color: '#10b981',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  selfTapeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10b981',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  selfTapeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  scenePartnerButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a2e',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  scenePartnerButtonText: {
+    color: '#f59e0b',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   startButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#6366f1',
     paddingVertical: 16,
     borderRadius: 12,
-    gap: 10,
+    gap: 8,
   },
   startButtonDisabled: {
     opacity: 0.5,
   },
   startButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
   modalOverlay: {
@@ -632,6 +1037,68 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginBottom: 12,
     marginTop: 8,
+  },
+  speedSection: {
+    marginBottom: 20,
+  },
+  speedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  speedBadge: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  speedValue: {
+    color: '#6366f1',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  speedSliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  speedSlider: {
+    flex: 1,
+    height: 40,
+  },
+  speedLabel: {
+    color: '#6b7280',
+    fontSize: 12,
+    width: 32,
+    textAlign: 'center',
+  },
+  speedPresets: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 12,
+    gap: 8,
+  },
+  speedPresetButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#0a0a0f',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+  },
+  speedPresetButtonActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    borderColor: '#6366f1',
+  },
+  speedPresetText: {
+    color: '#6b7280',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  speedPresetTextActive: {
+    color: '#6366f1',
   },
   voiceOption: {
     flexDirection: 'row',

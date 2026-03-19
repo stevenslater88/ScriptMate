@@ -1,219 +1,119 @@
-<analysis>
-
-**original_problem_statement**: The user wants to build a mobile-first application called **ScriptMate** (originally LineCoach) to help actors learn scripts using an AI reading partner.
+<analysis>**original_problem_statement:**
+The application, ScriptM8, is in a strict stabilization mode. The primary goal is to establish a stable baseline and then fix bugs one at a time, in a specific order, without introducing regressions. All fixes must be validated on a real Android device.
 
 **PRODUCT REQUIREMENTS**:
-- **Phase 1 (MVP - Completed)**: Script upload (PDF, DOCX, Text), automatic character detection & script formatting, assignment of user/AI characters, and a basic AI reading partner using Text-to-Speech.
-- **Phase 2 (In Progress)**: Add a premium subscription tier with advanced features. Implement performance mode, recording/playback, and a smart memory system to track difficult lines.
-- **Phase 3 (Upcoming)**: Implement features like emotional AI, director notes, and user analytics.
-- **Recent Request**: Add multi-region pricing for the UK (GBP) and Europe (EUR) in addition to the existing USD pricing. Prepare the app for deployment to iOS and Android app stores.
+1.  **Restore Baseline**: The immediate priority is to fix the crash that occurs when reopening a saved script. This is a core foundation phase feature.
+2.  **Stabilization Workflow**:
+    *   Fix only one bug at a time.
+    *   After each fix, the entire protected foundation (core working features) must be re-tested by the user to ensure no regressions were introduced.
+    *   Trust only real Android device test results.
+3.  **Protected Foundation (from Build 1089)**:
+    *   Script saving must work.
+    *   My Scripts list must work.
+    *   Backend config must be correct.
+    *   RevenueCat must initialize correctly.
+4.  **Current Highest-Priority Bug**: Tapping a saved script in the My Scripts list crashes the app.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Expo (React Native) and FastAPI application named ScriptMate. The app features:
-- **Backend**: FastAPI server with MongoDB. Endpoints exist for user management, script uploading/parsing (using OpenAI GPT-4o), and managing subscription tiers.
-- **Frontend**: An Expo mobile app with a dark-themed, professional UI. It includes screens for listing scripts, uploading files, viewing a formatted script, selecting a character, and rehearsing.
-- **Core Feature**: The rehearsal screen uses the device's native Text-to-Speech () to read AI character lines.
-- **Monetization**: A complete (but mock) free vs. premium subscription system is in place. The UI shows locked features, upgrade prompts, and a premium purchase screen.
-- **Deployment Prep**: Configuration files for external deployment ( for Expo,  and  for the backend) and detailed documentation (, ) have been created.
+The project is a React Native (Expo) and FastAPI application. The codebase has been reverted to a baseline state (approximating build 1089) where core features like saving scripts and RevenueCat initialization were confirmed to be working. However, the known bug where reopening a saved script causes a crash persists. The agent was in the middle of applying a minimal, targeted fix for this crash.
 
 **Last working item**:
-- **Last item agent was working**: The agent was implementing multi-region pricing. The backend was updated to define prices for USD, GBP, and EUR and the  endpoint now accepts a  parameter. The frontend Zustand store () was updated to handle region state. The agent was in the process of modifying the  screen to add a UI for region selection and display prices with the correct currency symbols.
-- **Status**: IN PROGRESS
-- **Agent Testing Done**: N
-- **Which testing method agent to use?**: both
-    - **Backend**: Use  to test the API endpoint with different region parameters (e.g., {"region":"uk","currency":"USD","currency_symbol":"$","plans":{"monthly":{"id":"premium_monthly_usd","name":"Premium Monthly","price":9.99,"currency":"USD","period":"month","trial_days":7,"features":["Unlimited scripts","6 AI voice options","All training modes","Performance mode with recording","Smart line tracking","Cloud storage","No ads"]},"yearly":{"id":"premium_yearly_usd","name":"Premium Yearly","price":79.99,"currency":"USD","period":"year","trial_days":7,"savings":"Save 33%","features":["Everything in monthly","Best value","Priority support","Early access to new features"]}},"free_features":{"max_scripts":3,"max_file_size_mb":1,"max_rehearsals_per_day":5,"available_voices":["alloy"],"available_modes":["full_read","cue_only"],"has_performance_mode":false,"has_recording":false,"has_smart_tracking":false,"has_cloud_storage":false,"has_director_notes":false,"show_ads":true},"premium_features":{"max_scripts":999,"max_file_size_mb":50,"max_rehearsals_per_day":999,"available_voices":["alloy","echo","fable","onyx","nova","shimmer"],"available_modes":["full_read","cue_only","performance","missing_words","first_letter","loop"],"has_performance_mode":true,"has_recording":true,"has_smart_tracking":true,"has_cloud_storage":true,"has_director_notes":true,"show_ads":false}}) to ensure it returns the correct pricing and currency.
-    - **Frontend**: Use the  tool to visually verify the new region selector on the premium screen and confirm that prices and currency symbols update correctly when the region is changed.
-- **User Testing Done**: N
+-   **Last item agent was working**: Fixing a crash that occurs when a user taps on a saved script from the My Scripts list. The root cause was identified as unsafe access to  and  in  when these fields are missing from the fetched script data. The agent was applying minimal, inline null/undefined guards.
+-   **Status**: IN PROGRESS
+-   **Agent Testing Done**: N
+-   **Which testing method agent to use?**: Manual testing by the user on a real Android device.
+-   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-- **Issue 1**: Persistent frontend linting and TypeScript errors. (P1)
-  - **Description**: Throughout the development process, the linter has reported multiple errors, such as  and . The agent has repeatedly dismissed these as linter configuration issues without fixing them.
-  - **Attempted fixes**: None. The agent has consistently ignored these warnings.
-  - **Next debug checklist**:
-    1.  Run yarn run v1.22.22
-$ /app/frontend/node_modules/.bin/eslint . --ext .ts,.tsx --fix
+-   **Issue 1 (P0)**: Reopening a saved script crashes the app.
+-   **Issue 2 (P1)**: Premium entitlement is not restored/activated after a successful purchase/restore action.
+-   **Issue 3 (P2)**: Speech recognition in rehearse mode advances to the next line too early.
+-   **Issue 4 (P3)**: AI Parse V2 feature fails with a network error.
 
-/app/frontend/app/index.tsx
-  16:7   warning  'BACKEND_URL' is assigned a value but never used                                                                                        @typescript-eslint/no-unused-vars
-  19:59  warning  'user' is assigned a value but never used                                                                                               @typescript-eslint/no-unused-vars
-  25:6   warning  React Hook useEffect has missing dependencies: 'fetchScripts' and 'initializeUser'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
-
-/app/frontend/app/premium.tsx
-   40:7    warning  'REGIONS' is assigned a value but never used                                                                               @typescript-eslint/no-unused-vars
-   47:101  warning  'region' is assigned a value but never used                                                                                @typescript-eslint/no-unused-vars
-   47:109  warning  'currencySymbol' is assigned a value but never used                                                                        @typescript-eslint/no-unused-vars
-   47:125  warning  'setRegion' is assigned a value but never used                                                                             @typescript-eslint/no-unused-vars
-   50:10   warning  'showRegionPicker' is assigned a value but never used                                                                      @typescript-eslint/no-unused-vars
-   50:28   warning  'setShowRegionPicker' is assigned a value but never used                                                                   @typescript-eslint/no-unused-vars
-   54:6    warning  React Hook useEffect has a missing dependency: 'fetchSubscriptionPlans'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  111:54   error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                            react/no-unescaped-entities
-  253:13   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                            react/no-unescaped-entities
-  253:125  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                            react/no-unescaped-entities
-
-/app/frontend/app/rehearsal/[id].tsx
-   79:6  warning  React Hook useEffect has missing dependencies: 'fetchRehearsal', 'fetchScript', and 'recording'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
-  151:5  warning  React Hook useCallback has a missing dependency: 'advanceToNextLine'. Either include it or remove the dependency array                               react-hooks/exhaustive-deps
-  186:6  warning  React Hook useCallback has a missing dependency: 'saveProgress'. Either include it or remove the dependency array                                    react-hooks/exhaustive-deps
-
-/app/frontend/app/script/[id].tsx
-  15:26  warning  'Script' is defined but never used                                                                              @typescript-eslint/no-unused-vars
-  15:34  warning  'Character' is defined but never used                                                                           @typescript-eslint/no-unused-vars
-  34:79  warning  'isPremium' is assigned a value but never used                                                                  @typescript-eslint/no-unused-vars
-  45:6   warning  React Hook useEffect has a missing dependency: 'fetchScript'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  75:14  warning  'error' is defined but never used                                                                               @typescript-eslint/no-unused-vars
-
-/app/frontend/app/script/notes/[id].tsx
-  53:6  warning  React Hook useEffect has a missing dependency: 'fetchScript'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-/app/frontend/app/scripts.tsx
-  23:6  warning  React Hook useEffect has a missing dependency: 'fetchScripts'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-✖ 23 problems (3 errors, 20 warnings)
-
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. to attempt auto-fixing.
-    2.  Manually inspect the files reported by the linter (e.g., , ).
-    3.  Ensure all  hooks have complete dependency arrays.
-    4.  Verify that TypeScript-specific syntax is only used in / files and that  and  are correctly configured for a TypeScript project.
-  - **Why fix this issue and what will be achieved with the fix?**: This will improve code quality, prevent potential hidden runtime bugs, and make the codebase more maintainable.
-  - **Status**: NOT STARTED
-  - **Is recurring issue?**: Y
-  - **Should Test frontend/backend/both after fix?**: frontend
+**Issues Detail**:
+-   **Issue 1**: Reopening a saved script crashes the app.
+    -   **Attempted fixes**: A previous attempt to fix this by wrapping the component's render method in an IIFE caused major regressions and was reverted. The current approach is to add targeted, inline null-coalescing () and optional chaining () operators.
+    -   **Next debug checklist**:
+        1.  Verify that all , , and  calls on  and  within  are safely guarded.
+        2.  Ensure the file is syntactically correct after all the search-and-replace edits.
+        3.  Hand over for the user to build and test, reminding them to also re-verify the protected foundation features (save, list, config, RevenueCat init).
+    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical foundation phase bug. Users must be able to access their saved work.
+    -   **Status**: IN PROGRESS
+    -   **Is recurring issue?**: Y
+    -   **Should Test frontend/backend/both after fix?**: Frontend (Manual user testing on device).
+    -   **Blocked on other issue**: None.
 
 **In progress Task List**:
-- **Task 1**: Complete multi-region pricing implementation. (P0)
-  - **Where to resume**: In , finish building the UI component for region selection (e.g., a Picker or SegmentedControl). Connect this UI to the  function in the Zustand store to trigger an API call and update the displayed plans and prices.
-  - **What will be achieved with this?**: The app will be able to display localized pricing for users in the US, UK, and Europe, which is a requirement for international release.
-  - **Status**: IN PROGRESS
-  - **Should Test frontend/backend/both after fix?**: both
-  - **Blocked on something**: No.
+-   **Task 1**: Complete the application of null/undefined guards in .
+    -   **Where to resume**: The previous agent had executed several  commands to add guards. The next agent must verify that all access points to  and  are now safe, then prepare for a user test build.
+    -   **What will be achieved with this?**: The app will no longer crash when opening a saved script that has missing data fields.
+    -   **Status**: IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?**: Frontend.
+    -   **Blocked on something**: No.
 
 **Upcoming and Future Tasks**
-- **Upcoming Tasks**:
-    - **(P1) Fully Implement Advanced Features**:
-        - **Speech Recognition**: In , implement logic using  to listen for the user's lines, validate them, and automatically advance the scene.
-        - **Recording & Playback**: In , use  to implement audio recording of the user's performance and a playback screen to review takes.
-        - **Director Notes**: Create backend endpoints (POST, GET, PUT on ) to save and retrieve notes. Connect the frontend screen  to these endpoints.
-    - **(P2) Finalize App Icons**: Use the concepts from  to create  and  files and place them in the  directory, replacing the default Expo icons.
-- **Future Tasks**:
-    - **(P3) Implement Native In-App Purchases**: Replace the mock subscription flow with a real IAP solution like RevenueCat or by directly integrating Apple's StoreKit and Google Play Billing.
-    - **(P3) Smart Memory System**: Design and build the backend logic and endpoints to track user's line accuracy and hesitation time. Implement frontend UI to display these weak lines and create custom drills.
-    - **(P4) Detailed Deployment Walkthrough**: Fulfill the user's request for a step-by-step guide on deploying the backend to Railway and setting up a MongoDB Atlas cluster.
+-   **Upcoming Tasks (Stabilization Priority Order)**:
+    -   **(P1) Fix Premium Entitlement**: Investigate why a successful purchase/restore action doesn't update the app's state to reflect Premium: Yes. The issue is likely in  or related state management logic.
+    -   **(P2) Tune Rehearse Mode Auto-Advance**: Modify the logic in  to prevent it from advancing to the next line on partial speech recognition results.
+    -   **(P3) Fix AI Parse V2**: Diagnose the network failure for this feature.
+-   **Future Tasks**:
+    -   Add optional password protection for shared casting links.
+    -   Introduce a Director Mode with on-screen framing guides.
+    -   Upgrade Scene Partner mode to use ElevenLabs voices.
 
 **Completed work in this session**
-- **MVP & Core Functionality**:
-    - Built the initial full-stack application.
-    - Implemented script uploading (PDF/DOCX/TXT) and AI-powered parsing ().
-    - Created the core rehearsal experience with client-side TTS ().
-- **Monetization & App Store Prep**:
-    - Implemented a complete Free vs. Premium subscription model with feature gating (, ).
-    - Created the premium upgrade screen ().
-    - Generated comprehensive App Store listing text and metadata ().
-- **Deployment Readiness**:
-    - Created configuration files for deployment: , , .
-    - Created a master deployment guide: .
-- **Feature Expansion (Stubs)**:
-    - Added UI stubs and screens for Director Notes, recording, and speech recognition.
-- **Bug Fixes**:
-    - Resolved missing Python dependencies in .
-    - Fixed a critical Expo build error caused by an incorrect  configuration.
-    - Corrected a bare  statement in the Python backend.
-
-**Earlier issues found/mentioned but not fixed**
-- **Issue 1**: Frontend linting and TypeScript parsing errors have been consistently ignored. See **All Pending/In progress Issue list** for details.
+-   **Reverted Regression**: Rolled back a faulty fix in  that had broken core saving and premium features, successfully restoring the protected foundation of build 1089.
+-   **Managed Build Version**: Updated  to set the  to 1089, ensuring a linear build history for user testing.
+-   **Diagnosed Multiple Issues**: Through a series of diagnostic builds, identified root causes for several issues, including build dependency failures, incorrect backend URLs, and crashes, adding detailed logging to aid future debugging.
 
 **Known issue recurrence from previous fork**
-- N/A
+-   **Issue recurrence in previous fork**: Build and environment configuration issues (stale cache, dependency mismatches, incorrect URLs) have been a recurring theme, causing regressions. This led to the user mandating the current re-test the baseline rule.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: Expo (React Native), TypeScript, Expo Router (file-based routing), Zustand (state management),  (client-side TTS).
-- **Backend**: Python (FastAPI), MongoDB (with  for async operations), Pydantic.
-- **AI Integration**: OpenAI GPT-4o for script parsing, accessed via the Emergent LLM Key.
-- **Deployment Strategy**: External deployment using EAS (for mobile builds), a cloud hosting provider like Railway (for the backend), and MongoDB Atlas (for the database).
+-   **Frontend**: Expo (React Native, SDK 54), Expo Router, TypeScript
+-   **Backend**: FastAPI, MongoDB
+-   **Builds**: Expo Application Services (EAS)
+-   **Methodology**: Strict, iterative stabilization focused on real-device testing and protecting a working baseline to prevent regressions.
 
 **key DB schema**
-- **scripts**: 
-- **users**: 
-
-**changes in tech stack**
-- The agent initially planned to use a backend-based OpenAI TTS service but pivoted to client-side  after encountering authentication issues with the Emergent LLM Key and the TTS API.
+-   **scripts**: The documents in this collection may or may not contain  and  fields. This is the source of the crash being fixed.
 
 **All files of reference**
-- **Core Logic**:
-  - : Contains all API endpoints, database models, and business logic.
-  - : The main rehearsal screen where the user interacts with the AI partner.
-  - : The central Zustand store managing global state for user, scripts, and subscriptions.
-- **Configuration**:
-  - : Expo app config, including store metadata.
-  - : Configuration for Expo Application Services builds.
-  - : Python dependencies.
-- **Documentation**:
-  - : The primary guide for deploying the application.
-  - : Content for App Store and Google Play listings.
-
-**Areas that need refactoring**
-- The  file is becoming monolithic. It contains logic for fetching data, managing rehearsal state, TTS, and stubs for recording and voice recognition. This should be broken down into smaller, reusable components and custom hooks (e.g., , , ).
-
-**key api endpoints**
-- : Retrieves subscription plans for a specific region (us, uk, eu).
-- : Uploads a script file (PDF, DOCX, TXT) for parsing.
-- : Fetches the list of all uploaded scripts.
-- : Creates or retrieves a user profile based on a device ID.
-- : Gets the current usage limits (e.g., script count) for a user.
-- : (Mock) Subscribes a user to a premium plan.
+-   : The file being actively modified to fix the reopen crash.
+-   : The My Scripts list screen, from which the user navigates to the crashing screen.
+-   : Manages the Android .
 
 **Critical Info for New Agent**
-- **Deployment is External**: Do not use the internal . The project is set up for external deployment using EAS, Railway/Heroku, and MongoDB Atlas. Follow the guide in .
-- **TTS is Client-Side**: Text-to-Speech is handled by  on the frontend. Do not attempt to build a backend TTS service.
-- **Subscription is Mocked**: The current subscription flow updates the database but does not handle real payments. A full IAP implementation is a future task.
-- **Address Linting Errors**: The previous agent ignored persistent frontend linting errors. These should be investigated and fixed to ensure code stability.
-
-**documents created in this job**
-- 
-- 
-- 
-- 
+1.  **STRICT STABILIZATION MODE**: Your only task is to fix the saved-script reopen crash. Do not work on any other bugs (premium, speech timing, etc.).
+2.  **PROTECT THE BASELINE**: The fix must not break the currently working features from build 1089 (saving scripts, listing scripts, backend config, RevenueCat init). The user will test for regressions.
+3.  **CURRENT FIX IN PROGRESS**: The previous agent was adding minimal null guards ( and ) to . Your job is to complete and verify this targeted fix. Do not introduce broad changes like the previously reverted IIFE wrapper.
+4.  **USER IS THE TESTER**: No fix is complete until the user confirms it works on a new APK built for a real Android device.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1. : User requested a guided walkthrough for deployment. (In Progress - agent created files but hasn't provided the walkthrough).
-2. : User requested deployment of the app. (In Progress - led to support agent interaction).
-3. : User approved the readiness check and prompted for deployment. (Completed).
-4. : User initiated a deployment readiness check. (Completed).
-5. : User initiated an earlier deployment readiness check. (Completed).
-6. : User requested renaming the app and adding more upload formats. (Completed).
-7. : User prompted the agent to continue after creating deployment documentation. (Pending - agent asked for next steps).
-8. : User requested multiple actions: Test, Add Features, Create Icons, Walkthrough, and Fix Issues. (In Progress).
-9. : User requested a bug hunt. (Completed).
-10. : User requested multi-region pricing for UK/EU. (In Progress - this is the current task).
+-   User confirmed that build 1089 restored core functionality (save works) but the reopen-crash persists.
+-   User explicitly prioritized fixing the reopen-crash and de-prioritized the premium and speech recognition issues for this pass.
+-   User established a CRITICAL BASELINE PROTECTION RULE: any change must be tested against the working foundation of build 1089, and regressions will be rejected.
+-   The user is waiting for a new build with the targeted fix for the reopen crash.
 
 **Project Health Check:**
-- **Broken**:
-    - The advanced features (Speech Recognition, Recording/Playback, Director Notes) are just UI stubs and are not functional.
-- **Mocked**:
-    - The entire subscription payment flow is mocked. The  endpoint updates the user's status in the database without processing any real payment.
+-   **Broken**: Yes. A foundational user flow—reopening a saved script—is crashing the app, blocking further progress.
+-   **Mocked**: A  flag exists for bypassing the paywall.
 
 **3rd Party Integrations**
-- **OpenAI GPT-4o**: Used for script parsing via the backend. — uses Emergent LLM Key.
-- **Expo Speech**: Used for Text-to-Speech on the client-side. — does not require a key.
-- **@react-native-voice/voice**: Installed for speech recognition, but not yet implemented. — does not require a key.
+-   **OpenAI GPT-4o**: AI coaching and feedback.
+-   **OpenAI Whisper**: Speech-to-Text.
+-   **RevenueCat**: In-app purchases.
+-   **Sentry**: Crash and error reporting.
+-   **ElevenLabs**: Multi-voice TTS.
 
 **Testing status**
-- **Testing agent used after significant changes**: YES (both backend and frontend agents have been used).
-- **Troubleshoot agent used after agent stuck in loop**: NO.
-- **Test files created**: None.
-- **Known regressions**: None.
-
-**Credentials to test flow:**
-N/A. The app uses a locally generated device ID for user management, so no login is required.
+-   **Testing agent used after significant changes**: NO. All testing is manual by the user on a real device.
+-   **Known regressions**: The project has a history of regressions when fixes are not carefully targeted, which is why the user has enforced the current strict stabilization mode.
 
 **What agent forgot to execute**
-- **Deployment Walkthrough**: The user asked for a step-by-step walkthrough (5) for deployment, but the agent only created the documentation files and did not provide the interactive guide.
-- **Fix Linting Errors**: The agent consistently ignored and failed to resolve frontend linting/TypeScript errors.
-- **Create App Icons**: The agent created an  but never generated and placed the actual icon files in the  directory.
-- **Full Feature Implementation**: The agent only created stubs for the advanced features (speech rec, recording, notes) requested by the user, leaving them non-functional.
-
-</analysis>
+-   The previous agent correctly followed the user's strict instructions to revert a bad fix and start a new, more targeted one. Nothing was forgotten; the current task is to complete the in-progress fix.</analysis>

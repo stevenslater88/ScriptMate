@@ -1,0 +1,90 @@
+{
+  "summary": "Iteration 21: deviceId Race Condition Fix - All 8 backend API tests passed (100%). All 6 critical frontend code fixes verified. The root cause (scripts created with user_id='default' when initializeUser() hasn't completed) has been properly addressed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration21_deviceid_fix.py",
+    "/app/test_reports/pytest/iteration21_deviceid_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration21_deviceid_fix.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 API tests passed)",
+    "frontend": "100% (6/6 code verification checks passed)"
+  },
+  "test_credentials": "TEST_device_*, TEST_upload_*, TEST_real_* prefixed IDs for isolation",
+  "seed_data_creation": "Test scripts created and cleaned up automatically",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "deviceId race condition fix verified. Expo React Native app (not browser-testable). Backend APIs functional at https://script-recovery-1.preview.emergentagent.com. All script CRUD operations now properly use getDeviceId() directly from AsyncStorage.",
+  "fix_verification": {
+    "CRITICAL_FIX_1_createScript": {
+      "file": "frontend/store/scriptStore.ts",
+      "lines": "343-351",
+      "before": "const deviceId = get().deviceId || 'default'",
+      "after": "const deviceId = await getDeviceId()",
+      "status": "VERIFIED",
+      "note": "createScript now calls getDeviceId() directly to read from AsyncStorage"
+    },
+    "CRITICAL_FIX_2_fetchScripts": {
+      "file": "frontend/store/scriptStore.ts",
+      "lines": "305-318",
+      "before": "const { deviceId } = get() with fallback to 'default'",
+      "after": "const deviceId = await getDeviceId()",
+      "status": "VERIFIED",
+      "note": "fetchScripts now calls getDeviceId() directly to read from AsyncStorage"
+    },
+    "CRITICAL_FIX_3_upload_imports": {
+      "file": "frontend/app/upload.tsx",
+      "lines": "19-20",
+      "code": "import AsyncStorage from '@react-native-async-storage/async-storage';\nimport * as Device from 'expo-device';",
+      "status": "VERIFIED"
+    },
+    "CRITICAL_FIX_4_upload_getDeviceId": {
+      "file": "frontend/app/upload.tsx",
+      "lines": "30-41",
+      "code": "const getDeviceId = async () => AsyncStorage.getItem('device_id') || generate new",
+      "status": "VERIFIED",
+      "note": "Same logic as scriptStore.ts getDeviceId for consistency"
+    },
+    "CRITICAL_FIX_5_FormData_user_id": {
+      "file": "frontend/app/upload.tsx",
+      "lines": "108-116",
+      "code": "const userId = await getDeviceId(); formData.append('user_id', userId);",
+      "status": "VERIFIED"
+    },
+    "CRITICAL_FIX_6_base64_user_id": {
+      "file": "frontend/app/upload.tsx",
+      "lines": "133-138",
+      "code": "user_id: userId in base64 fallback JSON payload",
+      "status": "VERIFIED"
+    }
+  },
+  "backend_flow_tests": [
+    {"test": "test_health_returns_200", "result": "PASS", "description": "Health check returns 200"},
+    {"test": "test_post_scripts_with_user_id", "result": "PASS", "description": "POST /api/scripts with user_id returns script with matching user_id"},
+    {"test": "test_get_scripts_filters_by_user_id", "result": "PASS", "description": "GET /api/scripts?user_id=X returns only scripts for that user_id"},
+    {"test": "test_create_then_fetch_same_device_id", "result": "PASS", "description": "Create script → script appears in library with same deviceId"},
+    {"test": "test_get_script_detail_by_id", "result": "PASS", "description": "GET /api/scripts/{id} returns full script detail"},
+    {"test": "test_upload_base64_with_user_id", "result": "PASS", "description": "POST /api/scripts/upload-base64 with user_id saves correctly"},
+    {"test": "test_upload_form_data_with_user_id", "result": "PASS", "description": "POST /api/scripts/upload with user_id in FormData saves correctly"},
+    {"test": "test_scripts_not_created_with_default", "result": "PASS", "description": "Scripts NOT created with user_id='default' when proper ID provided"}
+  ],
+  "root_cause_analysis": {
+    "problem": "Scripts created with user_id='default' but library queries with real deviceId, finding nothing",
+    "cause": "deviceId race condition - initializeUser() is async, so when user navigates to upload before it completes, store.deviceId is null",
+    "solution": "All script operations (createScript, fetchScripts, upload) now call getDeviceId() directly from AsyncStorage instead of relying on store state",
+    "verification": "Backend tests confirm scripts created with specific user_id appear in library fetch with same user_id"
+  },
+  "no_issues_found": true
+}

@@ -8,18 +8,29 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  Platform,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
+import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
 import { useScriptStore } from '../../store/scriptStore';
+
+// Safely import speech recognition - it may not be available on all devices
+let ExpoSpeechRecognitionModule: any = null;
+let useSpeechRecognitionEvent: (event: string, handler: (data: any) => void) => void = () => {};
+let speechRecognitionImported = false;
+
+try {
+  const speechRecognition = require('expo-speech-recognition');
+  ExpoSpeechRecognitionModule = speechRecognition.ExpoSpeechRecognitionModule;
+  useSpeechRecognitionEvent = speechRecognition.useSpeechRecognitionEvent;
+  speechRecognitionImported = true;
+} catch (e) {
+  console.log('[Rehearsal] Speech recognition module not available');
+}
 
 type RehearsalState = 'idle' | 'ai_speaking' | 'user_turn' | 'waiting' | 'finished';
 
@@ -28,26 +39,123 @@ interface LinePerformance {
   hesitationTime: number;
   attempts: number;
   hintUsed: boolean;
+  speechAccuracy?: number;
 }
 
-// Helper to calculate text similarity (Levenshtein distance based)
-const calculateSimilarity = (str1: string, str2: string): number => {
-  const s1 = str1.toLowerCase().replace(/[^\w\s]/g, '').trim();
-  const s2 = str2.toLowerCase().replace(/[^\w\s]/g, '').trim();
+// Normalize text for comparison
+const normalizeText = (text: string): string => {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '') // Remove punctuation
+    .replace(/\s+/g, ' ')    // Normalize whitespace
+    .trim();
+};
+
+// Calculate Levenshtein distance for fuzzy matching
+const levenshteinDistance = (str1: string, str2: string): number => {
+  const m = str1.length;
+  const n = str2.length;
+  
+  if (m === 0) return n;
+  if (n === 0) return m;
+  
+  // Use two rows instead of full matrix for memory efficiency
+  let prevRow = Array(n + 1).fill(0).map((_, i) => i);
+  let currRow = Array(n + 1).fill(0);
+  
+  for (let i = 1; i <= m; i++) {
+    currRow[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      currRow[j] = Math.min(
+        prevRow[j] + 1,      // deletion
+        currRow[j - 1] + 1,  // insertion
+        prevRow[j - 1] + cost // substitution
+      );
+    }
+    [prevRow, currRow] = [currRow, prevRow];
+  }
+  
+  return prevRow[n];
+};
+
+// Calculate similarity score combining multiple methods
+const calculateSimilarity = (spoken: string, expected: string): number => {
+  const s1 = normalizeText(spoken);
+  const s2 = normalizeText(expected);
   
   if (s1 === s2) return 1;
   if (s1.length === 0 || s2.length === 0) return 0;
   
-  // Simple word overlap comparison
+  // Method 1: Word overlap (order-independent)
   const words1 = s1.split(/\s+/);
   const words2 = s2.split(/\s+/);
   
-  let matchCount = 0;
-  for (const word of words1) {
-    if (words2.includes(word)) matchCount++;
+  let wordMatchCount = 0;
+  const usedIndices = new Set<number>();
+  
+  for (const word1 of words1) {
+    // Find best matching word in expected text
+    let bestMatch = -1;
+    let bestScore = 0;
+    
+    for (let i = 0; i < words2.length; i++) {
+      if (usedIndices.has(i)) continue;
+      
+      const word2 = words2[i];
+      // Exact match
+      if (word1 === word2) {
+        bestMatch = i;
+        bestScore = 1;
+        break;
+      }
+      // Fuzzy match for longer words
+      if (word1.length > 3 && word2.length > 3) {
+        const dist = levenshteinDistance(word1, word2);
+        const maxLen = Math.max(word1.length, word2.length);
+        const similarity = 1 - (dist / maxLen);
+        if (similarity > 0.7 && similarity > bestScore) {
+          bestMatch = i;
+          bestScore = similarity;
+        }
+      }
+    }
+    
+    if (bestMatch >= 0) {
+      wordMatchCount += bestScore;
+      usedIndices.add(bestMatch);
+    }
   }
   
-  return matchCount / Math.max(words1.length, words2.length);
+  const wordOverlapScore = wordMatchCount / Math.max(words1.length, words2.length);
+  
+  // Method 2: Character-level similarity (catches partial words)
+  const maxLen = Math.max(s1.length, s2.length);
+  const charScore = 1 - (levenshteinDistance(s1, s2) / maxLen);
+  
+  // Method 3: Sequence matching (checks if spoken text contains key phrases)
+  const sequenceScore = s2.split(' ').filter(word => 
+    word.length > 2 && s1.includes(word)
+  ).length / words2.length;
+  
+  // Weighted combination
+  return (wordOverlapScore * 0.5) + (charScore * 0.3) + (sequenceScore * 0.2);
+};
+
+// Get accuracy color based on score
+const getAccuracyColor = (accuracy: number): string => {
+  if (accuracy >= 0.8) return '#10b981'; // Green - Excellent
+  if (accuracy >= 0.6) return '#f59e0b'; // Yellow - Good
+  if (accuracy >= 0.4) return '#f97316'; // Orange - Partial
+  return '#ef4444'; // Red - Poor
+};
+
+// Get accuracy label
+const getAccuracyLabel = (accuracy: number): string => {
+  if (accuracy >= 0.8) return 'Excellent!';
+  if (accuracy >= 0.6) return 'Good';
+  if (accuracy >= 0.4) return 'Partial';
+  return 'Keep trying';
 };
 
 export default function RehearsalScreen() {
@@ -81,77 +189,196 @@ export default function RehearsalScreen() {
   const [recognizedText, setRecognizedText] = useState('');
   const [speechRecognitionAvailable, setSpeechRecognitionAvailable] = useState(false);
   const [autoAdvanceEnabled, setAutoAdvanceEnabled] = useState(true);
+  const [currentAccuracy, setCurrentAccuracy] = useState(0);
+  const [showAccuracyFeedback, setShowAccuracyFeedback] = useState(false);
+  
+  // Diagnostic state for debugging speech recognition flow
+  const [debugInfo, setDebugInfo] = useState<string>('Init');
+  const debugLog = (msg: string) => {
+    console.log(`[Rehearsal-Debug] ${msg}`);
+    setDebugInfo(msg);
+  };
+  
+  // Animation refs
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Pulse animation for listening indicator
+  useEffect(() => {
+    if (isListening) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isListening, pulseAnim]);
 
   // Check speech recognition availability
   useEffect(() => {
     const checkAvailability = async () => {
+      debugLog('Checking SR availability...');
+      if (!ExpoSpeechRecognitionModule) {
+        debugLog('SR Module not imported');
+        setSpeechRecognitionAvailable(false);
+        return;
+      }
+      
+      // If the module is imported, consider it available
+      // The actual start() call will handle permissions
+      debugLog('SR Module imported successfully');
+      setSpeechRecognitionAvailable(true);
+      
+      // Try to get current state for logging only
       try {
         const status = await ExpoSpeechRecognitionModule.getStateAsync();
-        setSpeechRecognitionAvailable(status !== 'inactive');
-      } catch {
-        setSpeechRecognitionAvailable(false);
+        debugLog(`SR current state: ${status}`);
+      } catch (err: any) {
+        debugLog(`SR state check skipped: ${err?.message || 'ok'}`);
       }
     };
     checkAvailability();
   }, []);
 
-  // Speech recognition event handlers
+  // Speech recognition event handlers (safely wrapped)
   useSpeechRecognitionEvent('start', () => {
+    if (!speechRecognitionImported) return;
+    debugLog('SR Event: start');
     setIsListening(true);
+    setCurrentAccuracy(0);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   });
 
   useSpeechRecognitionEvent('end', () => {
+    if (!speechRecognitionImported) return;
+    debugLog('SR Event: end');
     setIsListening(false);
-  });
-
-  useSpeechRecognitionEvent('result', (event) => {
-    const transcript = event.results[0]?.transcript || '';
-    setRecognizedText(transcript);
-    
-    // Check if user said something close to their line
-    if (autoAdvanceEnabled && state === 'user_turn' && transcript.length > 5) {
-      const lines = currentScript?.lines || [];
-      const currentLine = lines[currentLineIndex];
-      const expectedText = currentLine?.text || '';
-      
-      const similarity = calculateSimilarity(transcript, expectedText);
-      
-      // If similarity is > 60%, auto-advance
-      if (similarity > 0.6) {
-        stopListening();
-        onUserLineDone(false);
-      }
+    // Show accuracy feedback briefly after listening ends
+    if (currentAccuracy > 0) {
+      setShowAccuracyFeedback(true);
+      setTimeout(() => setShowAccuracyFeedback(false), 2000);
     }
   });
 
-  useSpeechRecognitionEvent('error', (event) => {
-    console.log('Speech recognition error:', event.error);
-    setIsListening(false);
+  useSpeechRecognitionEvent('result', (event: any) => {
+    if (!speechRecognitionImported) return;
+    
+    try {
+      // Safely extract transcript with multiple fallbacks
+      const transcript = event?.results?.[0]?.transcript || event?.results?.[0] || '';
+      const safeTranscript = typeof transcript === 'string' ? transcript : String(transcript || '');
+      
+      // Check if this is a final result (not interim/partial)
+      const isFinal = event?.isFinal || event?.results?.[0]?.isFinal || false;
+      
+      debugLog(`SR: "${safeTranscript.substring(0, 25)}..." final=${isFinal}`);
+      setRecognizedText(safeTranscript);
+      
+      // Calculate and update accuracy in real-time
+      if (state === 'user_turn' && safeTranscript.length > 0) {
+        const lines = currentScript?.lines || [];
+        const currentLine = lines[currentLineIndex];
+        const expectedText = currentLine?.text || '';
+        const expectedLength = expectedText.length;
+        
+        const similarity = calculateSimilarity(safeTranscript, expectedText);
+        setCurrentAccuracy(similarity);
+        
+        // Calculate how much of the line has been spoken (by length)
+        const spokenRatio = expectedLength > 0 ? safeTranscript.length / expectedLength : 0;
+        
+        debugLog(`SR: acc=${(similarity * 100).toFixed(0)}% ratio=${(spokenRatio * 100).toFixed(0)}% final=${isFinal}`);
+        
+        // Auto-advance ONLY when:
+        // 1. Auto-advance is enabled
+        // 2. This is a FINAL result (not interim), OR similarity is very high (>85%)
+        // 3. Similarity is good enough (>65%)
+        // 4. User has spoken at least 60% of the expected line length
+        // 5. Transcript is reasonably long (>10 chars or >50% of expected)
+        const minLengthMet = safeTranscript.length > 10 || spokenRatio > 0.5;
+        const similarityThresholdMet = similarity >= 0.65;
+        const completenessThresholdMet = spokenRatio >= 0.6;
+        const shouldAdvance = autoAdvanceEnabled && 
+                             similarityThresholdMet && 
+                             minLengthMet &&
+                             completenessThresholdMet &&
+                             (isFinal || similarity >= 0.85);
+        
+        if (shouldAdvance) {
+          debugLog('SR: Auto-advancing - line complete!');
+          try {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (hapticErr) {
+            console.log('[Rehearsal] Haptic feedback unavailable');
+          }
+          stopListening();
+          onUserLineDone(false, similarity);
+        }
+      }
+    } catch (err: any) {
+      console.error('[Rehearsal] SR result handler error:', err?.message || err);
+      debugLog(`SR Error: ${err?.message || 'unknown'}`);
+    }
+  });
+
+  useSpeechRecognitionEvent('error', (event: any) => {
+    if (!speechRecognitionImported) return;
+    try {
+      const errorMsg = event?.error || 'unknown error';
+      debugLog(`SR Event: error - ${errorMsg}`);
+      setIsListening(false);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } catch (hapticErr) {
+        // Haptics may not be available
+      }
+    } catch (err: any) {
+      console.error('[Rehearsal] SR error handler crashed:', err?.message || err);
+    }
   });
 
   // Start listening for user's line
   const startListening = async () => {
+    debugLog('startListening called');
     if (!speechRecognitionAvailable) {
+      debugLog('startListening: SR not available');
       Alert.alert('Not Available', 'Speech recognition is not available on this device.');
       return;
     }
 
     try {
+      debugLog('startListening: Requesting permissions...');
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      debugLog(`startListening: Permission result - ${result.granted ? 'granted' : 'denied'}`);
       if (!result.granted) {
         Alert.alert('Permission Required', 'Please grant microphone permission for speech recognition.');
         return;
       }
 
       setRecognizedText('');
+      debugLog('startListening: Starting SR module...');
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
         continuous: false,
       });
-    } catch (error) {
+      debugLog('startListening: SR module started');
+    } catch (error: any) {
+      debugLog(`startListening: Error - ${error?.message || 'unknown'}`);
       console.error('Failed to start speech recognition:', error);
     }
   };
@@ -169,22 +396,43 @@ export default function RehearsalScreen() {
   // Load rehearsal and script data
   useEffect(() => {
     const loadData = async () => {
-      if (id) {
-        const rehearsal = await fetchRehearsal(id);
-        if (rehearsal) {
-          await fetchScript(rehearsal.script_id);
-          setCurrentLineIndex(rehearsal.current_line_index || 0);
-          setCompletedLines(rehearsal.completed_lines || []);
-          setMissedLines(rehearsal.missed_lines || []);
-          setWeakLines(rehearsal.weak_lines || []);
+      try {
+        console.log('[Rehearsal] Loading data for id:', id);
+        if (id) {
+          const rehearsal = await fetchRehearsal(id);
+          console.log('[Rehearsal] Fetched rehearsal:', rehearsal ? 'found' : 'null');
+          if (rehearsal) {
+            const script = await fetchScript(rehearsal.script_id);
+            console.log('[Rehearsal] Fetched script:', script ? 'found' : 'null');
+            console.log('[Rehearsal] Script lines count:', script?.lines?.length || 0);
+            setCurrentLineIndex(rehearsal.current_line_index || 0);
+            setCompletedLines(rehearsal.completed_lines || []);
+            setMissedLines(rehearsal.missed_lines || []);
+            setWeakLines(rehearsal.weak_lines || []);
+          } else {
+            console.error('[Rehearsal] Rehearsal not found:', id);
+            Alert.alert('Error', 'Rehearsal not found. Please try again.');
+            router.back();
+            return;
+          }
         }
-        setLoading(false);
+      } catch (error) {
+        console.error('[Rehearsal] Error loading data:', error);
+        Alert.alert('Error', 'Failed to load rehearsal. Please try again.');
+        router.back();
+        return;
       }
+      setLoading(false);
     };
     loadData();
 
     return () => {
       Speech.stop();
+      isSpeakingRef.current = false;
+      speakingLineIndexRef.current = null;
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+      }
       if (recording) {
         recording.stopAndUnloadAsync();
       }
@@ -225,81 +473,111 @@ export default function RehearsalScreen() {
     }
   }, []);
 
-  // Speak a line using device TTS
-  const speakLine = useCallback(
-    async (text: string) => {
-      if (!text || isPaused) return;
+  // Track if speech is in progress to prevent multiple calls
+  const isSpeakingRef = useRef(false);
+  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const currentLineIndexRef = useRef(currentLineIndex);
+  // Track if we've already processed an advance for this speech cycle
+  const advanceProcessedRef = useRef(false);
+  // Track the line index we're currently speaking to prevent duplicate advances
+  const speakingLineIndexRef = useRef<number | null>(null);
+  // Ref to hold advanceToNextLine to avoid circular dependency
+  const advanceToNextLineRef = useRef<() => void>(() => {});
 
+  // Keep line index ref updated
+  useEffect(() => {
+    currentLineIndexRef.current = currentLineIndex;
+  }, [currentLineIndex]);
+
+  // Speak a line using device TTS (with crash protection)
+  const speakLine = useCallback(
+    async (text: string, lineIndex?: number) => {
+      // Use the passed lineIndex or fall back to current ref
+      const targetLineIndex = lineIndex ?? currentLineIndexRef.current;
+      
+      if (!text || isPaused) return;
+      
+      // Prevent multiple simultaneous speech calls for the same line
+      if (isSpeakingRef.current) {
+        console.log('[Rehearsal] Speech already in progress, skipping');
+        return;
+      }
+      
+      // Prevent speaking the same line twice
+      if (speakingLineIndexRef.current === targetLineIndex) {
+        console.log('[Rehearsal] Already spoke/speaking this line, skipping');
+        return;
+      }
+
+      console.log('[Rehearsal] Speaking line:', targetLineIndex, text.substring(0, 30));
+      isSpeakingRef.current = true;
+      speakingLineIndexRef.current = targetLineIndex;
+      advanceProcessedRef.current = false;
       setSpeaking(true);
       setState('ai_speaking');
 
       const voiceSettings = getVoiceSettings(voiceType);
 
+      // Helper to safely advance once
+      const safeAdvance = () => {
+        if (advanceProcessedRef.current) {
+          console.log('[Rehearsal] Advance already processed, skipping');
+          return;
+        }
+        advanceProcessedRef.current = true;
+        isSpeakingRef.current = false;
+        setSpeaking(false);
+        
+        // Clear any pending timeouts
+        if (speechTimeoutRef.current) {
+          clearTimeout(speechTimeoutRef.current);
+        }
+        
+        // Use a timeout to ensure state has settled
+        speechTimeoutRef.current = setTimeout(() => {
+          // Double-check we're still on the expected line before advancing
+          if (currentLineIndexRef.current === targetLineIndex) {
+            advanceToNextLineRef.current();
+          }
+        }, 300);
+      };
+
       try {
+        // Stop any existing speech first
         await Speech.stop();
+        
+        // Small delay to ensure previous speech is fully stopped
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         Speech.speak(text, {
           language: 'en-US',
           pitch: voiceSettings.pitch,
           rate: voiceSettings.rate,
           onDone: () => {
-            setSpeaking(false);
-            advanceToNextLine();
+            console.log('[Rehearsal] Speech done for line:', targetLineIndex);
+            safeAdvance();
           },
           onError: (error) => {
-            console.error('Speech error:', error);
-            setSpeaking(false);
-            advanceToNextLine();
+            console.error('[Rehearsal] Speech error:', error);
+            safeAdvance();
           },
           onStopped: () => {
+            console.log('[Rehearsal] Speech stopped');
+            isSpeakingRef.current = false;
             setSpeaking(false);
+            // Don't advance on manual stop - user may have paused
           },
         });
       } catch (error) {
-        console.error('TTS error:', error);
-        setSpeaking(false);
-        advanceToNextLine();
+        console.error('[Rehearsal] TTS error:', error);
+        safeAdvance();
       }
     },
     [voiceType, isPaused, getVoiceSettings]
   );
 
-  // Advance to next line
-  const advanceToNextLine = useCallback(() => {
-    if (isPaused) return;
-
-    const nextIndex = currentLineIndex + 1;
-    if (nextIndex >= lines.length) {
-      setState('finished');
-      saveProgress(nextIndex);
-      return;
-    }
-
-    setCompletedLines((prev) => [...prev, currentLineIndex]);
-    setCurrentLineIndex(nextIndex);
-
-    const nextLine = lines[nextIndex];
-    if (nextLine?.character === userCharacter) {
-      setState('user_turn');
-      setLineStartTime(Date.now());
-      if (mode === 'cue_only' || mode === 'performance') {
-        setUserLineVisible(false);
-      } else {
-        setUserLineVisible(true);
-      }
-    } else if (!nextLine?.is_stage_direction) {
-      setTimeout(() => {
-        if (!isPaused) {
-          speakLine(nextLine.text);
-        }
-      }, 500);
-    } else {
-      setTimeout(() => advanceToNextLine(), 300);
-    }
-  }, [currentLineIndex, lines, userCharacter, isPaused, mode, speakLine]);
-
   // Save progress to backend
-  const saveProgress = async (lineIndex: number) => {
+  const saveProgress = useCallback(async (lineIndex: number) => {
     if (id) {
       await updateRehearsal(id, {
         current_line_index: lineIndex,
@@ -308,7 +586,96 @@ export default function RehearsalScreen() {
         weak_lines: weakLines,
       });
     }
-  };
+  }, [id, completedLines, missedLines, weakLines, updateRehearsal]);
+
+  // Advance to next line
+  const advanceToNextLine = useCallback(() => {
+    try {
+      if (isPaused) return;
+
+      const currentIdx = currentLineIndexRef.current;
+      const nextIndex = currentIdx + 1;
+      console.log('[Rehearsal] Advancing from line:', currentIdx, 'to line:', nextIndex, 'of', lines.length);
+      
+      if (nextIndex >= lines.length) {
+        console.log('[Rehearsal] Finished!');
+        setState('finished');
+        saveProgress(nextIndex);
+        return;
+      }
+
+      // Update completed lines and current index
+      setCompletedLines((prev) => [...prev, currentIdx]);
+      setCurrentLineIndex(nextIndex);
+      currentLineIndexRef.current = nextIndex;
+      
+      // Reset speaking state for next line - IMPORTANT: clear before deciding to speak
+      speakingLineIndexRef.current = null;
+      advanceProcessedRef.current = false;
+      isSpeakingRef.current = false;
+
+      const nextLine = lines[nextIndex];
+      console.log('[Rehearsal] Next line character:', nextLine?.character, 'User:', userCharacter);
+      
+      if (!nextLine) {
+        console.error('[Rehearsal] nextLine is undefined at index:', nextIndex);
+        setState('finished');
+        return;
+      }
+      
+      if (nextLine.character === userCharacter) {
+        setState('user_turn');
+        setLineStartTime(Date.now());
+        if (mode === 'cue_only' || mode === 'performance') {
+          setUserLineVisible(false);
+        } else {
+          setUserLineVisible(true);
+        }
+      } else if (!nextLine.is_stage_direction) {
+      // AI line - speak it after a short delay
+      // Use a flag to prevent double-triggering
+      const lineToSpeak = nextIndex;
+      setTimeout(() => {
+        // Check that we haven't already started speaking this line
+        if (!isPaused && 
+            currentLineIndexRef.current === lineToSpeak && 
+            speakingLineIndexRef.current !== lineToSpeak &&
+            !isSpeakingRef.current) {
+          speakLine(nextLine.text, lineToSpeak);
+        }
+      }, 500);
+    } else {
+      // Stage direction - skip
+      setTimeout(() => advanceToNextLine(), 300);
+    }
+    } catch (err: any) {
+      console.error('[Rehearsal] advanceToNextLine error:', err?.message || err);
+      debugLog(`Advance Error: ${err?.message || 'unknown'}`);
+    }
+  }, [lines, userCharacter, isPaused, mode, speakLine, saveProgress]);
+
+  // Keep advanceToNextLine ref updated for use in speakLine callbacks
+  useEffect(() => {
+    advanceToNextLineRef.current = advanceToNextLine;
+  }, [advanceToNextLine]);
+
+  // Auto-start listening when it's the user's turn (if speech recognition is available and enabled)
+  useEffect(() => {
+    debugLog(`AutoStart check: state=${state}, srAvail=${speechRecognitionAvailable}, autoAdv=${autoAdvanceEnabled}, listening=${isListening}, paused=${isPaused}`);
+    if (state === 'user_turn' && 
+        speechRecognitionAvailable && 
+        autoAdvanceEnabled && 
+        !isListening && 
+        !isPaused) {
+      // Small delay to let UI settle before starting recognition
+      debugLog('AutoStart: Will start listening in 500ms');
+      const timer = setTimeout(() => {
+        debugLog('AutoStart: Starting listening now');
+        startListening();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [state, speechRecognitionAvailable, autoAdvanceEnabled, isListening, isPaused]);
 
   // Start rehearsal
   const startRehearsal = () => {
@@ -317,11 +684,16 @@ export default function RehearsalScreen() {
       return;
     }
 
+    // Reset all state
     setCurrentLineIndex(0);
+    currentLineIndexRef.current = 0;
     setCompletedLines([]);
     setMissedLines([]);
     setLinePerformances([]);
     setState('idle');
+    speakingLineIndexRef.current = null;
+    advanceProcessedRef.current = false;
+    isSpeakingRef.current = false;
 
     const firstLine = lines[0];
     if (firstLine.character === userCharacter) {
@@ -329,24 +701,29 @@ export default function RehearsalScreen() {
       setLineStartTime(Date.now());
       setUserLineVisible(mode !== 'cue_only' && mode !== 'performance');
     } else if (!firstLine.is_stage_direction) {
-      speakLine(firstLine.text);
+      speakLine(firstLine.text, 0);
     } else {
       advanceToNextLine();
     }
   };
 
   // User confirms they've said their line
-  const onUserLineDone = (usedHint: boolean = false) => {
+  const onUserLineDone = (usedHint: boolean = false, speechAccuracy?: number) => {
     const hesitationTime = (Date.now() - lineStartTime) / 1000;
     
-    // Track performance
+    // Track performance with speech accuracy
     const performance: LinePerformance = {
       lineIndex: currentLineIndex,
       hesitationTime,
       attempts: 1,
       hintUsed: usedHint || userLineVisible,
+      speechAccuracy: speechAccuracy,
     };
     setLinePerformances((prev) => [...prev, performance]);
+    
+    // Reset speech recognition state
+    setCurrentAccuracy(0);
+    setRecognizedText('');
     
     // Mark as weak if hesitation > 5 seconds or hint was used
     if (hesitationTime > 5 || usedHint) {
@@ -527,6 +904,22 @@ export default function RehearsalScreen() {
     );
   }
 
+  // Check if script has no lines
+  if (lines.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="document-text-outline" size={48} color="#f59e0b" />
+          <Text style={styles.errorText}>No dialogue lines found in script</Text>
+          <Text style={styles.errorSubtext}>The script may not have been parsed correctly</Text>
+          <TouchableOpacity style={styles.errorButton} onPress={() => router.back()}>
+            <Text style={styles.errorButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const progress = lines.length > 0 ? (currentLineIndex / lines.length) * 100 : 0;
   const stats = getStats();
 
@@ -575,6 +968,16 @@ export default function RehearsalScreen() {
           <Text style={styles.recordingText}>Recording...</Text>
         </View>
       )}
+
+      {/* DEBUG BANNER - Shows speech recognition state on device */}
+      <View style={{ backgroundColor: '#1a1a2e', padding: 8, borderBottomWidth: 1, borderBottomColor: '#333' }}>
+        <Text style={{ color: '#f59e0b', fontSize: 11, fontFamily: 'monospace' }} numberOfLines={2}>
+          [DEBUG] {debugInfo}
+        </Text>
+        <Text style={{ color: '#6b7280', fontSize: 10 }}>
+          SR:{speechRecognitionAvailable ? 'Y' : 'N'} | Auto:{autoAdvanceEnabled ? 'Y' : 'N'} | Listen:{isListening ? 'Y' : 'N'} | State:{state}
+        </Text>
+      </View>
 
       {/* Current Line Display */}
       <View style={styles.currentLineContainer}>
@@ -668,18 +1071,66 @@ export default function RehearsalScreen() {
                   </View>
                 )}
                 <View style={styles.userActionContainer}>
-                  {/* Speech Recognition Indicator */}
+                  {/* Speech Recognition Indicator with Accuracy */}
                   {isListening && (
                     <View style={styles.listeningContainer}>
-                      <View style={styles.listeningPulse}>
+                      <Animated.View 
+                        style={[
+                          styles.listeningPulse,
+                          { transform: [{ scale: pulseAnim }] }
+                        ]}
+                      >
                         <Ionicons name="mic" size={24} color="#10b981" />
-                      </View>
+                      </Animated.View>
                       <Text style={styles.listeningText}>Listening...</Text>
+                      
+                      {/* Real-time accuracy indicator */}
                       {recognizedText.length > 0 && (
-                        <Text style={styles.recognizedText} numberOfLines={2}>
-                          "{recognizedText}"
-                        </Text>
+                        <>
+                          <View style={styles.accuracyContainer}>
+                            <View style={styles.accuracyBar}>
+                              <View 
+                                style={[
+                                  styles.accuracyFill,
+                                  { 
+                                    width: `${Math.min(currentAccuracy * 100, 100)}%`,
+                                    backgroundColor: getAccuracyColor(currentAccuracy)
+                                  }
+                                ]} 
+                              />
+                            </View>
+                            <Text style={[
+                              styles.accuracyLabel,
+                              { color: getAccuracyColor(currentAccuracy) }
+                            ]}>
+                              {Math.round(currentAccuracy * 100)}% - {getAccuracyLabel(currentAccuracy)}
+                            </Text>
+                          </View>
+                          <Text style={styles.recognizedText} numberOfLines={2}>
+                            &quot;{recognizedText}&quot;
+                          </Text>
+                        </>
                       )}
+                    </View>
+                  )}
+                  
+                  {/* Accuracy feedback after listening */}
+                  {showAccuracyFeedback && !isListening && currentAccuracy > 0 && (
+                    <View style={[
+                      styles.accuracyFeedback,
+                      { borderColor: getAccuracyColor(currentAccuracy) }
+                    ]}>
+                      <Ionicons 
+                        name={currentAccuracy >= 0.6 ? 'checkmark-circle' : 'alert-circle'} 
+                        size={24} 
+                        color={getAccuracyColor(currentAccuracy)} 
+                      />
+                      <Text style={[
+                        styles.accuracyFeedbackText,
+                        { color: getAccuracyColor(currentAccuracy) }
+                      ]}>
+                        {getAccuracyLabel(currentAccuracy)} - {Math.round(currentAccuracy * 100)}% match
+                      </Text>
                     </View>
                   )}
                   
@@ -698,11 +1149,22 @@ export default function RehearsalScreen() {
                       </TouchableOpacity>
                     )}
                     
+                    {/* Stop Listening Button */}
+                    {isListening && (
+                      <TouchableOpacity
+                        style={styles.stopListenButton}
+                        onPress={stopListening}
+                      >
+                        <Ionicons name="stop" size={20} color="#ef4444" />
+                        <Text style={styles.stopListenButtonText}>Stop</Text>
+                      </TouchableOpacity>
+                    )}
+                    
                     <TouchableOpacity
                       style={styles.doneButton}
                       onPress={() => {
                         if (isListening) stopListening();
-                        onUserLineDone(!userLineVisible);
+                        onUserLineDone(!userLineVisible, currentAccuracy > 0 ? currentAccuracy : undefined);
                       }}
                     >
                       <Ionicons name="checkmark" size={24} color="#fff" />
@@ -913,6 +1375,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     marginTop: 16,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    color: '#9ca3af',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   errorButton: {
     backgroundColor: '#6366f1',
@@ -1272,6 +1741,59 @@ const styles = StyleSheet.create({
   autoAdvanceText: {
     fontSize: 12,
     color: '#6b7280',
+  },
+  // Accuracy feedback styles
+  accuracyContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  accuracyBar: {
+    width: '80%',
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  accuracyFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  accuracyLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  accuracyFeedback: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    marginBottom: 12,
+  },
+  accuracyFeedbackText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  stopListenButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  stopListenButtonText: {
+    color: '#ef4444',
+    fontSize: 15,
+    fontWeight: '600',
   },
   aiLineText: {
     fontSize: 18,

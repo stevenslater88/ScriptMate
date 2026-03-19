@@ -1,0 +1,152 @@
+{
+  "summary": "Completed testing for ScriptM8 Part 6 update: Training Modes removed from home screen, 6 training modes added to script detail screen with premium locking, all backend APIs verified working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_part6_training_modes.py",
+    "/app/test_reports/pytest/part6_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ Home screen (index.tsx): NO 'Training Modes' section - only 'AI Coaching' (4 tiles) and 'Script Tools' (4 tiles) sections",
+    "✅ Script detail (script/[id].tsx): 6 MODE_OPTIONS defined: Full Read, Cue Only, Recall, Character, Performance, Loop",
+    "✅ Premium locking: Performance and Loop modes have premium: true flag, show 'Premium' text and lock icon for non-premium users",
+    "✅ scriptStore.ts: API_TIMEOUT = 15000 (15s) for all API calls",
+    "✅ upload.tsx: UPLOAD_TIMEOUT = 30000 (30s) for file uploads",
+    "✅ eas.json: production env has EXPO_PUBLIC_BACKEND_URL = https://script-recovery-1.preview.emergentagent.com",
+    "✅ app.json: extra field has EXPO_PUBLIC_BACKEND_URL fallback",
+    "✅ API: POST /api/scripts creates scripts with AI parsing successfully",
+    "✅ API: GET /api/scripts/{id} retrieves scripts correctly",
+    "✅ API: POST /api/acting-coach/analyze returns AI coaching analysis (scene_title, emotion, style, energy required)",
+    "✅ API: GET /api/dialect/accents returns 6 accent profiles (british_rp, american_general, australian, irish, scottish, southern_american)",
+    "✅ API: GET /api/dialect/sample-lines returns practice lines",
+    "✅ API: GET /api/health responds quickly (<1s)",
+    "✅ API: 404 returns structured error response with 'detail' field"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_part6_training_modes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 pytest tests passed)",
+    "frontend": "100% - All UI elements verified via Playwright"
+  },
+  "test_credentials": "N/A - No authentication required for tested endpoints",
+  "seed_data_creation": "Created and deleted TEST_* prefixed scripts during testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Part 6 testing complete. Training Modes section removed from home screen (index.tsx), 6 training modes added to script detail screen (script/[id].tsx lines 41-48) with Performance and Loop modes locked for non-premium users. All backend APIs working: scripts CRUD, acting-coach/analyze, dialect/accents, health. Timeouts configured: API 15s, Upload 30s.",
+  "tests_performed": [
+    {
+      "test": "Home screen - NO 'Training Modes' section",
+      "result": "PASS",
+      "method": "playwright"
+    },
+    {
+      "test": "Home screen - 'AI Coaching' section with 4 tiles",
+      "result": "PASS",
+      "method": "playwright"
+    },
+    {
+      "test": "Home screen - 'Script Tools' section with 4 tiles",
+      "result": "PASS",
+      "method": "playwright"
+    },
+    {
+      "test": "Home screen - 'Self Tape Studio' featured",
+      "result": "PASS",
+      "method": "playwright"
+    },
+    {
+      "test": "Script detail - 'Full Read' mode visible",
+      "result": "PASS",
+      "method": "playwright"
+    },
+    {
+      "test": "Script detail - 'Cue Only' mode visible",
+      "result": "PASS",
+      "method": "playwright"
+    },
+    {
+      "test": "Script detail - 'Recall' mode visible",
+      "result": "PASS",
+      "method": "playwright"
+    },
+    {
+      "test": "Script detail - 'Character' mode visible",
+      "result": "PASS",
+      "method": "playwright"
+    },
+    {
+      "test": "Script detail - 'Performance' mode visible with Premium lock",
+      "result": "PASS",
+      "method": "playwright"
+    },
+    {
+      "test": "Script detail - 'Loop' mode visible with Premium lock",
+      "result": "PASS",
+      "method": "playwright"
+    },
+    {
+      "test": "API - POST /api/scripts creates script with timeout",
+      "result": "PASS",
+      "method": "pytest"
+    },
+    {
+      "test": "API - GET /api/scripts/{id} retrieves script",
+      "result": "PASS",
+      "method": "pytest"
+    },
+    {
+      "test": "API - POST /api/acting-coach/analyze returns AI analysis",
+      "result": "PASS",
+      "method": "pytest"
+    },
+    {
+      "test": "API - GET /api/dialect/accents returns accent list",
+      "result": "PASS",
+      "method": "pytest"
+    },
+    {
+      "test": "API - GET /api/dialect/sample-lines returns practice lines",
+      "result": "PASS",
+      "method": "pytest"
+    },
+    {
+      "test": "API - GET /api/health responds quickly",
+      "result": "PASS",
+      "method": "pytest"
+    },
+    {
+      "test": "API - 404 returns structured error",
+      "result": "PASS",
+      "method": "pytest"
+    },
+    {
+      "test": "Config - scriptStore.ts API_TIMEOUT = 15000",
+      "result": "PASS",
+      "method": "code review"
+    },
+    {
+      "test": "Config - upload.tsx UPLOAD_TIMEOUT = 30000",
+      "result": "PASS",
+      "method": "code review"
+    },
+    {
+      "test": "Config - eas.json has EXPO_PUBLIC_BACKEND_URL in production",
+      "result": "PASS",
+      "method": "code review"
+    },
+    {
+      "test": "Config - app.json extra has EXPO_PUBLIC_BACKEND_URL",
+      "result": "PASS",
+      "method": "code review"
+    }
+  ]
+}

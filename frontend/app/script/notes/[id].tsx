@@ -9,11 +9,19 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useScriptStore } from '../../../store/scriptStore';
+import { useAuth } from '../../../contexts/AuthContext';
+import { 
+  getNotesForScript, 
+  saveNote as syncSaveNote, 
+  deleteNote as syncDeleteNote,
+  DirectorNote as SyncDirectorNote 
+} from '../../../services/syncService';
 
 interface DirectorNote {
   id: string;
@@ -34,7 +42,9 @@ const NOTE_TYPES = [
 export default function DirectorNotesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { currentScript, fetchScript, isPremium } = useScriptStore();
+  const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState<DirectorNote[]>([]);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [noteText, setNoteText] = useState('');
@@ -45,7 +55,21 @@ export default function DirectorNotesScreen() {
     const load = async () => {
       if (id) {
         await fetchScript(id);
-        // Load saved notes from local storage or backend
+        // Load saved notes from sync service (server or local)
+        try {
+          const savedNotes = await getNotesForScript(id);
+          // Convert from sync format to local format
+          const convertedNotes: DirectorNote[] = savedNotes.map(n => ({
+            id: n.id,
+            lineIndex: n.line_index,
+            note: n.content,
+            type: (n.note_type as any) || 'general',
+            createdAt: new Date(n.created_at || Date.now()),
+          }));
+          setNotes(convertedNotes);
+        } catch (error) {
+          console.error('Error loading notes:', error);
+        }
         setLoading(false);
       }
     };
@@ -80,9 +104,10 @@ export default function DirectorNotesScreen() {
     );
   }
 
-  const addNote = () => {
-    if (selectedLine === null || !noteText.trim()) return;
+  const addNote = async () => {
+    if (selectedLine === null || !noteText.trim() || !id) return;
 
+    setSaving(true);
     const newNote: DirectorNote = {
       id: Date.now().toString(),
       lineIndex: selectedLine,
@@ -91,17 +116,42 @@ export default function DirectorNotesScreen() {
       createdAt: new Date(),
     };
 
-    setNotes([...notes, newNote]);
-    setNoteText('');
-    setShowNoteInput(false);
-    setSelectedLine(null);
+    // Convert to sync format and save
+    const syncNote: SyncDirectorNote = {
+      id: newNote.id,
+      script_id: id,
+      line_index: newNote.lineIndex,
+      note_type: newNote.type,
+      content: newNote.note,
+      color: getNoteTypeInfo(newNote.type).color,
+    };
+
+    try {
+      await syncSaveNote(syncNote);
+      setNotes([...notes, newNote]);
+      setNoteText('');
+      setShowNoteInput(false);
+      setSelectedLine(null);
+    } catch (error) {
+      console.error('Error saving note:', error);
+      Alert.alert('Error', 'Failed to save note');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const deleteNote = (noteId: string) => {
+  const deleteNoteHandler = (noteId: string) => {
     Alert.alert('Delete Note', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => {
-        setNotes(notes.filter(n => n.id !== noteId));
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        if (!id) return;
+        try {
+          await syncDeleteNote(noteId, id);
+          setNotes(notes.filter(n => n.id !== noteId));
+        } catch (error) {
+          console.error('Error deleting note:', error);
+          Alert.alert('Error', 'Failed to delete note');
+        }
       }},
     ]);
   };
@@ -184,7 +234,7 @@ export default function DirectorNotesScreen() {
                         <TouchableOpacity
                           key={note.id}
                           style={[styles.noteTag, { backgroundColor: `${typeInfo.color}20`, borderColor: typeInfo.color }]}
-                          onLongPress={() => deleteNote(note.id)}
+                          onLongPress={() => deleteNoteHandler(note.id)}
                         >
                           <Ionicons name={typeInfo.icon as any} size={14} color={typeInfo.color} />
                           <Text style={[styles.noteTagText, { color: typeInfo.color }]}>{note.note}</Text>

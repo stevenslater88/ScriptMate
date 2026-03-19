@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,11 +15,51 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Device from 'expo-device';
 import axios from 'axios';
-import { useScriptStore } from '../store/scriptStore';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import { useScriptStore } from '../store/scriptStore';
+import { DebugLog } from '../services/debugLogService';
+
+// HARDCODED backend URL - do not use env vars or dynamic resolution
+const API_BASE_URL = 'https://script-recovery-1.preview.emergentagent.com';
+
+const UPLOAD_TIMEOUT = 30000; // 30s for file uploads
+const FILE_OP_TIMEOUT = 15000; // 15s for file system operations
+
+// Helper to wrap async operations with a timeout
+function withTimeout(promise, ms, operation) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${operation} timed out after ${ms / 1000}s`));
+    }, ms);
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+};
+
+// Get device ID directly — same logic as store, ensures it's always available
+const getDeviceId = async (): Promise<string> => {
+  try {
+    let deviceId = await AsyncStorage.getItem('device_id');
+    if (deviceId) return deviceId;
+    const uniqueId = Device.modelId || Device.deviceName || 'unknown';
+    deviceId = `${uniqueId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await AsyncStorage.setItem('device_id', deviceId);
+    return deviceId;
+  } catch {
+    return `fallback-${Date.now()}`;
+  }
+};
 
 export default function UploadScreen() {
   const [title, setTitle] = useState('');
@@ -28,8 +68,15 @@ export default function UploadScreen() {
   const [uploadMethod, setUploadMethod] = useState<'paste' | 'file'>('paste');
   const { createScript } = useScriptStore();
 
+  // FORENSIC: Track screen view
+  useEffect(() => {
+    DebugLog.setScreen('UploadScreen');
+  }, []);
+
   const handleFilePick = async () => {
+    DebugLog.buttonPress('file-pick-btn', 'UploadScreen');
     try {
+      console.log('[Upload] Opening document picker...');
       const result = await DocumentPicker.getDocumentAsync({
         type: [
           'application/pdf',
@@ -41,26 +88,92 @@ export default function UploadScreen() {
         copyToCacheDirectory: true,
       });
 
-      if (result.canceled) return;
+      console.log('[Upload] Picker result type:', result.canceled ? 'canceled' : 'success');
+
+      if (result.canceled) {
+        console.log('[Upload] Picker cancelled by user');
+        return;
+      }
+
+      // Validate assets array exists and has items
+      if (!result.assets || result.assets.length === 0) {
+        console.error('[Upload] No assets in picker result');
+        Alert.alert('Error', 'No file was returned from the file picker. Please try again.');
+        return;
+      }
 
       const file = result.assets[0];
-      const filename = file.name.toLowerCase();
+      console.log('[Upload] File object keys:', Object.keys(file || {}).join(', '));
+      
+      if (!file) {
+        console.error('[Upload] File object is null/undefined');
+        Alert.alert('Error', 'File selection failed. Please try again.');
+        return;
+      }
+      
+      if (!file.uri) {
+        console.error('[Upload] File URI is missing. File object:', JSON.stringify(file));
+        Alert.alert('Error', 'File URI is missing. Please try selecting the file again.');
+        return;
+      }
+
+      const filename = (file.name || 'unknown').toLowerCase();
+      console.log(`[Upload] File picked: name=${file.name}, mime=${file.mimeType}, size=${file.size}, uri=${file.uri.substring(0, 100)}`);
       setLoading(true);
 
       // Text files can be read directly
       if (filename.endsWith('.txt') || filename.endsWith('.text')) {
-        const content = await FileSystem.readAsStringAsync(file.uri);
-        setScriptText(content);
-        if (!title) {
-          setTitle(file.name.replace(/\.[^/.]+$/, ''));
+        console.log('[Upload] Processing as text file...');
+        try {
+          // Copy to cache first to ensure we have a readable URI
+          let readableUri = file.uri;
+          if (Platform.OS === 'android') {
+            console.log('[Upload] Android: copying text file to cache...');
+            const cacheUri = `${FileSystem.cacheDirectory}text_${Date.now()}_${file.name || 'file.txt'}`;
+            try {
+              await withTimeout(
+                FileSystem.copyAsync({ from: file.uri, to: cacheUri }),
+                FILE_OP_TIMEOUT,
+                'Text file copy to cache'
+              );
+              readableUri = cacheUri;
+              console.log('[Upload] Copied to:', readableUri);
+            } catch (copyErr: any) {
+              console.log('[Upload] Copy failed, using original URI:', copyErr?.message);
+            }
+          }
+          
+          console.log('[Upload] Reading text content from:', readableUri.substring(0, 80));
+          const content = await withTimeout(
+            FileSystem.readAsStringAsync(readableUri),
+            FILE_OP_TIMEOUT,
+            'Text file read'
+          );
+          console.log(`[Upload] Read ${content?.length || 0} characters`);
+          
+          if (!content || content.trim().length === 0) {
+            Alert.alert('Empty File', 'The selected file appears to be empty.');
+            setLoading(false);
+            return;
+          }
+          setScriptText(content);
+          if (!title) {
+            setTitle((file.name || 'Untitled').replace(/\.[^/.]+$/, ''));
+          }
+          setLoading(false);
+          Alert.alert('File Loaded', `"${file.name}" loaded. Review the text below and tap Save Script.`);
+        } catch (readErr: any) {
+          console.error(`[Upload] Failed to read text file: ${readErr?.message}`, readErr);
+          Alert.alert('Error', `Could not read file: ${readErr?.message || 'Unknown error'}`);
+          setLoading(false);
         }
-        setLoading(false);
       } else {
         // PDF, Word docs, and other files - upload to backend for parsing
+        console.log('[Upload] Processing as binary file (PDF/DOCX)...');
         const formData = new FormData();
         
         // Determine MIME type
-        let mimeType = 'application/octet-stream';
+        let mimeType = file.mimeType || 'application/octet-stream';
         if (filename.endsWith('.pdf')) {
           mimeType = 'application/pdf';
         } else if (filename.endsWith('.docx')) {
@@ -68,24 +181,94 @@ export default function UploadScreen() {
         } else if (filename.endsWith('.doc')) {
           mimeType = 'application/msword';
         }
+
+        // Ensure URI is properly formatted for Android
+        let fileUri = file.uri;
+        if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
+          // If URI is not file://, read to cache first
+          console.log('[Upload] Android: copying binary file to cache...');
+          const cacheUri = `${FileSystem.cacheDirectory}upload_${Date.now()}_${file.name || 'file'}`;
+          try {
+            await withTimeout(
+              FileSystem.copyAsync({ from: file.uri, to: cacheUri }),
+              FILE_OP_TIMEOUT,
+              'File copy to cache'
+            );
+            fileUri = cacheUri;
+            console.log('[Upload] Copied to:', fileUri);
+          } catch (copyErr: any) {
+            console.error('[Upload] Copy failed:', copyErr?.message);
+            // If copy fails, try using the original URI anyway
+            console.log('[Upload] Attempting upload with original URI...');
+          }
+        }
+
+        console.log(`[Upload] Uploading file: name=${file.name}, mime=${mimeType}, uri=${fileUri.substring(0, 80)}`);
+        
+        // Get device ID for user association
+        const userId = await getDeviceId();
+        console.log('[Upload] User ID:', userId.substring(0, 20) + '...');
         
         formData.append('file', {
-          uri: file.uri,
+          uri: fileUri,
           type: mimeType,
-          name: file.name,
+          name: file.name || 'uploaded_file',
         } as any);
-        formData.append('title', title || file.name.replace(/\.[^/.]+$/, ''));
+        formData.append('title', title || (file.name || 'Untitled').replace(/\.[^/.]+$/, ''));
+        formData.append('user_id', userId);
 
-        const response = await axios.post(
-          `${BACKEND_URL}/api/scripts/upload`,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
+        console.log('[Upload] Sending FormData to server...');
+        const uploadUrl = `${API_BASE_URL}/api/scripts/upload`;
+        const base64Url = `${API_BASE_URL}/api/scripts/upload-base64`;
+        console.log(`[Upload] Target URL: ${uploadUrl}`);
+        
+        let response;
+        try {
+          response = await axios.post(
+            uploadUrl,
+            formData,
+            {
+              timeout: UPLOAD_TIMEOUT,
+              // Do NOT set Content-Type manually — axios/RN must set it with the correct multipart boundary
+            }
+          );
+          console.log('[Upload] FormData upload succeeded');
+        } catch (formDataError: any) {
+          console.log(`[Upload] FormData failed: ${formDataError?.response?.status || 'no status'} - ${formDataError?.message}`);
+          // Fallback: if FormData upload fails on Android, try base64 upload
+          if (Platform.OS === 'android') {
+            console.log(`[Upload] Trying base64 fallback to: ${base64Url}`);
+            try {
+              const base64Data = await withTimeout(
+                FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 }),
+                FILE_OP_TIMEOUT,
+                'Base64 file read'
+              );
+              console.log(`[Upload] Read ${base64Data?.length || 0} base64 chars, posting to upload-base64...`);
+              response = await axios.post(
+                base64Url,
+                {
+                  title: title || (file.name || 'Untitled').replace(/\.[^/.]+$/, ''),
+                  filename: file.name || 'uploaded_file',
+                  file_data: base64Data,
+                  user_id: userId,
+                },
+                {
+                  headers: { 'Content-Type': 'application/json' },
+                  timeout: UPLOAD_TIMEOUT,
+                }
+              );
+              console.log('[Upload] Base64 upload succeeded');
+            } catch (base64Err: any) {
+              console.error('[Upload] Base64 fallback also failed:', base64Err?.message);
+              throw base64Err;
+            }
+          } else {
+            throw formDataError;
           }
-        );
+        }
 
+        console.log('[Upload] Server response received, id:', response?.data?.id);
         setLoading(false);
         Alert.alert('Success', 'Script uploaded and parsed successfully!', [
           {
@@ -96,34 +279,101 @@ export default function UploadScreen() {
       }
     } catch (error: any) {
       setLoading(false);
-      console.error('File pick error:', error);
-      Alert.alert('Error', error.message || 'Failed to upload file');
+      const status = error?.response?.status;
+      const serverMsg = error?.response?.data?.detail;
+      const errMsg = error?.message || 'Unknown error';
+      const requestUrl = error?.config?.url || `${API_BASE_URL}/api/scripts/upload`;
+      console.error(`[Upload] Failed: status=${status}, msg=${errMsg}, server=${serverMsg}, requestUrl=${requestUrl}`);
+      console.error('[Upload] Full error:', error);
+
+      let msg = 'Failed to upload file';
+      if (error?.code === 'ECONNABORTED' || errMsg.includes('timeout')) {
+        msg = 'Upload timed out. Please check your connection and try again.';
+      } else if (errMsg === 'Network Error' || !error?.response) {
+        msg = `Unable to reach server.\n\nEndpoint: ${requestUrl}\nError: ${errMsg}\n\nCheck your internet connection.`;
+      } else if (status === 404) {
+        msg = `Endpoint not found (404).\n\nURL: ${requestUrl}\n\nBackend may not have this route.`;
+      } else if (status === 413) {
+        msg = 'File is too large. Please try a smaller file.';
+      } else if (status === 415) {
+        msg = 'Unsupported file type. Please use PDF, DOCX, or TXT files.';
+      } else if (status === 400 && serverMsg) {
+        msg = serverMsg;
+      } else if (serverMsg) {
+        msg = serverMsg;
+      } else {
+        msg = `Upload failed (${status || 'no status'}): ${errMsg}\n\nEndpoint: ${requestUrl}`;
+      }
+      Alert.alert('Upload Failed', msg);
     }
   };
 
   const handleSubmit = async () => {
+    // FORENSIC: Log Parse with AI button press
+    DebugLog.buttonPress('parse-ai-btn', 'UploadScreen');
+    DebugLog.functionStart('handleSubmit', { 
+      titleLength: title.trim().length, 
+      textLength: scriptText.trim().length 
+    });
+    
     if (!title.trim()) {
+      DebugLog.alertShown('Error', 'Please enter a script title');
       Alert.alert('Error', 'Please enter a script title');
       return;
     }
     if (!scriptText.trim()) {
+      DebugLog.alertShown('Error', 'Please paste your script text');
       Alert.alert('Error', 'Please paste your script text');
       return;
     }
 
+    console.log(`[Upload] handleSubmit: title="${title.trim().substring(0, 30)}", textLength=${scriptText.trim().length}`);
     setLoading(true);
     try {
+      console.log('[Upload] Calling createScript...');
       const script = await createScript(title.trim(), scriptText.trim());
+      console.log(`[Upload] createScript returned: ${script ? `id=${script.id}` : 'null'}`);
       if (script) {
+        DebugLog.functionSuccess('handleSubmit', { scriptId: script.id });
+        DebugLog.alertShown('Success', 'Script created and parsed successfully!');
         Alert.alert('Success', 'Script created and parsed successfully!', [
           {
             text: 'View Script',
-            onPress: () => router.replace(`/script/${script.id}`),
+            onPress: () => {
+              DebugLog.navigation('UploadScreen', `script/${script.id}`);
+              router.replace(`/script/${script.id}`);
+            },
           },
         ]);
+      } else {
+        // createScript catches errors internally and returns null — surface this to user
+        const storeError = useScriptStore.getState().error;
+        console.error(`[Upload] createScript returned null, store error: ${storeError}`);
+        DebugLog.functionError('handleSubmit', new Error(storeError || 'createScript returned null'));
+        DebugLog.alertShown('Save Failed', storeError || 'Could not save script');
+        Alert.alert(
+          'Save Failed',
+          storeError || 'Could not save script. Please check your internet connection and try again.'
+        );
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create script');
+      const errMsg = error?.message || 'Unknown error';
+      const serverMsg = error?.response?.data?.detail;
+      console.error(`[Upload] Submit failed: msg=${errMsg}, server=${serverMsg}`);
+      DebugLog.functionError('handleSubmit', error);
+
+      let msg = 'Failed to create script';
+      if (error?.message?.includes('timeout') || error?.code === 'ECONNABORTED') {
+        msg = 'Request timed out. Please check your internet connection.';
+      } else if (error?.message === 'Network Error') {
+        msg = `Unable to reach server. Please check your internet connection.`;
+      } else if (serverMsg) {
+        msg = serverMsg;
+      } else {
+        msg = `Upload failed: ${errMsg}`;
+      }
+      DebugLog.alertShown('Error', msg);
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
@@ -266,21 +516,49 @@ Then I guess this is goodbye.`;
                 </Text>
               </View>
 
-              {/* Submit Button */}
-              <TouchableOpacity
-                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={handleSubmit}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="sparkles" size={20} color="#fff" />
-                    <Text style={styles.submitButtonText}>Parse Script with AI</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              {/* Submit Buttons */}
+              <View style={styles.parseOptions}>
+                <TouchableOpacity
+                  style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                  onPress={handleSubmit}
+                  disabled={loading}
+                  testID="parse-ai-btn"
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="sparkles" size={20} color="#fff" />
+                      <Text style={styles.submitButtonText}>Parse with AI</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.smartParseButton, (!title.trim() || !scriptText.trim()) && styles.submitButtonDisabled]}
+                  onPress={() => {
+                    if (!title.trim() || !scriptText.trim()) {
+                      DebugLog.alertShown('Error', 'Enter a title and paste script text first');
+                      Alert.alert('Error', 'Enter a title and paste script text first');
+                      return;
+                    }
+                    // FORENSIC: Log Smart Parse V2 navigation
+                    DebugLog.buttonPress('parse-smart-btn', 'UploadScreen');
+                    DebugLog.navigation('UploadScreen', 'script-parser', { 
+                      titleLength: title.trim().length, 
+                      rawTextLength: scriptText.trim().length 
+                    });
+                    router.push({
+                      pathname: '/script-parser',
+                      params: { title: title.trim(), rawText: scriptText.trim() },
+                    });
+                  }}
+                  disabled={!title.trim() || !scriptText.trim()}
+                  testID="parse-smart-btn"
+                >
+                  <Ionicons name="flash" size={20} color="#fff" />
+                  <Text style={styles.submitButtonText}>Smart Parse V2</Text>
+                </TouchableOpacity>
+              </View>
             </>
           ) : (
             <>
@@ -447,6 +725,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#6366f1',
     paddingVertical: 16,
     borderRadius: 12,
+    gap: 10,
+    flex: 1,
+  },
+  smartParseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#7c3aed',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 10,
+    flex: 1,
+  },
+  parseOptions: {
+    flexDirection: 'row',
     gap: 10,
   },
   submitButtonDisabled: {

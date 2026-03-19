@@ -1,0 +1,90 @@
+{
+  "summary": "Completed frontend web preview testing for ScriptMate mobile app. Backend health check working. All requested pages load correctly: Home/Index, Dashboard, Auditions (with stats modal), and Self-Tape Studio. The P0 rehearsal bug fix could not be fully verified in web preview as it requires TTS callbacks on native device.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Global",
+        "issues": [
+          "Console warning: 'shadow*' style props are deprecated. Use 'boxShadow' - cosmetic issue, not affecting functionality",
+          "Console warning: expo-av deprecated, will be removed in SDK 54 - not blocking current functionality"
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/backend/tests/test_scriptmate_api.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Rehearsal screen fix (lines 407-439, 516-561): Added speakingLineIndexRef and advanceProcessedRef to prevent AI cue loop - good implementation pattern for TTS callback handling",
+    "auditions.tsx handleShowStats (line 189-192): Modal opens correctly for all users (free and premium) as expected",
+    "selftape/index.tsx navigation (lines 53-69): Navigation to /selftape/prep working with premium gating",
+    "Root layout properly handles RevenueCat initialization errors with graceful fallback on web platform"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% - /api/health returns healthy status",
+    "frontend": "100% - All tested pages load without errors"
+  },
+  "test_credentials": "N/A - No authentication required for web preview testing",
+  "seed_data_creation": "None - Using empty state for frontend verification",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Web preview testing completed. All core pages verified: 1) Home page ('/') loads with all feature cards visible 2) Dashboard ('/dashboard') renders correctly with progress tracking 3) Auditions ('/auditions') loads with stats modal working when clicking bar-chart icon 4) Self-Tape Studio ('/selftape') loads with all features visible. The rehearsal screen P0 bug fix (AI cue loop) requires on-device testing to verify TTS callback behavior. RevenueCat is correctly disabled on web platform.",
+  "tests_performed": [
+    {
+      "test": "Backend health check",
+      "endpoint": "/api/health",
+      "result": "PASS - Returns {status: 'healthy', timestamp: '...'}",
+      "method": "curl"
+    },
+    {
+      "test": "Frontend onboarding page",
+      "url": "/onboarding",
+      "result": "PASS - Shows welcome screen with skip button",
+      "method": "playwright"
+    },
+    {
+      "test": "Home page after skip",
+      "url": "/",
+      "result": "PASS - Shows main feature cards (Self Tape, Auditions, Dashboard, Scripts, Training Modes)",
+      "method": "playwright"
+    },
+    {
+      "test": "Dashboard page",
+      "url": "/dashboard",
+      "result": "PASS - Shows Daily Progress, Career Momentum, Quick Actions sections",
+      "method": "playwright"
+    },
+    {
+      "test": "Auditions page",
+      "url": "/auditions",
+      "result": "PASS - Shows Audition Tracker with stats, filters, search",
+      "method": "playwright"
+    },
+    {
+      "test": "Auditions stats modal",
+      "url": "/auditions",
+      "result": "PASS - Stats modal opens showing This Month, Last Month, Callback Rate, Booking Rate",
+      "method": "playwright - click at x=1888, y=32"
+    },
+    {
+      "test": "Self-Tape Studio",
+      "url": "/selftape",
+      "result": "PASS - Shows Quick Paste, My Takes, PRO FEATURE badge, features list, script selection",
+      "method": "playwright"
+    }
+  ],
+  "notes_on_rehearsal_fix": {
+    "fix_location": "frontend/app/rehearsal/[id].tsx lines 407-439 and 516-561",
+    "fix_description": "Added speakingLineIndexRef to track which line is being spoken to prevent duplicate TTS calls. Added advanceProcessedRef to ensure advance only happens once per speech cycle. Moved saveProgress before advanceToNextLine to fix variable ordering.",
+    "verification_status": "Cannot fully verify in web preview - requires native device testing with TTS callbacks. Code review indicates correct implementation pattern."
+  }
+}

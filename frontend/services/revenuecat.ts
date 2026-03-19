@@ -7,13 +7,14 @@ import Purchases, {
   PurchasesError,
   PURCHASES_ERROR_CODE,
 } from 'react-native-purchases';
+import { AppConfig } from './appConfig';
 
-// RevenueCat API Keys from environment
-const REVENUECAT_APPLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY || '';
-const REVENUECAT_GOOGLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY || '';
+// RevenueCat API Keys — resolved from centralized config (env → extra → hardcoded)
+const REVENUECAT_APPLE_API_KEY = AppConfig.REVENUECAT_APPLE_API_KEY;
+const REVENUECAT_GOOGLE_API_KEY = AppConfig.REVENUECAT_GOOGLE_API_KEY;
 
 // Entitlement identifier that unlocks premium features
-export const PREMIUM_ENTITLEMENT_ID = 'ScriptMate Pro';
+export const PREMIUM_ENTITLEMENT_ID = 'ScriptM8 Pro';
 
 // Product identifiers (must match RevenueCat dashboard)
 export const PRODUCT_IDS = {
@@ -26,11 +27,18 @@ export const PRODUCT_IDS = {
 let isConfigured = false;
 
 /**
- * Check if RevenueCat is already configured
- * (Configuration happens in _layout.tsx on app start)
+ * Mark RevenueCat as configured (called from _layout.tsx after successful configure)
+ */
+export const markRevenueCatConfigured = (): void => {
+  isConfigured = true;
+};
+
+/**
+ * Check if RevenueCat is actually configured and ready to use
  */
 export const isRevenueCatConfigured = (): boolean => {
-  return Platform.OS !== 'web';
+  if (Platform.OS === 'web') return false;
+  return isConfigured;
 };
 
 /**
@@ -143,6 +151,7 @@ export interface PurchaseResult {
   error?: string;
   errorCode?: PURCHASES_ERROR_CODE;
   cancelled?: boolean;
+  restored?: boolean;
 }
 
 /**
@@ -215,10 +224,11 @@ export const restorePurchases = async (): Promise<PurchaseResult> => {
 
     if (isPremium) {
       console.log('[RevenueCat] Purchases restored successfully');
-      return { success: true, customerInfo };
+      return { success: true, customerInfo, restored: true };
     } else {
       return { 
-        success: false, 
+        success: true, // Restore itself succeeded, just no purchases found
+        restored: false,
         error: 'No previous purchases found.',
         customerInfo 
       };
