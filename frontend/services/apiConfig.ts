@@ -1,27 +1,42 @@
 /**
- * API Configuration — HARDCODED production backend URL.
+ * API Configuration — Backend URL Override Patch
  * 
- * SINGLE SOURCE OF TRUTH for the backend URL.
- * NO environment variables. NO dynamic resolution. NO overrides.
- * This ensures the URL is always correct and cannot be changed at build time.
+ * QUICK SWITCH: Change ACTIVE_BACKEND below to switch environments instantly.
+ * No other code changes needed. Rebuild app after changing.
  */
 
-export const API_BASE_URL = 'https://script-recovery-1.preview.emergentagent.com';
+// ═══════════════════════════════════════════════════════════════════════════
+// BACKEND SWITCH - CHANGE THIS VALUE TO SWITCH ENVIRONMENTS
+// ═══════════════════════════════════════════════════════════════════════════
+const ACTIVE_BACKEND: 'PREVIEW' | 'PRODUCTION' | 'LOCAL' = 'PREVIEW';
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Backend URL Options
+const BACKENDS = {
+  PREVIEW: 'https://script-recovery-1.preview.emergentagent.com',
+  PRODUCTION: 'https://script.emergentagent.com',
+  LOCAL: 'http://192.168.1.100:4000', // <-- Replace with your local IP
+};
+
+// Active URL (DO NOT MODIFY BELOW THIS LINE)
+export const API_BASE_URL = BACKENDS[ACTIVE_BACKEND];
 export const API_TIMEOUT = 15000;
 
-// HARD FAIL-SAFE: Crash app if wrong URL is somehow injected
-if (API_BASE_URL.includes('android-upload-test')) {
-  console.error('FATAL: API_BASE_URL contains incorrect domain: android-upload-test');
-  console.error('Expected: script-recovery-1.preview.emergentagent.com');
-  throw new Error('FATAL CONFIG ERROR: Backend URL is incorrect. Build is corrupted.');
+// Config source for diagnostics
+export const API_CONFIG_SOURCE = `apiConfig.ts (${ACTIVE_BACKEND})`;
+
+// Fail-safe validation
+if (!API_BASE_URL || API_BASE_URL.includes('undefined')) {
+  console.error('FATAL: API_BASE_URL is invalid:', API_BASE_URL);
+  throw new Error('FATAL CONFIG ERROR: Backend URL is not configured.');
 }
 
-// Config source indicator for diagnostics
-export const API_CONFIG_SOURCE = 'apiConfig.ts (hardcoded)';
+// Log active backend on load
+console.log(`[apiConfig] Active backend: ${ACTIVE_BACKEND}`);
+console.log(`[apiConfig] URL: ${API_BASE_URL}`);
 
 /**
  * Build a full API endpoint URL.
- * Usage: apiUrl('/api/scripts') → 'https://…/api/scripts'
  */
 export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
