@@ -7,7 +7,7 @@
  */
 
 // HARDCODED - DO NOT USE process.env FOR BACKEND URL
-const BACKEND_URL = 'https://script-recovery-1.preview.emergentagent.com';
+const BACKEND_URL = 'https://scriptmate-api.emergentagent.com';
 
 const REVENUECAT_GOOGLE_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY ||
