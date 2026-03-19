@@ -6,7 +6,7 @@
  * This ensures the URL is always correct and cannot be changed at build time.
  */
 
-export const API_BASE_URL = 'https://scriptmate-api.emergentagent.com';
+export const API_BASE_URL = 'https://script-recovery-1.preview.emergentagent.com';
 export const API_TIMEOUT = 15000;
 
 // HARD FAIL-SAFE: Crash app if wrong URL is somehow injected

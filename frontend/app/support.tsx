@@ -352,7 +352,7 @@ export default function SupportScreen() {
             <Text style={[styles.diagSectionTitle, { color: '#6366f1' }]}>BUILD SOURCE PROOF</Text>
             <DiagRow label="branch" value="main" />
             <DiagRow label="build" value="1102" />
-            <DiagRow label="backend" value="https://scriptmate-api.emergentagent.com" />
+            <DiagRow label="backend" value="https://script-recovery-1.preview.emergentagent.com" />
             <DiagRow label="config_source" value="apiConfig.ts (hardcoded)" />
           </View>
 
