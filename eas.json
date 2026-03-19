@@ -1,0 +1,73 @@
+{
+  "cli": {
+    "version": ">= 5.0.0",
+    "requireCommit": false
+  },
+  "build": {
+    "base": {
+      "node": "22.13.0",
+      "yarn": "1.22.22"
+    },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "__DEV__": "false",
+        "EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY": "appl_YOUR_IOS_KEY_HERE",
+        "EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY": "goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT",
+        "EXPO_PUBLIC_PREMIUM_ENABLED": "true",
+        "EXPO_PUBLIC_SHOW_LIFETIME": "false",
+        "EXPO_PUBLIC_PAYWALL_VARIANT": "A",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://141660e463cc23c1c29fef7403bcb3d6@o4510914410840064.ingest.de.sentry.io/4510914414116944",
+        "EXPO_PUBLIC_ELEVENLABS_API_KEY": "c73f5731f01c8a7070b87d37254eaa611b68c803168c0d0999654b3bc1becbeb"
+      }
+    },
+    "production": {
+      "extends": "base",
+      "autoIncrement": true,
+      "channel": "production",
+      "ios": {
+        "resourceClass": "m1-medium",
+        "autoIncrement": "buildNumber"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "autoIncrement": "versionCode",
+        "credentialsSource": "remote"
+      },
+      "env": {
+        "__DEV__": "false",
+        "EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY": "appl_YOUR_IOS_KEY_HERE",
+        "EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY": "goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT",
+        "EXPO_PUBLIC_PREMIUM_ENABLED": "true",
+        "EXPO_PUBLIC_SHOW_LIFETIME": "false",
+        "EXPO_PUBLIC_PAYWALL_VARIANT": "A",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://141660e463cc23c1c29fef7403bcb3d6@o4510914410840064.ingest.de.sentry.io/4510914414116944",
+        "EXPO_PUBLIC_ELEVENLABS_API_KEY": "c73f5731f01c8a7070b87d37254eaa611b68c803168c0d0999654b3bc1becbeb"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "YOUR_APPLE_ID@email.com",
+        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "internal"
+      }
+    }
+  }
+}
