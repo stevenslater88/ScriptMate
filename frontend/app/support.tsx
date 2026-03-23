@@ -635,7 +635,7 @@ export default function SupportScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'diagnostics' && styles.tabActive]}
-          onPress={() => setActiveTab('diagnostics')}
+          onPress={() => Alert.alert('Coming Soon', 'Diagnostics temporarily disabled for stability.')}
         >
           <Ionicons name="construct" size={18} color={activeTab === 'diagnostics' ? '#6366f1' : '#6b7280'} />
           <Text style={[styles.tabText, activeTab === 'diagnostics' && styles.tabTextActive]}>Diagnostics</Text>
