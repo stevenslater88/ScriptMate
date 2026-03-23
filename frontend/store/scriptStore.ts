@@ -149,6 +149,7 @@ interface ScriptStore {
   startTrial: () => Promise<boolean>;
   subscribe: (plan: string) => Promise<boolean>;
   setRegion: (region: string) => void;
+  refreshPremiumStatus: () => Promise<void>; // Refresh after purchase
   
   // Script Actions
   fetchScripts: () => Promise<void>;
@@ -301,6 +302,18 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     const symbols: Record<string, string> = { US: '$', GB: '£', EU: '€' };
     set({ region, currencySymbol: symbols[region] || '$' });
     get().fetchSubscriptionPlans(region);
+  },
+
+  // Refresh premium status from RevenueCat - call after any purchase/restore
+  refreshPremiumStatus: async () => {
+    try {
+      const devMode = await isDevTestMode();
+      const rcPremium = await checkPremiumAccess();
+      console.log(`[ScriptStore] refreshPremiumStatus: devMode=${devMode}, rcPremium=${rcPremium}`);
+      set({ isPremium: devMode || rcPremium });
+    } catch (error) {
+      console.error('[ScriptStore] Error refreshing premium status:', error);
+    }
   },
 
   fetchScripts: async () => {
