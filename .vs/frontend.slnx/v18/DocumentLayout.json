@@ -1,12 +1,54 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "C:\\Users\\Slater\\Desktop\\ScriptMate Expo\\frontend\\frontend\\",
-  "Documents": [],
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Slater\\Desktop\\ScriptMate Expo\\frontend\\frontend\\api.Config.ts.txt||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:api.Config.ts.txt||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Slater\\Desktop\\ScriptMate Expo\\frontend\\frontend\\services\\appConfig.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:services\\appConfig.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    }
+  ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
       "VerticalTabListWidth": 256,
-      "DocumentGroups": []
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "api.Config.ts.txt",
+              "DocumentMoniker": "C:\\Users\\Slater\\Desktop\\ScriptMate Expo\\frontend\\frontend\\api.Config.ts.txt",
+              "RelativeDocumentMoniker": "api.Config.ts.txt",
+              "ToolTip": "C:\\Users\\Slater\\Desktop\\ScriptMate Expo\\frontend\\frontend\\api.Config.ts.txt",
+              "RelativeToolTip": "api.Config.ts.txt",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAsAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003109|",
+              "WhenOpened": "2026-03-19T22:47:18.492Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "appConfig.ts",
+              "DocumentMoniker": "C:\\Users\\Slater\\Desktop\\ScriptMate Expo\\frontend\\frontend\\services\\appConfig.ts",
+              "RelativeDocumentMoniker": "services\\appConfig.ts",
+              "ToolTip": "C:\\Users\\Slater\\Desktop\\ScriptMate Expo\\frontend\\frontend\\services\\appConfig.ts",
+              "RelativeToolTip": "services\\appConfig.ts",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAnwBoAAAAaAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-03-19T22:39:35.516Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
     }
   ]
 }
