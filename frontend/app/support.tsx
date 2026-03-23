@@ -117,6 +117,23 @@ export default function SupportScreen() {
       setDiagnostics(diag);
     } catch (error) {
       console.error('Failed to load diagnostics:', error);
+      // FALLBACK: Always show basic info even if getDiagnostics fails
+      setDiagnostics({
+        appName: 'ScriptM8',
+        appVersion: 'Unknown',
+        buildNumber: 'Unknown',
+        bundleId: 'Unknown',
+        platform: Platform.OS,
+        osVersion: 'Unknown',
+        deviceModel: 'Unknown',
+        deviceId: 'Unknown',
+        isPremium: false,
+        activeEntitlements: [],
+        featureFlags: { PREMIUM_ENABLED: true, SHOW_LIFETIME: false, PAYWALL_VARIANT: 'A' },
+        configAudit: [],
+        buildFingerprint: BUILD_FINGERPRINT,
+        buildProof: `BUILD_ID: ${BUILD_ID}, API: ${API_BASE_URL}`,
+      } as DiagnosticsInfo);
     } finally {
       setLoadingDiagnostics(false);
     }
@@ -345,26 +362,25 @@ export default function SupportScreen() {
         Technical information to help troubleshoot issues.
       </Text>
 
+      {/* BUILD SOURCE PROOF - ALWAYS VISIBLE (not dependent on loading) */}
+      <View style={[styles.diagSection, { backgroundColor: '#0f172a', borderColor: '#ef4444', borderWidth: 2 }]}>
+        <Text style={[styles.diagSectionTitle, { color: '#ef4444', fontSize: 16 }]}>🔍 BUILD SOURCE PROOF</Text>
+        <DiagRow label="BUILD_ID" value={BUILD_ID} />
+        <DiagRow label="FINGERPRINT" value={BUILD_FINGERPRINT} />
+        <DiagRow label="API_BASE_URL" value={API_BASE_URL} />
+        <DiagRow label="CORRECT_URL?" value={API_BASE_URL.includes('script-recovery-1') ? '✅ YES' : '❌ NO - WRONG!'} />
+        <View style={{ marginTop: 8, padding: 8, backgroundColor: '#1e293b', borderRadius: 4 }}>
+          <Text style={{ color: '#94a3b8', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+            If API_BASE_URL is wrong, this build was made from old code.{'\n'}
+            Expected: script-recovery-1.preview.emergentagent.com
+          </Text>
+        </View>
+      </View>
+
       {loadingDiagnostics ? (
         <ActivityIndicator color="#6366f1" size="large" style={{ marginTop: 40 }} />
       ) : diagnostics ? (
         <>
-          {/* BUILD SOURCE PROOF - Critical diagnostic info */}
-          <View style={[styles.diagSection, { backgroundColor: '#0f172a', borderColor: '#ef4444', borderWidth: 2 }]}>
-            <Text style={[styles.diagSectionTitle, { color: '#ef4444', fontSize: 16 }]}>🔍 BUILD SOURCE PROOF</Text>
-            <DiagRow label="BUILD_ID" value={BUILD_ID} />
-            <DiagRow label="FINGERPRINT" value={BUILD_FINGERPRINT} />
-            <DiagRow label="API_BASE_URL" value={API_BASE_URL} />
-            <DiagRow label="CORRECT_URL?" value={API_BASE_URL.includes('script-recovery-1') ? '✅ YES' : '❌ NO - WRONG!'} />
-            <View style={{ marginTop: 8, padding: 8, backgroundColor: '#1e293b', borderRadius: 4 }}>
-              <Text style={{ color: '#94a3b8', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                If API_BASE_URL is wrong, this build was made from old code.{'\n'}
-                Expected: script-recovery-1.preview.emergentagent.com
-              </Text>
-            </View>
-          </View>
-
-          {/* App Info */}
           <View style={styles.diagSection}>
             <Text style={styles.diagSectionTitle}>App Info</Text>
             <DiagRow label="Build Fingerprint" value={BUILD_FINGERPRINT} />
@@ -577,7 +593,15 @@ export default function SupportScreen() {
           </View>
         </>
       ) : (
-        <Text style={styles.diagNoData}>Failed to load diagnostics</Text>
+        <View style={styles.diagSection}>
+          <Text style={[styles.diagSectionTitle, { color: '#f59e0b' }]}>⚠️ Additional Diagnostics Failed to Load</Text>
+          <Text style={styles.diagValue}>The BUILD SOURCE PROOF above shows your app config.</Text>
+          <Text style={styles.diagValue}>If it's wrong, this build is from old code.</Text>
+          <TouchableOpacity style={styles.refreshDiagButton} onPress={loadDiagnostics}>
+            <Ionicons name="refresh" size={20} color="#6b7280" />
+            <Text style={styles.refreshDiagText}>Retry Loading Diagnostics</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </ScrollView>
   );
