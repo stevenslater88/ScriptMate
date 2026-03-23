@@ -28,6 +28,8 @@ import {
 import { DebugLog, DebugLogEntry } from '../services/debugLogService';
 import { resetOnboarding } from '../components/OnboardingTutorial';
 import Purchases from 'react-native-purchases';
+import { API_BASE_URL, BUILD_ID, getApiDiagnostics } from '../services/apiConfig';
+import { BUILD_FINGERPRINT } from './_layout';
 
 const FAQ_ITEMS = [
   {
@@ -347,19 +349,25 @@ export default function SupportScreen() {
         <ActivityIndicator color="#6366f1" size="large" style={{ marginTop: 40 }} />
       ) : diagnostics ? (
         <>
-          {/* BUILD SOURCE PROOF - Verify this matches the code being edited */}
-          <View style={[styles.diagSection, { backgroundColor: '#1a1a2e', borderColor: '#6366f1', borderWidth: 1 }]}>
-            <Text style={[styles.diagSectionTitle, { color: '#6366f1' }]}>BUILD SOURCE PROOF</Text>
-            <DiagRow label="branch" value="main" />
-            <DiagRow label="build" value="1102" />
-            <DiagRow label="backend" value="https://script-recovery-1.preview.emergentagent.com" />
-            <DiagRow label="config_source" value="apiConfig.ts (hardcoded)" />
+          {/* BUILD SOURCE PROOF - Critical diagnostic info */}
+          <View style={[styles.diagSection, { backgroundColor: '#0f172a', borderColor: '#ef4444', borderWidth: 2 }]}>
+            <Text style={[styles.diagSectionTitle, { color: '#ef4444', fontSize: 16 }]}>🔍 BUILD SOURCE PROOF</Text>
+            <DiagRow label="BUILD_ID" value={BUILD_ID} />
+            <DiagRow label="FINGERPRINT" value={BUILD_FINGERPRINT} />
+            <DiagRow label="API_BASE_URL" value={API_BASE_URL} />
+            <DiagRow label="CORRECT_URL?" value={API_BASE_URL.includes('script-recovery-1') ? '✅ YES' : '❌ NO - WRONG!'} />
+            <View style={{ marginTop: 8, padding: 8, backgroundColor: '#1e293b', borderRadius: 4 }}>
+              <Text style={{ color: '#94a3b8', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                If API_BASE_URL is wrong, this build was made from old code.{'\n'}
+                Expected: script-recovery-1.preview.emergentagent.com
+              </Text>
+            </View>
           </View>
 
           {/* App Info */}
           <View style={styles.diagSection}>
             <Text style={styles.diagSectionTitle}>App Info</Text>
-            <DiagRow label="Build Fingerprint" value={'SM8-FIX-0315A'} />
+            <DiagRow label="Build Fingerprint" value={BUILD_FINGERPRINT} />
             <DiagRow label="Version" value={diagnostics.appVersion} />
             <DiagRow label="Build" value={diagnostics.buildNumber} />
             <DiagRow label="Bundle ID" value={diagnostics.bundleId} />
