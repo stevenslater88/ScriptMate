@@ -7,6 +7,7 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -131,7 +132,7 @@ export default function DashboardScreen() {
             <View style={styles.headerButtons}>
               <TouchableOpacity 
                 style={styles.headerButton} 
-                onPress={() => router.push('/support')}
+                onPress={() => Alert.alert("Support", "Support temporarily disabled")}
                 data-testid="help-button"
               >
                 <Ionicons name="help-circle-outline" size={22} color="#6b7280" />
