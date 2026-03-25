@@ -24,7 +24,7 @@ import os
 import time
 import uuid
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://script-recovery-1.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://save-script-verify.preview.emergentagent.com')
 
 # Test identifiers for cleanup
 TEST_PREFIX = "TEST_phase_cd"

@@ -1,119 +1,139 @@
-<analysis>**original_problem_statement:**
-The application, ScriptM8, is in a strict stabilization mode. The primary goal is to establish a stable baseline and then fix bugs one at a time, in a specific order, without introducing regressions. All fixes must be validated on a real Android device.
+<analysis>**original_problem_statement**: 
+The application, ScriptM8, is in a strict stabilization mode and build cost control mode. The primary goal is to establish a stable baseline, fix critical bugs (specifically a 404 error when saving scripts and app crashes), and enforce a single source of truth for backend API configuration. 
 
 **PRODUCT REQUIREMENTS**:
-1.  **Restore Baseline**: The immediate priority is to fix the crash that occurs when reopening a saved script. This is a core foundation phase feature.
-2.  **Stabilization Workflow**:
-    *   Fix only one bug at a time.
-    *   After each fix, the entire protected foundation (core working features) must be re-tested by the user to ensure no regressions were introduced.
-    *   Trust only real Android device test results.
-3.  **Protected Foundation (from Build 1089)**:
-    *   Script saving must work.
-    *   My Scripts list must work.
-    *   Backend config must be correct.
-    *   RevenueCat must initialize correctly.
-4.  **Current Highest-Priority Bug**: Tapping a saved script in the My Scripts list crashes the app.
+1.  **Strict Stabilization**: Fix only one bug at a time. No new features, no UI redesigns, no broad refactoring.
+2.  **Build Cost Control**: EAS builds are expensive. The agent MUST explicitly verify that code is pushed to GitHub before asking the user to run a build, as EAS pulls from GitHub, not the local workspace.
+3.  **Backend Config**: Eliminate all environment variable fallbacks for the backend URL. Force a single, hardcoded source of truth.
+4.  **Crash Prevention**: Resolve startup and navigation crashes immediately, even if it means temporarily disabling/mocking screens (like Diagnostics).
 
 **User's preferred language**: English
+*(Note to next agent: ALWAYS respond in English.)*
 
-**what currently exists?**
-The project is a React Native (Expo) and FastAPI application. The codebase has been reverted to a baseline state (approximating build 1089) where core features like saving scripts and RevenueCat initialization were confirmed to be working. However, the known bug where reopening a saved script causes a crash persists. The agent was in the middle of applying a minimal, targeted fix for this crash.
+**what currently exists?** 
+A React Native (Expo) frontend and FastAPI backend app. Core script saving works on the backend, but the Android device builds are consistently failing with a 404 error because the EAS builds were pointing to stale/incorrect backend URLs. Several app-crashing bugs have been patched: a startup crash was fixed, and the Support/Diagnostics screen was entirely replaced with a blank placeholder to prevent navigation crashes. Premium entitlement logic has been updated to unlock immediately after purchase.
 
 **Last working item**:
--   **Last item agent was working**: Fixing a crash that occurs when a user taps on a saved script from the My Scripts list. The root cause was identified as unsafe access to  and  in  when these fields are missing from the fetched script data. The agent was applying minimal, inline null/undefined guards.
--   **Status**: IN PROGRESS
--   **Agent Testing Done**: N
--   **Which testing method agent to use?**: Manual testing by the user on a real Android device.
--   **User Testing Done**: N
+- **Last item agent was working**: Forcing the app to use the correct backend URL for  and adding a diagnostic  on startup to verify the URL on the device.
+- **Status**: IN PROGRESS
+- **Agent Testing Done**: Y (Backend  tested successfully via curl)
+- **Which testing method agent to use?** Manual testing by curl for backend endpoints; User manual testing on a real Android device for frontend.
+- **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1 (P0)**: Reopening a saved script crashes the app.
--   **Issue 2 (P1)**: Premium entitlement is not restored/activated after a successful purchase/restore action.
--   **Issue 3 (P2)**: Speech recognition in rehearse mode advances to the next line too early.
--   **Issue 4 (P3)**: AI Parse V2 feature fails with a network error.
+Issue 1: Device app throws 404 on  (P0)
+Issue 2: Reopening a saved script crashes the app (P1)
 
-**Issues Detail**:
--   **Issue 1**: Reopening a saved script crashes the app.
-    -   **Attempted fixes**: A previous attempt to fix this by wrapping the component's render method in an IIFE caused major regressions and was reverted. The current approach is to add targeted, inline null-coalescing () and optional chaining () operators.
-    -   **Next debug checklist**:
-        1.  Verify that all , , and  calls on  and  within  are safely guarded.
-        2.  Ensure the file is syntactically correct after all the search-and-replace edits.
-        3.  Hand over for the user to build and test, reminding them to also re-verify the protected foundation features (save, list, config, RevenueCat init).
-    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical foundation phase bug. Users must be able to access their saved work.
-    -   **Status**: IN PROGRESS
-    -   **Is recurring issue?**: Y
-    -   **Should Test frontend/backend/both after fix?**: Frontend (Manual user testing on device).
-    -   **Blocked on other issue**: None.
+Issues Detail:
+- **Issue 1**: Device app throws 404 on 
+  - **Attempted fixes**: Stripped  from  and . Hardcoded the URL in . The issue persisted because the local code was not being properly synced to GitHub before EAS builds, meaning the device kept installing old code.
+  - **Next debug checklist**: Add  on app startup as requested by the user. Ensure absolutely NO other preview URLs exist in the codebase. Prompt user to Save to Github before they build.
+  - **Why fix this issue and what will be achieved with the fix?**: Users cannot save scripts on the live app until the app correctly points to the live backend.
+  - **Status**: IN PROGRESS
+  - **Is recurring issue?**: Y (Build sync issue caused massive confusion)
+  - **Should Test frontend/backend/both after fix?**: Frontend (User device test)
+  - **Blocked on other issue**: None
+
+- **Issue 2**: Reopening a saved script crashes the app
+  - **Attempted fixes**: Previous attempts to add null guards to  broke the baseline save functionality and were reverted in a previous phase.
+  - **Next debug checklist**: Carefully re-evaluate safe access to  and  without breaking initial save flow.
+  - **Why fix this issue and what will be achieved with the fix?**: Core feature; users must be able to open saved scripts.
+  - **Status**: NOT STARTED (Deferred due to P0 API configuration issues)
+  - **Is recurring issue?**: Y
+  - **Should Test frontend/backend/both after fix?**: Frontend
+  - **Blocked on other issue**: Blocked by Issue 1.
 
 **In progress Task List**:
--   **Task 1**: Complete the application of null/undefined guards in .
-    -   **Where to resume**: The previous agent had executed several  commands to add guards. The next agent must verify that all access points to  and  are now safe, then prepare for a user test build.
-    -   **What will be achieved with this?**: The app will no longer crash when opening a saved script that has missing data fields.
-    -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: Frontend.
-    -   **Blocked on something**: No.
+*None. User has strictly forbidden feature work until stabilization is complete.*
 
-**Upcoming and Future Tasks**
--   **Upcoming Tasks (Stabilization Priority Order)**:
-    -   **(P1) Fix Premium Entitlement**: Investigate why a successful purchase/restore action doesn't update the app's state to reflect Premium: Yes. The issue is likely in  or related state management logic.
-    -   **(P2) Tune Rehearse Mode Auto-Advance**: Modify the logic in  to prevent it from advancing to the next line on partial speech recognition results.
-    -   **(P3) Fix AI Parse V2**: Diagnose the network failure for this feature.
--   **Future Tasks**:
-    -   Add optional password protection for shared casting links.
-    -   Introduce a Director Mode with on-screen framing guides.
-    -   Upgrade Scene Partner mode to use ElevenLabs voices.
+**Upcoming and Future Tasks**:
+- **Upcoming Tasks**:
+  - (P1) Tune Rehearse Mode Auto-Advance: Prevent advancing to next line on partial speech recognition.
+  - (P2) Restore Support/Diagnostics Screen: The screen was wiped to a placeholder to stop crashes. Needs to be safely rebuilt later.
+- **Future Tasks**:
+  - Add optional password protection for shared casting links.
+  - Introduce a Director Mode with on-screen framing guides.
+  - Upgrade Scene Partner mode to use ElevenLabs voices.
 
-**Completed work in this session**
--   **Reverted Regression**: Rolled back a faulty fix in  that had broken core saving and premium features, successfully restoring the protected foundation of build 1089.
--   **Managed Build Version**: Updated  to set the  to 1089, ensuring a linear build history for user testing.
--   **Diagnosed Multiple Issues**: Through a series of diagnostic builds, identified root causes for several issues, including build dependency failures, incorrect backend URLs, and crashes, adding detailed logging to aid future debugging.
+**Completed work in this session**:
+- Reverted accidental Quick Rehearse feature addition to adhere to stabilization rules (DONE)
+- Centralized API URL strictly to , removing build-time overrides in , , and  (DONE)
+- Fixed Premium entitlement not unlocking after purchase by adding  to  and calling it in  (DONE)
+- Fixed app startup crash in  by changing  to  (DONE)
+- Eliminated Support screen crash by replacing  with a basic View/Text placeholder (DONE)
 
-**Known issue recurrence from previous fork**
--   **Issue recurrence in previous fork**: Build and environment configuration issues (stale cache, dependency mismatches, incorrect URLs) have been a recurring theme, causing regressions. This led to the user mandating the current re-test the baseline rule.
+**Earlier issues found/mentioned but not fixed**:
+- **Issue 1**: Disconnect between Local Workspace and EAS Builds
+  - **Debug checklist**: Ensure you NEVER approve a build without verifying the code is pushed to GitHub.
+  - **Why to solve this issue**: The agent spent hours debugging code that was correct locally, but the user's EAS build was compiling old GitHub code.
+  - **Should Test frontend/backend/both after fix**: N/A (Process issue)
+  - **Is recurring issue?**: Y
 
-**Code Architecture**
+**Known issue recurrence from previous fork**:
+- **Issue recurrence in previous fork**: EAS Build Configuration / Caching
+- **Recurrence count**: 4+
+- **Status**: IN PROGRESS
+- **Note**: Next agent MUST remember: The user's EAS build compiles from GitHub. If you make a local change, the user MUST use the Save to Github button in the Emergent UI before running an EAS build, otherwise they will test old code and report false negatives.
+
+**Code Architecture**:
 
 
-**Key Technical Concepts**
--   **Frontend**: Expo (React Native, SDK 54), Expo Router, TypeScript
--   **Backend**: FastAPI, MongoDB
--   **Builds**: Expo Application Services (EAS)
--   **Methodology**: Strict, iterative stabilization focused on real-device testing and protecting a working baseline to prevent regressions.
+**Key Technical Concepts**:
+- **Frontend**: React Native (Expo), TypeScript, Zustand
+- **Backend**: FastAPI, MongoDB
+- **Builds**: Expo Application Services (EAS). *Crucial constraint: EAS builds from the GitHub repo, not the local ephemeral workspace.*
 
-**key DB schema**
--   **scripts**: The documents in this collection may or may not contain  and  fields. This is the source of the crash being fixed.
+**key DB schema**:
+- **scripts**: { characters, lines }
 
-**All files of reference**
--   : The file being actively modified to fix the reopen crash.
--   : The My Scripts list screen, from which the user navigates to the crashing screen.
--   : Manages the Android .
+**changes in tech stack**:
+- None.
 
-**Critical Info for New Agent**
-1.  **STRICT STABILIZATION MODE**: Your only task is to fix the saved-script reopen crash. Do not work on any other bugs (premium, speech timing, etc.).
-2.  **PROTECT THE BASELINE**: The fix must not break the currently working features from build 1089 (saving scripts, listing scripts, backend config, RevenueCat init). The user will test for regressions.
-3.  **CURRENT FIX IN PROGRESS**: The previous agent was adding minimal null guards ( and ) to . Your job is to complete and verify this targeted fix. Do not introduce broad changes like the previously reverted IIFE wrapper.
-4.  **USER IS THE TESTER**: No fix is complete until the user confirms it works on a new APK built for a real Android device.
+**All files of reference**:
+- : The absolute single source of truth for the API URL.
+- : Updated to refresh premium state post-purchase.
+- : Triggers premium refresh.
+- : Patched  typing to prevent startup crash.
+- : Replaced with a dummy component to stop navigation crashes.
+- , , : Stripped of all environment variable fallbacks for backend URLs.
 
-**Last 10 User Messages and any pending HUMAN messages**
--   User confirmed that build 1089 restored core functionality (save works) but the reopen-crash persists.
--   User explicitly prioritized fixing the reopen-crash and de-prioritized the premium and speech recognition issues for this pass.
--   User established a CRITICAL BASELINE PROTECTION RULE: any change must be tested against the working foundation of build 1089, and regressions will be rejected.
--   The user is waiting for a new build with the targeted fix for the reopen crash.
+**Areas that need refactoring**: 
+-  is currently a mocked-out blank placeholder.
 
-**Project Health Check:**
--   **Broken**: Yes. A foundational user flow—reopening a saved script—is crashing the app, blocking further progress.
--   **Mocked**: A  flag exists for bypassing the paywall.
+**key api endpoints**:
+- : Creates a script. Currently works on the backend but is the target of the ongoing device-side 404 issue.
 
-**3rd Party Integrations**
--   **OpenAI GPT-4o**: AI coaching and feedback.
--   **OpenAI Whisper**: Speech-to-Text.
--   **RevenueCat**: In-app purchases.
--   **Sentry**: Crash and error reporting.
--   **ElevenLabs**: Multi-voice TTS.
+**Critical Info for New Agent**:
+1. **STRICT STABILIZATION**: No new features. No UI changes. Fix exactly what is asked.
+2. **BUILD COST CONTROL**: EAS builds cost the user money. Do not ask them to build to test a theory. You MUST verify changes are saved to GitHub before a build occurs.
+3. **NO PREVIEW URLS**: Ensure no old preview URLs are floating around in the codebase. Use only the currently verified working backend URL assigned to  in .
+4. **MOCKED FILES**:  was intentionally wiped out to stop a crash. Leave it alone unless specifically told to restore it.
 
-**Testing status**
--   **Testing agent used after significant changes**: NO. All testing is manual by the user on a real device.
--   **Known regressions**: The project has a history of regressions when fixes are not carefully targeted, which is why the user has enforced the current strict stabilization mode.
+**documents and test reports created in this job**: 
+- None generated as separate  or  files in this specific session.
 
-**What agent forgot to execute**
--   The previous agent correctly followed the user's strict instructions to revert a bad fix and start a new, more targeted one. Nothing was forgotten; the current task is to complete the in-progress fix.</analysis>
+**Last 10 User Messages and any pending HUMAN messages**:
+- User stated: App is calling a specific URL that returns 404 in production build.
+- User instructed to force the app to use the correct working backend URL for  and .
+- User instructed to locate ALL API base URL definitions, replace any old preview URLs, and ensure NO hardcoded preview URLs remain.
+- User instructed to add a temporary console.log on app startup: .
+- User mandated: Do NOT modify request logic, UI, or refactor anything else.
+- *Pending Agent Action:* The agent verified the backend works via curl but still needs to add the  on startup and finalize the file sweep before handing over to the user to Save to Github.
+
+**Project Health Check**:
+- **Broken**: Android device build synchronization (EAS pulling old code vs local workspace).
+- **Mocked**:  (Completely disabled with a placeholder).
+
+**3rd Party Integrations**:
+- OpenAI GPT-4o — uses Emergent LLM Key
+- OpenAI Whisper — uses Emergent LLM Key
+- RevenueCat (Payments) — requires User API Key
+- ElevenLabs (Voice) — requires User API Key
+
+**Testing status**:
+- Testing agent used after significant changes: NO (User strictly handles testing via Android APKs).
+- Troubleshoot agent used after agent stuck in loop: NO.
+- Known regressions: Device builds failing to hit correct API due to misaligned GitHub syncs.
+
+**What agent forgot to execute**:
+- The agent has not yet added the user-requested  on app startup. You must implement this in the next message.</analysis>
