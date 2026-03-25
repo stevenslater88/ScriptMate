@@ -26,7 +26,7 @@
   "seed_data_creation": "Test scripts created and cleaned up automatically",
   "retest_needed": false,
   "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "Teleprompter fix verified - now calls fetchScript() when script not in store. Build stamp shows 'ScriptM8 v1.1.0 (1041)'. Backend APIs at https://script-recovery-1.preview.emergentagent.com all functional. Expo React Native app (not browser-testable).",
+  "context_for_next_testing_agent": "Teleprompter fix verified - now calls fetchScript() when script not in store. Build stamp shows 'ScriptM8 v1.1.0 (1041)'. Backend APIs at https://save-script-verify.preview.emergentagent.com all functional. Expo React Native app (not browser-testable).",
   "teleprompter_fix_verification": {
     "TELEPROMPTER_FIX_1_fetchScript_called": {
       "file": "frontend/app/selftape/teleprompter.tsx",

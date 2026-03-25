@@ -24,7 +24,7 @@ import { useScriptStore } from '../store/scriptStore';
 import { DebugLog } from '../services/debugLogService';
 
 // HARDCODED backend URL - do not use env vars or dynamic resolution
-const API_BASE_URL = 'https://script-recovery-1.preview.emergentagent.com';
+const API_BASE_URL = 'https://save-script-verify.preview.emergentagent.com';
 
 const UPLOAD_TIMEOUT = 30000; // 30s for file uploads
 const FILE_OP_TIMEOUT = 15000; // 15s for file system operations

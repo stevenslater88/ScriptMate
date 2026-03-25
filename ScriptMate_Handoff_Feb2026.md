@@ -154,7 +154,7 @@ ELEVENLABS_API_KEY=c73f5731f01c8a7070b87d37254eaa611b68c803168c0d0999654b3bc1bec
 
 ### Frontend (.env)
 ```
-EXPO_PUBLIC_BACKEND_URL=https://script-recovery-1.preview.emergentagent.com
+EXPO_PUBLIC_BACKEND_URL=https://save-script-verify.preview.emergentagent.com
 EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY=appl_YOUR_IOS_KEY_HERE
 EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY=goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT
 EXPO_PUBLIC_SENTRY_DSN=https://xxxxx@sentry.io/xxxxx

@@ -24,7 +24,7 @@ import { Platform } from 'react-native';
 // ─── Hardcoded production values ───────────────────────────────────────────
 // These are ALWAYS compiled into the JS bundle by Metro. No env var needed.
 const DEFAULTS = {
-  BACKEND_URL: 'https://script-recovery-1.preview.emergentagent.com',
+  BACKEND_URL: 'https://save-script-verify.preview.emergentagent.com',
   REVENUECAT_GOOGLE_API_KEY: 'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT',
   REVENUECAT_APPLE_API_KEY: 'appl_YOUR_IOS_KEY_HERE',
   SENTRY_DSN: 'https://141660e463cc23c1c29fef7403bcb3d6@o4510914410840064.ingest.de.sentry.io/4510914414116944',
