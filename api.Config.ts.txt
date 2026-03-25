@@ -1,6 +1,34 @@
 // apiConfig.ts
 
-// HARDCODED backend (prevents Expo env issues)
-export const BACKEND_URL = "https://android-upload-test.preview.emergentagent.com";
+/**
+ * 🔒 SINGLE SOURCE OF TRUTH FOR API BASE URL
+ * 
+ * RULES:
+ * - DO NOT duplicate this URL anywhere else
+ * - DO NOT use preview/staging fallbacks
+ * - DO NOT introduce env switching (yet)
+ * - ALL API calls MUST use this file
+ */
 
-console.log(`[Config] Backend URL set to: ${BACKEND_URL}`);
+export const API_BASE_URL = "https://script-recovery-1.preview.emergentagent.com";
+
+/**
+ * ✅ Helper to build endpoints safely
+ * Prevents string mistakes across the app
+ */
+export const buildApiUrl = (path: string): string => {
+  if (!path.startsWith("/")) {
+    console.warn("API path should start with '/' → fixing automatically:", path);
+    path = `/${path}`;
+  }
+
+  return `${API_BASE_URL.replace(/\/$/, "")}${path}`;
+};
+
+/**
+ * 🚨 DEV GUARD (keeps you safe during future edits)
+ * Logs once at app startup so you ALWAYS know what backend you're hitting
+ */
+export const logApiConfig = () => {
+  console.log("🚀 FINAL API URL:", API_BASE_URL);
+};
