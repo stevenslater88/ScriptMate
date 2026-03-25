@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet, Platform, Alert } from 'react-native';
+import { View, StyleSheet, Platform, Alert, Text, TouchableOpacity } from 'react-native';
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { AuthProvider } from '../contexts/AuthContext';
 import { logError } from '../services/debugService';
@@ -17,11 +17,17 @@ import { initSentry, setSentryUserId, captureRevenueCatError } from '../services
 import { AppConfig } from '../services/appConfig';
 import { API_BASE_URL, BUILD_ID, getApiDiagnostics } from '../services/apiConfig';
 
+// IMMEDIATE STARTUP LOG
+console.log('APP STARTED');
+console.log('FINAL API URL:', API_BASE_URL);
+
 // BUILD FINGERPRINT — unique string to prove this code is in the compiled build.
 // If you see this on the debug screen, the code is present. If not, the build is stale.
-export const BUILD_FINGERPRINT = 'SM8-1106-DIAG';
+export const BUILD_FINGERPRINT = 'SM8-1108-OVERLAY';
 
 export default function RootLayout() {
+  const router = useRouter();
+
   // Initialize Sentry for crash reporting
   useEffect(() => {
     initSentry();
@@ -200,8 +206,28 @@ export default function RootLayout() {
           <Stack.Screen name="voice-studio" />
           <Stack.Screen name="scene-partner" />
           <Stack.Screen name="debug" />
+          <Stack.Screen name="diagnostics" />
           <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal' }} />
         </Stack>
+        
+        {/* DEBUG OVERLAY - ALWAYS VISIBLE ON TOP - NO CONDITIONS */}
+        <View style={styles.debugOverlay}>
+          <Text style={styles.debugTitle}>BUILD CHECK</Text>
+          <Text style={styles.debugUrl}>API: {API_BASE_URL}</Text>
+          <Text style={styles.debugBuild}>Build: {BUILD_ID}</Text>
+          <TouchableOpacity 
+            style={styles.diagButton}
+            onPress={() => {
+              try {
+                router.push('/diagnostics');
+              } catch (e) {
+                Alert.alert('Nav Error', String(e));
+              }
+            }}
+          >
+            <Text style={styles.diagButtonText}>OPEN DIAGNOSTICS</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </AuthProvider>
   );
@@ -211,5 +237,51 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0a0a0f',
+  },
+  debugOverlay: {
+    position: 'absolute',
+    top: 50,
+    left: 10,
+    right: 10,
+    backgroundColor: 'rgba(255, 0, 0, 0.9)',
+    padding: 15,
+    borderRadius: 10,
+    zIndex: 9999,
+    elevation: 9999,
+  },
+  debugTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  debugUrl: {
+    color: '#ffff00',
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  debugBuild: {
+    color: '#fff',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  debugButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  diagButton: {
+    backgroundColor: '#00ff00',
+    padding: 12,
+    borderRadius: 5,
+  },
+  diagButtonText: {
+    color: '#000',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    fontSize: 14,
   },
 });
