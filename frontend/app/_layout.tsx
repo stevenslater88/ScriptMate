@@ -20,6 +20,7 @@ export default function RootLayout() {
         <Stack.Screen name="upload" options={{ title: 'Upload Script' }} />
         <Stack.Screen name="scripts" options={{ title: 'My Scripts' }} />
         <Stack.Screen name="player" options={{ title: 'Script Player' }} />
+        <Stack.Screen name="debug" options={{ title: 'Debug' }} />
       </Stack>
     </View>
   );

@@ -23,6 +23,13 @@ export default function HomeScreen() {
       >
         <Text style={styles.buttonText}>My Scripts</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.debugButton}
+        onPress={() => router.push('/debug')}
+      >
+        <Text style={styles.debugButtonText}>Debug</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -59,5 +66,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  debugButton: {
+    marginTop: 40,
+    padding: 10,
+  },
+  debugButtonText: {
+    color: '#555',
+    fontSize: 14,
   },
 });
