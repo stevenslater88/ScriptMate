@@ -14,10 +14,11 @@ import {
   checkProductAvailability,
 } from '../services/diagnosticsService';
 import { initSentry, setSentryUserId, captureRevenueCatError } from '../services/sentryService';
-import { API_BASE_URL } from '../services/apiConfig';
 
-// IMMEDIATE STARTUP LOG - SAFE GUARD
-const SAFE_API_URL = API_BASE_URL || 'https://save-script-verify.preview.emergentagent.com';
+// HARDCODED API URL - NO IMPORTS
+const SAFE_API_URL = 'https://save-script-verify.preview.emergentagent.com';
+
+// STARTUP LOGS ONLY
 console.log('APP STARTED');
 console.log('BUILD ID: SM8-1109-STABLE');
 console.log('FINAL API URL:', SAFE_API_URL);
