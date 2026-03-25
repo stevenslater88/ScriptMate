@@ -14,12 +14,13 @@ import {
   checkProductAvailability,
 } from '../services/diagnosticsService';
 import { initSentry, setSentryUserId, captureRevenueCatError } from '../services/sentryService';
-import { AppConfig } from '../services/appConfig';
-import { API_BASE_URL, BUILD_ID, getApiDiagnostics } from '../services/apiConfig';
 
-// IMMEDIATE STARTUP LOG - SAFE GUARD
-const SAFE_API_URL = API_BASE_URL || 'https://save-script-verify.preview.emergentagent.com';
+// HARDCODED API URL - NO IMPORTS
+const SAFE_API_URL = 'https://save-script-verify.preview.emergentagent.com';
+
+// STARTUP LOGS ONLY
 console.log('APP STARTED');
+console.log('BUILD ID: SM8-1109-STABLE');
 console.log('FINAL API URL:', SAFE_API_URL);
 
 // BUILD FINGERPRINT
@@ -30,39 +31,6 @@ export default function RootLayout() {
   // Initialize Sentry for crash reporting
   useEffect(() => {
     initSentry();
-  }, []);
-
-  // DIAGNOSTIC: Show alert with API config on app start (DEV builds only)
-  useEffect(() => {
-    const diag = getApiDiagnostics();
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('       SCRIPTM8 APP STARTED - DIAGNOSTIC INFO');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log(`BUILD_FINGERPRINT: ${BUILD_FINGERPRINT}`);
-    console.log(`BUILD_ID:          ${diag.buildId}`);
-    console.log(`API_BASE_URL:      ${diag.baseUrl}`);
-    console.log(`CORRECT_DOMAIN:    ${diag.isCorrectDomain ? 'YES ✓' : 'NO ✗'}`);
-    console.log(`AppConfig.URL:     ${AppConfig.BACKEND_URL}`);
-    console.log('═══════════════════════════════════════════════════════════════');
-    
-    // Show visible alert with URL info (for debugging)
-    if (__DEV__ || !diag.isCorrectDomain) {
-      setTimeout(() => {
-        Alert.alert(
-          `Build ${BUILD_ID}`,
-          `API: ${diag.baseUrl}\n\nCorrect: ${diag.isCorrectDomain ? 'YES ✓' : 'NO ✗ WRONG URL!'}\n\nFingerprint: ${BUILD_FINGERPRINT}`,
-          [{ text: 'OK' }]
-        );
-      }, 1000);
-    }
-  }, []);
-
-  // Debug log on startup — includes fingerprint to verify code is present
-  useEffect(() => {
-    console.log(`[ScriptM8] BUILD_FINGERPRINT: ${BUILD_FINGERPRINT}`);
-    console.log(`[ScriptM8] Backend URL: ${AppConfig.BACKEND_URL}`);
-    console.log(`[ScriptM8] API_BASE_URL: ${API_BASE_URL}`);
-    isDevTestMode().then(dm => console.log(`[ScriptM8] Dev Test Mode: ${dm}`));
   }, []);
 
   // Initialize RevenueCat on app start
