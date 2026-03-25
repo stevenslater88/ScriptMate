@@ -35,10 +35,11 @@ if (!API_BASE_URL) {
 if (API_BASE_URL.includes('android-upload-test')) {
   console.error('WARNING: API_BASE_URL contains OLD android-upload-test domain!');
 }
-if (!API_BASE_URL.includes('script-recovery-1')) {
-  console.error('WARNING: API_BASE_URL does not contain expected script-recovery-1 domain!');
+if (!API_BASE_URL.includes('save-script-verify')) {
+  console.error('WARNING: API_BASE_URL does not contain expected save-script-verify domain!');
   console.error('ACTUAL URL:', API_BASE_URL);
 }
+console.log('FINAL API URL:', API_BASE_URL);
 
 /**
  * Build a full API endpoint URL with logging.
@@ -63,7 +64,7 @@ export function getApiDiagnostics(): {
     baseUrl: API_BASE_URL,
     configSource: API_CONFIG_SOURCE,
     buildId: BUILD_ID,
-    isCorrectDomain: API_BASE_URL.includes('script-recovery-1'),
+    isCorrectDomain: API_BASE_URL.includes('save-script-verify'),
     timestamp: new Date().toISOString(),
   };
 }

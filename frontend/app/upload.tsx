@@ -23,8 +23,8 @@ import axios from 'axios';
 import { useScriptStore } from '../store/scriptStore';
 import { DebugLog } from '../services/debugLogService';
 
-// HARDCODED backend URL - do not use env vars or dynamic resolution
-const API_BASE_URL = 'https://save-script-verify.preview.emergentagent.com';
+// Import from single source of truth
+import { API_BASE_URL } from '../services/apiConfig';
 
 const UPLOAD_TIMEOUT = 30000; // 30s for file uploads
 const FILE_OP_TIMEOUT = 15000; // 15s for file system operations
