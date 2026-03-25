@@ -27,6 +27,7 @@ import {
   addBreadcrumb,
 } from '../services/sentryService';
 import { isDevTestMode } from '../services/devTestMode';
+import { useScriptStore } from '../store/scriptStore';
 
 // The offering identifier configured in RevenueCat dashboard
 const PRODUCTION_OFFERING_ID = 'production';
@@ -300,6 +301,11 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       
       if (result.success && result.customerInfo) {
         setCustomerInfo(result.customerInfo);
+        
+        // CRITICAL: Refresh scriptStore premium status after purchase
+        console.log('[useRevenueCat] Purchase successful, refreshing premium status...');
+        await useScriptStore.getState().refreshPremiumStatus();
+        
         addBreadcrumb('Purchase successful', 'revenuecat', {
           packageId: pkg.identifier,
           hasPremium: result.customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined,
@@ -342,6 +348,10 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
       
       if (result.customerInfo) {
         setCustomerInfo(result.customerInfo);
+        
+        // CRITICAL: Refresh scriptStore premium status after restore
+        console.log('[useRevenueCat] Restore completed, refreshing premium status...');
+        await useScriptStore.getState().refreshPremiumStatus();
       }
       
       if (!result.success && result.error) {

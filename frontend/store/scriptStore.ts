@@ -2,11 +2,22 @@ import { create } from 'zustand';
 import axios from 'axios';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
-import { API_BASE_URL, API_TIMEOUT } from '../services/apiConfig';
+import { API_BASE_URL, API_TIMEOUT, BUILD_ID, getApiDiagnostics } from '../services/apiConfig';
 import { isDevTestMode } from '../services/devTestMode';
 import { checkPremiumAccess } from '../services/revenuecat';
 import { DebugLog } from '../services/debugLogService';
+
+// DIAGNOSTIC: Log API config on store load
+const apiDiag = getApiDiagnostics();
+console.log('╔═══════════════════════════════════════════════════════════════╗');
+console.log('║           SCRIPTSTORE LOADED - API CONFIG                     ║');
+console.log('╠═══════════════════════════════════════════════════════════════╣');
+console.log(`║ BUILD_ID:       ${apiDiag.buildId}`);
+console.log(`║ API_BASE_URL:   ${apiDiag.baseUrl}`);
+console.log(`║ CORRECT_DOMAIN: ${apiDiag.isCorrectDomain ? 'YES ✓' : 'NO ✗ WRONG!'}`);
+console.log('╚═══════════════════════════════════════════════════════════════╝');
 
 function getErrorMessage(error: any): string {
   if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
@@ -149,6 +160,7 @@ interface ScriptStore {
   startTrial: () => Promise<boolean>;
   subscribe: (plan: string) => Promise<boolean>;
   setRegion: (region: string) => void;
+  refreshPremiumStatus: () => Promise<void>; // Refresh after purchase
   
   // Script Actions
   fetchScripts: () => Promise<void>;
@@ -301,6 +313,18 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     const symbols: Record<string, string> = { US: '$', GB: '£', EU: '€' };
     set({ region, currencySymbol: symbols[region] || '$' });
     get().fetchSubscriptionPlans(region);
+  },
+
+  // Refresh premium status from RevenueCat - call after any purchase/restore
+  refreshPremiumStatus: async () => {
+    try {
+      const devMode = await isDevTestMode();
+      const rcPremium = await checkPremiumAccess();
+      console.log(`[ScriptStore] refreshPremiumStatus: devMode=${devMode}, rcPremium=${rcPremium}`);
+      set({ isPremium: devMode || rcPremium });
+    } catch (error) {
+      console.error('[ScriptStore] Error refreshing premium status:', error);
+    }
   },
 
   fetchScripts: async () => {

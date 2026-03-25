@@ -15,10 +15,11 @@ import {
 } from '../services/diagnosticsService';
 import { initSentry, setSentryUserId, captureRevenueCatError } from '../services/sentryService';
 import { AppConfig } from '../services/appConfig';
+import { API_BASE_URL, BUILD_ID, getApiDiagnostics } from '../services/apiConfig';
 
 // BUILD FINGERPRINT — unique string to prove this code is in the compiled build.
 // If you see this on the debug screen, the code is present. If not, the build is stale.
-export const BUILD_FINGERPRINT = 'SM8-0316E-SRDEBUG';
+export const BUILD_FINGERPRINT = 'SM8-1106-DIAG';
 
 export default function RootLayout() {
   // Initialize Sentry for crash reporting
@@ -26,10 +27,36 @@ export default function RootLayout() {
     initSentry();
   }, []);
 
+  // DIAGNOSTIC: Show alert with API config on app start (DEV builds only)
+  useEffect(() => {
+    const diag = getApiDiagnostics();
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('       SCRIPTM8 APP STARTED - DIAGNOSTIC INFO');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log(`BUILD_FINGERPRINT: ${BUILD_FINGERPRINT}`);
+    console.log(`BUILD_ID:          ${diag.buildId}`);
+    console.log(`API_BASE_URL:      ${diag.baseUrl}`);
+    console.log(`CORRECT_DOMAIN:    ${diag.isCorrectDomain ? 'YES ✓' : 'NO ✗'}`);
+    console.log(`AppConfig.URL:     ${AppConfig.BACKEND_URL}`);
+    console.log('═══════════════════════════════════════════════════════════════');
+    
+    // Show visible alert with URL info (for debugging)
+    if (__DEV__ || !diag.isCorrectDomain) {
+      setTimeout(() => {
+        Alert.alert(
+          `Build ${BUILD_ID}`,
+          `API: ${diag.baseUrl}\n\nCorrect: ${diag.isCorrectDomain ? 'YES ✓' : 'NO ✗ WRONG URL!'}\n\nFingerprint: ${BUILD_FINGERPRINT}`,
+          [{ text: 'OK' }]
+        );
+      }, 1000);
+    }
+  }, []);
+
   // Debug log on startup — includes fingerprint to verify code is present
   useEffect(() => {
     console.log(`[ScriptM8] BUILD_FINGERPRINT: ${BUILD_FINGERPRINT}`);
     console.log(`[ScriptM8] Backend URL: ${AppConfig.BACKEND_URL}`);
+    console.log(`[ScriptM8] API_BASE_URL: ${API_BASE_URL}`);
     isDevTestMode().then(dm => console.log(`[ScriptM8] Dev Test Mode: ${dm}`));
   }, []);
 

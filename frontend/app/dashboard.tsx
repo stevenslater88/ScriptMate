@@ -39,7 +39,7 @@ export default function DashboardScreen() {
   
   // Hidden debug screen - tap logo 5x
   const logoTapCount = useRef(0);
-  const logoTapTimer = useRef<NodeJS.Timeout | null>(null);
+  const logoTapTimer = useRef<any>(null);
   
   const handleLogoTap = () => {
     logoTapCount.current += 1;
