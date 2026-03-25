@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet, Platform, Alert, Text, TouchableOpacity } from 'react-native';
@@ -26,7 +26,6 @@ console.log('FINAL API URL:', API_BASE_URL);
 export const BUILD_FINGERPRINT = 'SM8-1108-OVERLAY';
 
 export default function RootLayout() {
-  const [showOverlay, setShowOverlay] = useState(true);
   const router = useRouter();
 
   // Initialize Sentry for crash reporting
@@ -211,34 +210,24 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal' }} />
         </Stack>
         
-        {/* DEBUG OVERLAY - ALWAYS VISIBLE ON TOP */}
-        {showOverlay && (
-          <View style={styles.debugOverlay}>
-            <Text style={styles.debugTitle}>BUILD CHECK</Text>
-            <Text style={styles.debugUrl}>{API_BASE_URL}</Text>
-            <Text style={styles.debugBuild}>Build: {BUILD_ID}</Text>
-            <View style={styles.debugButtons}>
-              <TouchableOpacity 
-                style={styles.diagButton}
-                onPress={() => {
-                  try {
-                    router.push('/diagnostics');
-                  } catch (e) {
-                    Alert.alert('Nav Error', String(e));
-                  }
-                }}
-              >
-                <Text style={styles.diagButtonText}>GO TO DIAGNOSTICS</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.hideButton}
-                onPress={() => setShowOverlay(false)}
-              >
-                <Text style={styles.hideButtonText}>HIDE</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        {/* DEBUG OVERLAY - ALWAYS VISIBLE ON TOP - NO CONDITIONS */}
+        <View style={styles.debugOverlay}>
+          <Text style={styles.debugTitle}>BUILD CHECK</Text>
+          <Text style={styles.debugUrl}>API: {API_BASE_URL}</Text>
+          <Text style={styles.debugBuild}>Build: {BUILD_ID}</Text>
+          <TouchableOpacity 
+            style={styles.diagButton}
+            onPress={() => {
+              try {
+                router.push('/diagnostics');
+              } catch (e) {
+                Alert.alert('Nav Error', String(e));
+              }
+            }}
+          >
+            <Text style={styles.diagButtonText}>OPEN DIAGNOSTICS</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </AuthProvider>
   );
@@ -282,31 +271,17 @@ const styles = StyleSheet.create({
   },
   debugButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
   diagButton: {
-    flex: 1,
     backgroundColor: '#00ff00',
-    padding: 10,
+    padding: 12,
     borderRadius: 5,
-    marginRight: 5,
   },
   diagButtonText: {
     color: '#000',
     fontWeight: 'bold',
     textAlign: 'center',
-    fontSize: 12,
-  },
-  hideButton: {
-    backgroundColor: '#333',
-    padding: 10,
-    borderRadius: 5,
-    paddingHorizontal: 20,
-  },
-  hideButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    textAlign: 'center',
-    fontSize: 12,
+    fontSize: 14,
   },
 });
