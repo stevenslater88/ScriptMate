@@ -44,7 +44,7 @@ export default function PlayerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: '#000000',
     padding: 20,
   },
   title: {
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#111111',
     borderRadius: 10,
     padding: 15,
     marginBottom: 20,

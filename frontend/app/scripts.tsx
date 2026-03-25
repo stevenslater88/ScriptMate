@@ -76,13 +76,13 @@ export default function ScriptsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: '#000000',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0f0f1a',
+    backgroundColor: '#000000',
   },
   emptyText: {
     color: '#888',
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   scriptItem: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#111111',
     padding: 20,
     marginHorizontal: 15,
     marginVertical: 8,

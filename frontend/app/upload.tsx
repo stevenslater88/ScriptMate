@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: '#000000',
   },
   label: {
     color: '#fff',
@@ -77,14 +77,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   input: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#111111',
     color: '#fff',
     padding: 15,
     borderRadius: 8,
     fontSize: 16,
   },
   textArea: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#111111',
     color: '#fff',
     padding: 15,
     borderRadius: 8,

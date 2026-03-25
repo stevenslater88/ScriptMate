@@ -11,9 +11,9 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: true,
-          headerStyle: { backgroundColor: '#1a1a2e' },
+          headerStyle: { backgroundColor: '#000000' },
           headerTintColor: '#fff',
-          contentStyle: { backgroundColor: '#0f0f1a' },
+          contentStyle: { backgroundColor: '#000000' },
         }}
       >
         <Stack.Screen name="index" options={{ title: 'ScriptM8' }} />
@@ -28,6 +28,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f1a',
+    backgroundColor: '#000000',
   },
 });
