@@ -1,11 +1,163 @@
 import { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList, ScrollView } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList, ScrollView, SafeAreaView, StatusBar } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Speech from "expo-speech";
 
 console.log("APP STARTED");
 
-// Script View Screen Component
+// REHEARSE SCREEN - Full screen cinematic view
+function RehearseScreen({ script, onBack }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const handlePlay = () => {
+    try {
+      const textToSpeak = script?.content || "";
+      if (textToSpeak.length > 0) {
+        setIsPlaying(true);
+        Speech.speak(textToSpeak, {
+          onDone: () => setIsPlaying(false),
+          onStopped: () => setIsPlaying(false),
+          onError: () => setIsPlaying(false),
+        });
+      }
+    } catch (e) {
+      console.log("TTS Error:", e);
+      setIsPlaying(false);
+    }
+  };
+
+  const handleStop = () => {
+    try {
+      Speech.stop();
+      setIsPlaying(false);
+    } catch (e) {
+      console.log("Stop Error:", e);
+    }
+  };
+
+  const handleBack = () => {
+    try {
+      Speech.stop();
+    } catch (e) {}
+    onBack();
+  };
+
+  return (
+    <SafeAreaView style={rehearseStyles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      
+      {/* Header */}
+      <View style={rehearseStyles.header}>
+        <TouchableOpacity style={rehearseStyles.backButton} onPress={handleBack}>
+          <Text style={rehearseStyles.backText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={rehearseStyles.title} numberOfLines={1}>{script.title}</Text>
+        <View style={rehearseStyles.spacer} />
+      </View>
+
+      {/* Script Content */}
+      <ScrollView 
+        style={rehearseStyles.scrollView}
+        contentContainerStyle={rehearseStyles.scrollContent}
+      >
+        <Text style={rehearseStyles.scriptText}>{script.content}</Text>
+      </ScrollView>
+
+      {/* Controls */}
+      <View style={rehearseStyles.controls}>
+        <TouchableOpacity 
+          style={[rehearseStyles.playBtn, isPlaying && rehearseStyles.playingBtn]} 
+          onPress={handlePlay}
+        >
+          <Text style={rehearseStyles.controlText}>
+            {isPlaying ? "▶ Playing..." : "▶ PLAY"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={rehearseStyles.stopBtn} onPress={handleStop}>
+          <Text style={rehearseStyles.controlText}>■ STOP</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const rehearseStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#222",
+  },
+  backButton: {
+    paddingVertical: 5,
+    paddingRight: 15,
+  },
+  backText: {
+    color: "#4a90d9",
+    fontSize: 16,
+  },
+  title: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  spacer: {
+    width: 60,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 25,
+    paddingBottom: 40,
+  },
+  scriptText: {
+    color: "#fff",
+    fontSize: 22,
+    lineHeight: 36,
+    textAlign: "left",
+  },
+  controls: {
+    flexDirection: "row",
+    padding: 20,
+    gap: 15,
+    borderTopWidth: 1,
+    borderTopColor: "#222",
+  },
+  playBtn: {
+    flex: 1,
+    backgroundColor: "#4a90d9",
+    paddingVertical: 18,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  playingBtn: {
+    backgroundColor: "#2a6a99",
+  },
+  stopBtn: {
+    flex: 1,
+    backgroundColor: "#d94a4a",
+    paddingVertical: 18,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  controlText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+});
+
+// Script View Screen Component (KEPT FOR COMPATIBILITY)
 function ScriptViewScreen({ script, onBack }) {
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -118,10 +270,20 @@ export default function App() {
 
   const viewScript = (script) => {
     setSelectedScript(script);
-    setScreen("view");
+    setScreen("rehearse");
   };
 
-  // Script View Screen
+  // Rehearse Screen (Full Screen Mode)
+  if (screen === "rehearse" && selectedScript) {
+    return (
+      <RehearseScreen 
+        script={selectedScript} 
+        onBack={() => setScreen("home")} 
+      />
+    );
+  }
+
+  // Script View Screen (kept for compatibility)
   if (screen === "view" && selectedScript) {
     return (
       <ScriptViewScreen 
