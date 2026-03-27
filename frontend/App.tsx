@@ -3,6 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList, S
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Speech from "expo-speech";
 
+console.log("APP STARTED");
+
 // Script View Screen Component
 function ScriptViewScreen({ script, onBack }) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -10,22 +12,15 @@ function ScriptViewScreen({ script, onBack }) {
   const handlePlay = () => {
     console.log("PLAY PRESSED - SCRIPT OBJECT:", script);
     
-    const textToSpeak =
-      script?.content ||
-      script?.raw_text ||
-      (script?.lines ? script.lines.map(l => l.text).join(" ") : "");
-
+    const textToSpeak = script?.content || script?.raw_text || "";
     console.log("TEXT TO SPEAK:", textToSpeak);
 
-    if (textToSpeak && textToSpeak.length > 0) {
+    if (textToSpeak.length > 0) {
       setIsPlaying(true);
       Speech.speak(textToSpeak, {
         onDone: () => setIsPlaying(false),
         onStopped: () => setIsPlaying(false),
-        onError: () => {
-          console.log("ERROR: Speech failed");
-          setIsPlaying(false);
-        },
+        onError: () => setIsPlaying(false),
       });
     } else {
       console.log("ERROR: No valid text found for speech");
@@ -39,38 +34,41 @@ function ScriptViewScreen({ script, onBack }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Script</Text>
+      <Text style={styles.screenTitle}>{script.title || "Script"}</Text>
 
-      <ScrollView style={styles.scriptContainer}>
-        <Text style={styles.scriptContent}>{script.content}</Text>
+      <ScrollView style={styles.scriptBox}>
+        <Text style={styles.scriptText}>{script.content}</Text>
       </ScrollView>
 
-      <View style={styles.controlsRow}>
+      <View style={styles.row}>
         <TouchableOpacity 
-          style={[styles.playButton, isPlaying && styles.playingButton]} 
+          style={[styles.playBtn, isPlaying && styles.playingBtn]} 
           onPress={handlePlay}
-          disabled={isPlaying}
         >
-          <Text style={styles.buttonText}>{isPlaying ? "Playing..." : "▶️ Play"}</Text>
+          <Text style={styles.btnText}>{isPlaying ? "Playing..." : "▶️ Play"}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.stopButton} onPress={handleStop}>
-          <Text style={styles.buttonText}>⏹ Stop</Text>
+        <TouchableOpacity style={styles.stopBtn} onPress={handleStop}>
+          <Text style={styles.btnText}>⏹ Stop</Text>
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.backButton} onPress={onBack}>
-        <Text style={styles.buttonText}>Back</Text>
+      <TouchableOpacity style={styles.backBtn} onPress={() => { Speech.stop(); onBack(); }}>
+        <Text style={styles.btnText}>Back</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-// My Scripts Screen Component
-function MyScriptsScreen({ onBack, onViewScript }) {
+// Main App Component - SINGLE SCREEN
+export default function App() {
+  const [title, setTitle] = useState("");
+  const [scriptText, setScriptText] = useState("");
   const [scripts, setScripts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [screen, setScreen] = useState("home");
+  const [selectedScript, setSelectedScript] = useState(null);
 
+  // Load scripts on app start
   useEffect(() => {
     loadScripts();
   }, []);
@@ -84,127 +82,101 @@ function MyScriptsScreen({ onBack, onViewScript }) {
     } catch (e) {
       console.log("Error loading scripts:", e);
     }
-    setLoading(false);
   };
 
-  if (loading) {
+  const saveScript = async () => {
+    if (!title.trim() || !scriptText.trim()) {
+      Alert.alert("Error", "Please enter both title and script text");
+      return;
+    }
+
+    try {
+      const newScript = {
+        id: Date.now().toString(),
+        title: title.trim(),
+        content: scriptText.trim(),
+        createdAt: new Date().toISOString(),
+      };
+
+      const existing = await AsyncStorage.getItem("scripts");
+      const allScripts = existing ? JSON.parse(existing) : [];
+      allScripts.unshift(newScript);
+      await AsyncStorage.setItem("scripts", JSON.stringify(allScripts));
+
+      console.log("SCRIPT SAVED LOCALLY");
+      
+      setTitle("");
+      setScriptText("");
+      setScripts(allScripts);
+      
+      Alert.alert("Saved", "Saved locally");
+    } catch (e) {
+      console.log("Error saving script:", e);
+      Alert.alert("Error", "Failed to save");
+    }
+  };
+
+  const viewScript = (script) => {
+    setSelectedScript(script);
+    setScreen("view");
+  };
+
+  // Script View Screen
+  if (screen === "view" && selectedScript) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Loading...</Text>
-      </View>
+      <ScriptViewScreen 
+        script={selectedScript} 
+        onBack={() => setScreen("home")} 
+      />
     );
   }
 
+  // Main Home Screen
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>My Scripts</Text>
+      <Text style={styles.screenTitle}>ScriptMate</Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Script Title"
+        placeholderTextColor="#666"
+        value={title}
+        onChangeText={setTitle}
+      />
+
+      <TextInput
+        style={styles.textArea}
+        placeholder="Paste your script here..."
+        placeholderTextColor="#666"
+        value={scriptText}
+        onChangeText={setScriptText}
+        multiline
+        textAlignVertical="top"
+      />
+
+      <TouchableOpacity style={styles.saveBtn} onPress={saveScript}>
+        <Text style={styles.btnText}>SAVE</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.sectionTitle}>Saved Scripts</Text>
 
       {scripts.length === 0 ? (
-        <Text style={styles.emptyText}>No scripts yet</Text>
+        <Text style={styles.emptyText}>No scripts saved yet</Text>
       ) : (
         <FlatList
           data={scripts}
           keyExtractor={(item) => item.id}
           style={styles.list}
           renderItem={({ item }) => (
-            <TouchableOpacity style={styles.scriptItem} onPress={() => onViewScript(item)}>
-              <Text style={styles.scriptText} numberOfLines={2}>
-                {item.content.substring(0, 100)}
-              </Text>
-              <Text style={styles.scriptDate}>
-                {new Date(item.createdAt).toLocaleDateString()}
+            <TouchableOpacity style={styles.listItem} onPress={() => viewScript(item)}>
+              <Text style={styles.itemTitle}>{item.title}</Text>
+              <Text style={styles.itemPreview} numberOfLines={1}>
+                {item.content.substring(0, 50)}...
               </Text>
             </TouchableOpacity>
           )}
         />
       )}
-
-      <TouchableOpacity style={styles.backButton} onPress={onBack}>
-        <Text style={styles.buttonText}>Back</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-// Main App Component
-export default function App() {
-  const [text, setText] = useState("");
-  const [screen, setScreen] = useState("home");
-  const [selectedScript, setSelectedScript] = useState(null);
-
-  console.log("APP STARTED");
-
-  const saveScript = async () => {
-    if (!text.trim()) {
-      Alert.alert("Error", "Please enter some text");
-      return;
-    }
-
-    const script = {
-      id: Date.now().toString(),
-      content: text.trim(),
-      createdAt: new Date().toISOString(),
-    };
-
-    const existing = await AsyncStorage.getItem("scripts");
-    const scripts = existing ? JSON.parse(existing) : [];
-    scripts.push(script);
-    await AsyncStorage.setItem("scripts", JSON.stringify(scripts));
-
-    console.log("SCRIPT SAVED LOCALLY");
-    Alert.alert("Saved", "Script saved locally!");
-    setText("");
-  };
-
-  const handleViewScript = (script) => {
-    setSelectedScript(script);
-    setScreen("view-script");
-  };
-
-  // Show Script View screen
-  if (screen === "view-script" && selectedScript) {
-    return (
-      <ScriptViewScreen 
-        script={selectedScript} 
-        onBack={() => {
-          Speech.stop();
-          setScreen("my-scripts");
-        }} 
-      />
-    );
-  }
-
-  // Show My Scripts screen
-  if (screen === "my-scripts") {
-    return (
-      <MyScriptsScreen 
-        onBack={() => setScreen("home")} 
-        onViewScript={handleViewScript}
-      />
-    );
-  }
-
-  // Home screen
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>APP IS WORKING</Text>
-      
-      <TextInput
-        style={styles.input}
-        placeholder="Paste script here..."
-        placeholderTextColor="#666"
-        value={text}
-        onChangeText={setText}
-        multiline
-      />
-
-      <TouchableOpacity style={styles.button} onPress={saveScript}>
-        <Text style={styles.buttonText}>Save</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.secondaryButton} onPress={() => setScreen("my-scripts")}>
-        <Text style={styles.buttonText}>My Scripts</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -212,103 +184,113 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
     padding: 20,
+    paddingTop: 60,
     backgroundColor: "#000",
   },
-  title: {
+  screenTitle: {
     color: "#fff",
-    fontSize: 24,
+    fontSize: 28,
+    fontWeight: "bold",
     marginBottom: 20,
+    textAlign: "center",
   },
   input: {
-    width: "100%",
-    height: 150,
     backgroundColor: "#111",
     color: "#fff",
     padding: 15,
     borderRadius: 8,
-    marginBottom: 20,
-  },
-  button: {
-    backgroundColor: "#4a90d9",
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 8,
+    fontSize: 16,
     marginBottom: 10,
   },
-  secondaryButton: {
-    backgroundColor: "#333",
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 8,
-  },
-  backButton: {
-    backgroundColor: "#333",
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 8,
-    marginTop: 20,
-  },
-  buttonText: {
+  textArea: {
+    backgroundColor: "#111",
     color: "#fff",
-    fontSize: 18,
+    padding: 15,
+    borderRadius: 8,
+    fontSize: 16,
+    height: 120,
+    marginBottom: 15,
+  },
+  saveBtn: {
+    backgroundColor: "#4a90d9",
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 25,
+  },
+  btnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  sectionTitle: {
+    color: "#888",
+    fontSize: 14,
+    marginBottom: 10,
   },
   emptyText: {
-    color: "#666",
-    fontSize: 16,
+    color: "#555",
+    textAlign: "center",
+    marginTop: 20,
   },
   list: {
-    width: "100%",
     flex: 1,
   },
-  scriptItem: {
+  listItem: {
     backgroundColor: "#111",
     padding: 15,
     borderRadius: 8,
     marginBottom: 10,
   },
-  scriptText: {
+  itemTitle: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: "600",
   },
-  scriptDate: {
-    color: "#666",
-    fontSize: 12,
+  itemPreview: {
+    color: "#888",
+    fontSize: 14,
     marginTop: 5,
   },
-  scriptContainer: {
+  scriptBox: {
     flex: 1,
-    width: "100%",
     backgroundColor: "#111",
     borderRadius: 8,
     padding: 15,
     marginBottom: 20,
   },
-  scriptContent: {
+  scriptText: {
     color: "#fff",
     fontSize: 16,
     lineHeight: 24,
   },
-  controlsRow: {
+  row: {
     flexDirection: "row",
     gap: 10,
     marginBottom: 10,
   },
-  playButton: {
+  playBtn: {
+    flex: 1,
     backgroundColor: "#4a90d9",
-    paddingVertical: 15,
-    paddingHorizontal: 30,
+    padding: 15,
     borderRadius: 8,
+    alignItems: "center",
   },
-  playingButton: {
-    backgroundColor: "#2a6aa9",
+  playingBtn: {
+    backgroundColor: "#2a6a99",
   },
-  stopButton: {
+  stopBtn: {
+    flex: 1,
     backgroundColor: "#d94a4a",
-    paddingVertical: 15,
-    paddingHorizontal: 30,
+    padding: 15,
     borderRadius: 8,
+    alignItems: "center",
+  },
+  backBtn: {
+    backgroundColor: "#333",
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
   },
 });
