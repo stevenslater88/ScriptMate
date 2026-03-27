@@ -80,17 +80,78 @@ function RehearseScreen({ script, onBack }) {
     setTimeout(() => setTapIndicator(null), 300);
   };
 
-  const handlePlay = () => {
+  // Ref to track if speech should be cancelled
+  const speechCancelledRef = useRef(false);
+
+  // Split text into segments with punctuation-based pauses
+  const splitIntoSegments = (text) => {
+    // Split by sentence-ending punctuation, keeping the punctuation
+    const segments = [];
+    let current = "";
+    
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      current += char;
+      
+      if (char === '.' || char === '?' || char === '!') {
+        segments.push({ text: current.trim(), pause: char === ',' ? 250 : (char === '.' ? 500 : 700) });
+        current = "";
+      } else if (char === ',') {
+        segments.push({ text: current.trim(), pause: 250 });
+        current = "";
+      }
+    }
+    
+    // Add remaining text
+    if (current.trim()) {
+      segments.push({ text: current.trim(), pause: 0 });
+    }
+    
+    return segments.filter(s => s.text.length > 0);
+  };
+
+  // Speak a single segment and return a promise
+  const speakSegment = (text) => {
+    return new Promise((resolve) => {
+      Speech.speak(text, {
+        onDone: resolve,
+        onStopped: resolve,
+        onError: resolve,
+      });
+    });
+  };
+
+  // Delay helper
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Play with natural pauses
+  const handlePlay = async () => {
     try {
       const textToSpeak = script?.content || "";
-      if (textToSpeak.length > 0) {
-        setIsPlaying(true);
-        Speech.speak(textToSpeak, {
-          onDone: () => setIsPlaying(false),
-          onStopped: () => setIsPlaying(false),
-          onError: () => setIsPlaying(false),
-        });
+      if (textToSpeak.length === 0) return;
+
+      setIsPlaying(true);
+      speechCancelledRef.current = false;
+
+      const segments = splitIntoSegments(textToSpeak);
+      
+      for (const segment of segments) {
+        // Check if cancelled
+        if (speechCancelledRef.current) break;
+        
+        // Speak segment
+        await speakSegment(segment.text);
+        
+        // Check again after speaking
+        if (speechCancelledRef.current) break;
+        
+        // Pause between segments
+        if (segment.pause > 0) {
+          await delay(segment.pause);
+        }
       }
+
+      setIsPlaying(false);
     } catch (e) {
       console.log("TTS Error:", e);
       setIsPlaying(false);
@@ -99,6 +160,7 @@ function RehearseScreen({ script, onBack }) {
 
   const handleStop = () => {
     try {
+      speechCancelledRef.current = true;
       Speech.stop();
       setIsPlaying(false);
     } catch (e) {
