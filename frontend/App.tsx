@@ -8,13 +8,28 @@ function ScriptViewScreen({ script, onBack }) {
   const [isPlaying, setIsPlaying] = useState(false);
 
   const handlePlay = () => {
-    if (!script.content) return;
-    setIsPlaying(true);
-    Speech.speak(script.content, {
-      onDone: () => setIsPlaying(false),
-      onStopped: () => setIsPlaying(false),
-      onError: () => setIsPlaying(false),
-    });
+    console.log("PLAY PRESSED - SCRIPT OBJECT:", script);
+    
+    const textToSpeak =
+      script?.content ||
+      script?.raw_text ||
+      (script?.lines ? script.lines.map(l => l.text).join(" ") : "");
+
+    console.log("TEXT TO SPEAK:", textToSpeak);
+
+    if (textToSpeak && textToSpeak.length > 0) {
+      setIsPlaying(true);
+      Speech.speak(textToSpeak, {
+        onDone: () => setIsPlaying(false),
+        onStopped: () => setIsPlaying(false),
+        onError: () => {
+          console.log("ERROR: Speech failed");
+          setIsPlaying(false);
+        },
+      });
+    } else {
+      console.log("ERROR: No valid text found for speech");
+    }
   };
 
   const handleStop = () => {
