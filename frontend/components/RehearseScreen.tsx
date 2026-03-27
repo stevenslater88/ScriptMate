@@ -17,6 +17,10 @@ export default function RehearseScreen({ script, onBack }) {
   const [mode, setMode] = useState("teleprompter"); // "teleprompter" or "scene-partner"
   const [currentLine, setCurrentLine] = useState(0); // Current line in scene partner mode
   const [lines, setLines] = useState([]); // Parsed lines for scene partner
+  const [characters, setCharacters] = useState([]); // Unique character names
+  const [characterVoices, setCharacterVoices] = useState({}); // Voice per character
+  const [availableVoices, setAvailableVoices] = useState([]); // System voices
+  const [userCharacter, setUserCharacter] = useState(null); // Character to skip (user's role)
   const scrollViewRef = useRef(null);
   const scrollIntervalRef = useRef(null);
   const scrollPositionRef = useRef(0);
@@ -29,11 +33,40 @@ export default function RehearseScreen({ script, onBack }) {
     { label: "Fast", value: 3 },
   ];
 
+  // Load available voices on mount
+  useEffect(() => {
+    const loadVoices = async () => {
+      try {
+        const voices = await Speech.getAvailableVoicesAsync();
+        setAvailableVoices(voices);
+      } catch (e) {
+        console.log("Could not load voices:", e);
+      }
+    };
+    loadVoices();
+  }, []);
+
   // Parse script into lines on mount
   useEffect(() => {
     if (script?.content) {
       const parsed = parseScriptLines(script.content);
       setLines(parsed);
+      
+      // Extract unique characters and assign voices
+      const uniqueChars = [...new Set(parsed.filter(l => l.speaker).map(l => l.speaker.toUpperCase()))];
+      setCharacters(uniqueChars);
+      
+      // Assign alternating pitch/rate to simulate different voices
+      const voiceAssignments = {};
+      uniqueChars.forEach((char, index) => {
+        voiceAssignments[char] = {
+          pitch: index % 2 === 0 ? 1.0 : 1.2,  // Alternate pitch
+          rate: index % 3 === 0 ? 0.9 : (index % 3 === 1 ? 1.0 : 1.1), // Vary rate
+        };
+      });
+      setCharacterVoices(voiceAssignments);
+      
+      console.log("CHARACTERS DETECTED:", uniqueChars);
     }
   }, [script]);
 
@@ -150,10 +183,12 @@ export default function RehearseScreen({ script, onBack }) {
     return segments.filter(s => s.text.length > 0);
   };
 
-  // Speak a single segment and return a promise
-  const speakSegment = (text) => {
+  // Speak a single segment with optional voice settings
+  const speakSegment = (text, voiceSettings = {}) => {
     return new Promise((resolve) => {
       Speech.speak(text, {
+        pitch: voiceSettings.pitch || 1.0,
+        rate: voiceSettings.rate || 1.0,
         onDone: resolve,
         onStopped: resolve,
         onError: resolve,
@@ -164,33 +199,44 @@ export default function RehearseScreen({ script, onBack }) {
   // Delay helper
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // Play with natural pauses
+  // Play with character voices
   const handlePlay = async () => {
-    console.log("PLAY PRESSED");
+    console.log("PLAY PRESSED - CHARACTER MODE");
     
     try {
-      const textToSpeak = script?.content || "";
-      if (textToSpeak.length === 0) return;
+      if (lines.length === 0) return;
 
       setIsPlaying(true);
       speechCancelledRef.current = false;
 
-      const segments = splitIntoSegments(textToSpeak);
-      
-      for (const segment of segments) {
+      for (const line of lines) {
         // Check if cancelled
         if (speechCancelledRef.current) break;
         
-        // Speak segment
-        await speakSegment(segment.text);
+        const speaker = line.speaker?.toUpperCase();
+        const textToSpeak = line.text || line.full;
+        
+        // Skip if this is the user's character
+        if (speaker && userCharacter && speaker === userCharacter.toUpperCase()) {
+          console.log("SKIPPING USER CHARACTER:", speaker);
+          await delay(1500); // Pause for user to read their line
+          continue;
+        }
+        
+        if (speaker) {
+          console.log("PLAYING CHARACTER:", speaker);
+          const voiceSettings = characterVoices[speaker] || { pitch: 1.0, rate: 1.0 };
+          await speakSegment(textToSpeak, voiceSettings);
+        } else {
+          // Non-character line (narration)
+          await speakSegment(textToSpeak, { pitch: 0.9, rate: 0.95 });
+        }
         
         // Check again after speaking
         if (speechCancelledRef.current) break;
         
-        // Pause between segments
-        if (segment.pause > 0) {
-          await delay(segment.pause);
-        }
+        // Brief pause between lines
+        await delay(400);
       }
 
       setIsPlaying(false);
@@ -216,11 +262,24 @@ export default function RehearseScreen({ script, onBack }) {
     
     try {
       const line = lines[currentLine];
+      const speaker = line.speaker?.toUpperCase();
       const textToSpeak = line.text || line.full;
+      
+      // Skip if this is the user's character
+      if (speaker && userCharacter && speaker === userCharacter.toUpperCase()) {
+        console.log("SKIPPING USER CHARACTER:", speaker);
+        return;
+      }
       
       if (textToSpeak.length > 0) {
         setIsPlaying(true);
+        console.log("PLAYING CHARACTER:", speaker || "NARRATOR");
+        
+        const voiceSettings = speaker ? (characterVoices[speaker] || { pitch: 1.0, rate: 1.0 }) : { pitch: 0.9, rate: 0.95 };
+        
         Speech.speak(textToSpeak, {
+          pitch: voiceSettings.pitch,
+          rate: voiceSettings.rate,
           onDone: () => setIsPlaying(false),
           onStopped: () => setIsPlaying(false),
           onError: () => setIsPlaying(false),
