@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList, ScrollView, SafeAreaView, StatusBar } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList, ScrollView, SafeAreaView, StatusBar, Pressable } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Speech from "expo-speech";
 
@@ -10,9 +10,11 @@ function RehearseScreen({ script, onBack }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const [speed, setSpeed] = useState(1); // 0=Slow, 1=Medium, 2=Fast
+  const [tapIndicator, setTapIndicator] = useState(null); // Y position of tap indicator
   const scrollViewRef = useRef(null);
   const scrollIntervalRef = useRef(null);
   const scrollPositionRef = useRef(0);
+  const contentHeightRef = useRef(0);
 
   const speeds = [
     { label: "Slow", value: 0.5 },
@@ -54,6 +56,30 @@ function RehearseScreen({ script, onBack }) {
     setIsScrolling(false);
   };
 
+  // Handle tap to jump to position
+  const handleTapToPosition = (event) => {
+    const tapY = event.nativeEvent.locationY;
+    const newScrollPosition = scrollPositionRef.current + tapY - 100; // Offset to center tap point
+    
+    // Clamp to valid range
+    const clampedPosition = Math.max(0, newScrollPosition);
+    
+    // Update scroll position
+    scrollPositionRef.current = clampedPosition;
+    
+    // Jump to position
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({
+        y: clampedPosition,
+        animated: true,
+      });
+    }
+
+    // Show tap indicator briefly
+    setTapIndicator(tapY);
+    setTimeout(() => setTapIndicator(null), 300);
+  };
+
   const handlePlay = () => {
     try {
       const textToSpeak = script?.content || "";
@@ -90,6 +116,10 @@ function RehearseScreen({ script, onBack }) {
     scrollPositionRef.current = event.nativeEvent.contentOffset.y;
   };
 
+  const handleContentSizeChange = (w, h) => {
+    contentHeightRef.current = h;
+  };
+
   return (
     <SafeAreaView style={rehearseStyles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
@@ -103,16 +133,27 @@ function RehearseScreen({ script, onBack }) {
         <View style={rehearseStyles.spacer} />
       </View>
 
-      {/* Script Content */}
-      <ScrollView 
-        ref={scrollViewRef}
-        style={rehearseStyles.scrollView}
-        contentContainerStyle={rehearseStyles.scrollContent}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        <Text style={rehearseStyles.scriptText}>{script.content}</Text>
-      </ScrollView>
+      {/* Tap hint */}
+      <Text style={rehearseStyles.tapHint}>Tap anywhere to jump to that position</Text>
+
+      {/* Script Content - Wrapped in Pressable for tap detection */}
+      <Pressable style={rehearseStyles.scrollWrapper} onPress={handleTapToPosition}>
+        <ScrollView 
+          ref={scrollViewRef}
+          style={rehearseStyles.scrollView}
+          contentContainerStyle={rehearseStyles.scrollContent}
+          onScroll={handleScroll}
+          onContentSizeChange={handleContentSizeChange}
+          scrollEventThrottle={16}
+        >
+          <Text style={rehearseStyles.scriptText}>{script.content}</Text>
+        </ScrollView>
+
+        {/* Tap Indicator */}
+        {tapIndicator !== null && (
+          <View style={[rehearseStyles.tapLine, { top: tapIndicator }]} />
+        )}
+      </Pressable>
 
       {/* Speed Selector */}
       <View style={rehearseStyles.speedRow}>
@@ -195,6 +236,16 @@ const rehearseStyles = StyleSheet.create({
   spacer: {
     width: 60,
   },
+  tapHint: {
+    color: "#555",
+    fontSize: 12,
+    textAlign: "center",
+    paddingVertical: 5,
+  },
+  scrollWrapper: {
+    flex: 1,
+    position: "relative",
+  },
   scrollView: {
     flex: 1,
   },
@@ -207,6 +258,13 @@ const rehearseStyles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 36,
     textAlign: "left",
+  },
+  tapLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: "#4a90d9",
   },
   speedRow: {
     flexDirection: "row",
