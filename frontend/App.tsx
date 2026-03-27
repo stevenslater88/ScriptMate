@@ -1,9 +1,58 @@
 import { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList, ScrollView } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Speech from "expo-speech";
+
+// Script View Screen Component
+function ScriptViewScreen({ script, onBack }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const handlePlay = () => {
+    if (!script.content) return;
+    setIsPlaying(true);
+    Speech.speak(script.content, {
+      onDone: () => setIsPlaying(false),
+      onStopped: () => setIsPlaying(false),
+      onError: () => setIsPlaying(false),
+    });
+  };
+
+  const handleStop = () => {
+    Speech.stop();
+    setIsPlaying(false);
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Script</Text>
+
+      <ScrollView style={styles.scriptContainer}>
+        <Text style={styles.scriptContent}>{script.content}</Text>
+      </ScrollView>
+
+      <View style={styles.controlsRow}>
+        <TouchableOpacity 
+          style={[styles.playButton, isPlaying && styles.playingButton]} 
+          onPress={handlePlay}
+          disabled={isPlaying}
+        >
+          <Text style={styles.buttonText}>{isPlaying ? "Playing..." : "▶️ Play"}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.stopButton} onPress={handleStop}>
+          <Text style={styles.buttonText}>⏹ Stop</Text>
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity style={styles.backButton} onPress={onBack}>
+        <Text style={styles.buttonText}>Back</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 // My Scripts Screen Component
-function MyScriptsScreen({ onBack }) {
+function MyScriptsScreen({ onBack, onViewScript }) {
   const [scripts, setScripts] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,10 +70,6 @@ function MyScriptsScreen({ onBack }) {
       console.log("Error loading scripts:", e);
     }
     setLoading(false);
-  };
-
-  const handleScriptTap = (script) => {
-    console.log("Script tapped:", script);
   };
 
   if (loading) {
@@ -47,7 +92,7 @@ function MyScriptsScreen({ onBack }) {
           keyExtractor={(item) => item.id}
           style={styles.list}
           renderItem={({ item }) => (
-            <TouchableOpacity style={styles.scriptItem} onPress={() => handleScriptTap(item)}>
+            <TouchableOpacity style={styles.scriptItem} onPress={() => onViewScript(item)}>
               <Text style={styles.scriptText} numberOfLines={2}>
                 {item.content.substring(0, 100)}
               </Text>
@@ -70,6 +115,7 @@ function MyScriptsScreen({ onBack }) {
 export default function App() {
   const [text, setText] = useState("");
   const [screen, setScreen] = useState("home");
+  const [selectedScript, setSelectedScript] = useState(null);
 
   console.log("APP STARTED");
 
@@ -95,9 +141,32 @@ export default function App() {
     setText("");
   };
 
+  const handleViewScript = (script) => {
+    setSelectedScript(script);
+    setScreen("view-script");
+  };
+
+  // Show Script View screen
+  if (screen === "view-script" && selectedScript) {
+    return (
+      <ScriptViewScreen 
+        script={selectedScript} 
+        onBack={() => {
+          Speech.stop();
+          setScreen("my-scripts");
+        }} 
+      />
+    );
+  }
+
   // Show My Scripts screen
   if (screen === "my-scripts") {
-    return <MyScriptsScreen onBack={() => setScreen("home")} />;
+    return (
+      <MyScriptsScreen 
+        onBack={() => setScreen("home")} 
+        onViewScript={handleViewScript}
+      />
+    );
   }
 
   // Home screen
@@ -193,5 +262,38 @@ const styles = StyleSheet.create({
     color: "#666",
     fontSize: 12,
     marginTop: 5,
+  },
+  scriptContainer: {
+    flex: 1,
+    width: "100%",
+    backgroundColor: "#111",
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 20,
+  },
+  scriptContent: {
+    color: "#fff",
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  controlsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 10,
+  },
+  playButton: {
+    backgroundColor: "#4a90d9",
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 8,
+  },
+  playingButton: {
+    backgroundColor: "#2a6aa9",
+  },
+  stopButton: {
+    backgroundColor: "#d94a4a",
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 8,
   },
 });
