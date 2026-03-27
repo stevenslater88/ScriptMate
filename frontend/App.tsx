@@ -5,22 +5,59 @@ import * as Speech from "expo-speech";
 
 console.log("APP STARTED");
 
-// REHEARSE SCREEN - Full screen cinematic view with teleprompter
+// REHEARSE SCREEN - Full screen cinematic view with teleprompter and scene partner modes
 function RehearseScreen({ script, onBack }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const [speed, setSpeed] = useState(1); // 0=Slow, 1=Medium, 2=Fast
   const [tapIndicator, setTapIndicator] = useState(null); // Y position of tap indicator
+  const [mode, setMode] = useState("teleprompter"); // "teleprompter" or "scene-partner"
+  const [currentLine, setCurrentLine] = useState(0); // Current line in scene partner mode
+  const [lines, setLines] = useState([]); // Parsed lines for scene partner
   const scrollViewRef = useRef(null);
   const scrollIntervalRef = useRef(null);
   const scrollPositionRef = useRef(0);
   const contentHeightRef = useRef(0);
+  const sceneScrollRef = useRef(null);
 
   const speeds = [
     { label: "Slow", value: 0.5 },
     { label: "Med", value: 1.5 },
     { label: "Fast", value: 3 },
   ];
+
+  // Parse script into lines on mount
+  useEffect(() => {
+    if (script?.content) {
+      const parsed = parseScriptLines(script.content);
+      setLines(parsed);
+    }
+  }, [script]);
+
+  // Parse script into lines (by newline or speaker format)
+  const parseScriptLines = (text) => {
+    // Split by newlines first
+    const rawLines = text.split(/\n/).filter(line => line.trim().length > 0);
+    
+    return rawLines.map((line, index) => {
+      // Check for speaker format (NAME: or NAME-)
+      const speakerMatch = line.match(/^([A-Z][A-Z0-9\s]*)[:\-]\s*(.*)$/i);
+      if (speakerMatch) {
+        return {
+          id: index,
+          speaker: speakerMatch[1].trim(),
+          text: speakerMatch[2].trim(),
+          full: line.trim(),
+        };
+      }
+      return {
+        id: index,
+        speaker: null,
+        text: line.trim(),
+        full: line.trim(),
+      };
+    });
+  };
 
   // Cleanup on unmount
   useEffect(() => {
@@ -168,6 +205,52 @@ function RehearseScreen({ script, onBack }) {
     }
   };
 
+  // Scene Partner Mode Functions
+  const playCurrentLine = () => {
+    if (lines.length === 0 || currentLine >= lines.length) return;
+    
+    try {
+      const line = lines[currentLine];
+      const textToSpeak = line.text || line.full;
+      
+      if (textToSpeak.length > 0) {
+        setIsPlaying(true);
+        Speech.speak(textToSpeak, {
+          onDone: () => setIsPlaying(false),
+          onStopped: () => setIsPlaying(false),
+          onError: () => setIsPlaying(false),
+        });
+      }
+    } catch (e) {
+      console.log("Scene Partner TTS Error:", e);
+      setIsPlaying(false);
+    }
+  };
+
+  const nextLine = () => {
+    try { Speech.stop(); } catch (e) {}
+    setIsPlaying(false);
+    
+    if (currentLine < lines.length - 1) {
+      setCurrentLine(prev => prev + 1);
+    }
+  };
+
+  const prevLine = () => {
+    try { Speech.stop(); } catch (e) {}
+    setIsPlaying(false);
+    
+    if (currentLine > 0) {
+      setCurrentLine(prev => prev - 1);
+    }
+  };
+
+  const resetLines = () => {
+    try { Speech.stop(); } catch (e) {}
+    setIsPlaying(false);
+    setCurrentLine(0);
+  };
+
   const handleBack = () => {
     stopScroll();
     try { Speech.stop(); } catch (e) {}
@@ -195,27 +278,50 @@ function RehearseScreen({ script, onBack }) {
         <View style={rehearseStyles.spacer} />
       </View>
 
-      {/* Tap hint */}
-      <Text style={rehearseStyles.tapHint}>Tap anywhere to jump to that position</Text>
-
-      {/* Script Content - Wrapped in Pressable for tap detection */}
-      <Pressable style={rehearseStyles.scrollWrapper} onPress={handleTapToPosition}>
-        <ScrollView 
-          ref={scrollViewRef}
-          style={rehearseStyles.scrollView}
-          contentContainerStyle={rehearseStyles.scrollContent}
-          onScroll={handleScroll}
-          onContentSizeChange={handleContentSizeChange}
-          scrollEventThrottle={16}
+      {/* Mode Toggle */}
+      <View style={rehearseStyles.modeToggle}>
+        <TouchableOpacity 
+          style={[rehearseStyles.modeBtn, mode === "teleprompter" && rehearseStyles.modeBtnActive]}
+          onPress={() => setMode("teleprompter")}
         >
-          <Text style={rehearseStyles.scriptText}>{script.content}</Text>
-        </ScrollView>
+          <Text style={[rehearseStyles.modeText, mode === "teleprompter" && rehearseStyles.modeTextActive]}>
+            Teleprompter
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[rehearseStyles.modeBtn, mode === "scene-partner" && rehearseStyles.modeBtnActive]}
+          onPress={() => { setMode("scene-partner"); resetLines(); }}
+        >
+          <Text style={[rehearseStyles.modeText, mode === "scene-partner" && rehearseStyles.modeTextActive]}>
+            Scene Partner
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-        {/* Tap Indicator */}
-        {tapIndicator !== null && (
-          <View style={[rehearseStyles.tapLine, { top: tapIndicator }]} />
-        )}
-      </Pressable>
+      {/* TELEPROMPTER MODE */}
+      {mode === "teleprompter" && (
+        <>
+          {/* Tap hint */}
+          <Text style={rehearseStyles.tapHint}>Tap anywhere to jump to that position</Text>
+
+          {/* Script Content - Wrapped in Pressable for tap detection */}
+          <Pressable style={rehearseStyles.scrollWrapper} onPress={handleTapToPosition}>
+            <ScrollView 
+              ref={scrollViewRef}
+              style={rehearseStyles.scrollView}
+              contentContainerStyle={rehearseStyles.scrollContent}
+              onScroll={handleScroll}
+              onContentSizeChange={handleContentSizeChange}
+              scrollEventThrottle={16}
+            >
+              <Text style={rehearseStyles.scriptText}>{script.content}</Text>
+            </ScrollView>
+
+            {/* Tap Indicator */}
+            {tapIndicator !== null && (
+              <View style={[rehearseStyles.tapLine, { top: tapIndicator }]} />
+            )}
+          </Pressable>
 
       {/* Speed Selector */}
       <View style={rehearseStyles.speedRow}>
@@ -263,6 +369,76 @@ function RehearseScreen({ script, onBack }) {
           <Text style={rehearseStyles.controlText}>■ STOP</Text>
         </TouchableOpacity>
       </View>
+        </>
+      )}
+
+      {/* SCENE PARTNER MODE */}
+      {mode === "scene-partner" && (
+        <>
+          {/* Line Counter */}
+          <Text style={rehearseStyles.lineCounter}>
+            Line {currentLine + 1} of {lines.length}
+          </Text>
+
+          {/* Current Line Display */}
+          <ScrollView 
+            ref={sceneScrollRef}
+            style={rehearseStyles.sceneContent}
+            contentContainerStyle={rehearseStyles.sceneContentInner}
+          >
+            {lines.map((line, index) => (
+              <View 
+                key={line.id} 
+                style={[
+                  rehearseStyles.lineItem,
+                  index === currentLine && rehearseStyles.lineItemActive,
+                  index < currentLine && rehearseStyles.lineItemPast,
+                ]}
+              >
+                {line.speaker && (
+                  <Text style={rehearseStyles.lineSpeaker}>{line.speaker}</Text>
+                )}
+                <Text style={[
+                  rehearseStyles.lineText,
+                  index === currentLine && rehearseStyles.lineTextActive,
+                ]}>
+                  {line.text || line.full}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+
+          {/* Scene Partner Controls */}
+          <View style={rehearseStyles.sceneControls}>
+            <TouchableOpacity style={rehearseStyles.prevBtn} onPress={prevLine}>
+              <Text style={rehearseStyles.controlText}>← PREV</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[rehearseStyles.playLineBtn, isPlaying && rehearseStyles.playingBtn]} 
+              onPress={playCurrentLine}
+            >
+              <Text style={rehearseStyles.controlText}>
+                {isPlaying ? "🔊..." : "🔊 PLAY"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={rehearseStyles.nextBtn} onPress={nextLine}>
+              <Text style={rehearseStyles.controlText}>NEXT →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Stop / Reset */}
+          <View style={rehearseStyles.sceneSecondary}>
+            <TouchableOpacity style={rehearseStyles.stopBtn} onPress={handleStop}>
+              <Text style={rehearseStyles.controlText}>■ STOP</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={rehearseStyles.resetBtn} onPress={resetLines}>
+              <Text style={rehearseStyles.controlText}>↺ RESET</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -403,6 +579,115 @@ const rehearseStyles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  // Mode Toggle Styles
+  modeToggle: {
+    flexDirection: "row",
+    justifyContent: "center",
+    paddingVertical: 10,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#222",
+  },
+  modeBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: "#222",
+  },
+  modeBtnActive: {
+    backgroundColor: "#4a90d9",
+  },
+  modeText: {
+    color: "#888",
+    fontSize: 14,
+  },
+  modeTextActive: {
+    color: "#fff",
+  },
+  // Scene Partner Styles
+  lineCounter: {
+    color: "#888",
+    fontSize: 14,
+    textAlign: "center",
+    paddingVertical: 10,
+  },
+  sceneContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  sceneContentInner: {
+    paddingVertical: 20,
+  },
+  lineItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    marginBottom: 8,
+    borderRadius: 8,
+    backgroundColor: "#111",
+    borderLeftWidth: 3,
+    borderLeftColor: "transparent",
+  },
+  lineItemActive: {
+    backgroundColor: "#1a3a5a",
+    borderLeftColor: "#4a90d9",
+  },
+  lineItemPast: {
+    opacity: 0.5,
+  },
+  lineSpeaker: {
+    color: "#4a90d9",
+    fontSize: 12,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  lineText: {
+    color: "#fff",
+    fontSize: 18,
+    lineHeight: 26,
+  },
+  lineTextActive: {
+    fontSize: 20,
+  },
+  sceneControls: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  prevBtn: {
+    flex: 1,
+    backgroundColor: "#333",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  playLineBtn: {
+    flex: 1,
+    backgroundColor: "#4a90d9",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  nextBtn: {
+    flex: 1,
+    backgroundColor: "#2a8a2a",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  sceneSecondary: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    gap: 10,
+  },
+  resetBtn: {
+    flex: 1,
+    backgroundColor: "#555",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
   },
 });
 
