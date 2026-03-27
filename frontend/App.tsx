@@ -1,13 +1,58 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList, ScrollView, SafeAreaView, StatusBar } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Speech from "expo-speech";
 
 console.log("APP STARTED");
 
-// REHEARSE SCREEN - Full screen cinematic view
+// REHEARSE SCREEN - Full screen cinematic view with teleprompter
 function RehearseScreen({ script, onBack }) {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const [speed, setSpeed] = useState(1); // 0=Slow, 1=Medium, 2=Fast
+  const scrollViewRef = useRef(null);
+  const scrollIntervalRef = useRef(null);
+  const scrollPositionRef = useRef(0);
+
+  const speeds = [
+    { label: "Slow", value: 0.5 },
+    { label: "Med", value: 1.5 },
+    { label: "Fast", value: 3 },
+  ];
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+      }
+      try { Speech.stop(); } catch (e) {}
+    };
+  }, []);
+
+  const startScroll = () => {
+    if (scrollIntervalRef.current) {
+      clearInterval(scrollIntervalRef.current);
+    }
+    setIsScrolling(true);
+    scrollIntervalRef.current = setInterval(() => {
+      scrollPositionRef.current += speeds[speed].value;
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({
+          y: scrollPositionRef.current,
+          animated: false,
+        });
+      }
+    }, 16); // ~60fps
+  };
+
+  const stopScroll = () => {
+    if (scrollIntervalRef.current) {
+      clearInterval(scrollIntervalRef.current);
+      scrollIntervalRef.current = null;
+    }
+    setIsScrolling(false);
+  };
 
   const handlePlay = () => {
     try {
@@ -36,10 +81,13 @@ function RehearseScreen({ script, onBack }) {
   };
 
   const handleBack = () => {
-    try {
-      Speech.stop();
-    } catch (e) {}
+    stopScroll();
+    try { Speech.stop(); } catch (e) {}
     onBack();
+  };
+
+  const handleScroll = (event) => {
+    scrollPositionRef.current = event.nativeEvent.contentOffset.y;
   };
 
   return (
@@ -57,20 +105,54 @@ function RehearseScreen({ script, onBack }) {
 
       {/* Script Content */}
       <ScrollView 
+        ref={scrollViewRef}
         style={rehearseStyles.scrollView}
         contentContainerStyle={rehearseStyles.scrollContent}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         <Text style={rehearseStyles.scriptText}>{script.content}</Text>
       </ScrollView>
 
-      {/* Controls */}
+      {/* Speed Selector */}
+      <View style={rehearseStyles.speedRow}>
+        {speeds.map((s, i) => (
+          <TouchableOpacity
+            key={i}
+            style={[rehearseStyles.speedBtn, speed === i && rehearseStyles.speedBtnActive]}
+            onPress={() => setSpeed(i)}
+          >
+            <Text style={[rehearseStyles.speedText, speed === i && rehearseStyles.speedTextActive]}>
+              {s.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Scroll Controls */}
+      <View style={rehearseStyles.scrollControls}>
+        <TouchableOpacity 
+          style={[rehearseStyles.scrollBtn, isScrolling && rehearseStyles.scrollBtnActive]} 
+          onPress={startScroll}
+        >
+          <Text style={rehearseStyles.controlText}>
+            {isScrolling ? "⏬ Scrolling..." : "⏬ START SCROLL"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={rehearseStyles.scrollStopBtn} onPress={stopScroll}>
+          <Text style={rehearseStyles.controlText}>⏹ STOP</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Voice Controls */}
       <View style={rehearseStyles.controls}>
         <TouchableOpacity 
           style={[rehearseStyles.playBtn, isPlaying && rehearseStyles.playingBtn]} 
           onPress={handlePlay}
         >
           <Text style={rehearseStyles.controlText}>
-            {isPlaying ? "▶ Playing..." : "▶ PLAY"}
+            {isPlaying ? "🔊 Playing..." : "🔊 VOICE"}
           </Text>
         </TouchableOpacity>
 
@@ -118,7 +200,7 @@ const rehearseStyles = StyleSheet.create({
   },
   scrollContent: {
     padding: 25,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   scriptText: {
     color: "#fff",
@@ -126,17 +208,64 @@ const rehearseStyles = StyleSheet.create({
     lineHeight: 36,
     textAlign: "left",
   },
-  controls: {
+  speedRow: {
     flexDirection: "row",
-    padding: 20,
-    gap: 15,
+    justifyContent: "center",
+    paddingVertical: 10,
+    gap: 10,
     borderTopWidth: 1,
     borderTopColor: "#222",
+  },
+  speedBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: "#222",
+  },
+  speedBtnActive: {
+    backgroundColor: "#4a90d9",
+  },
+  speedText: {
+    color: "#888",
+    fontSize: 14,
+  },
+  speedTextActive: {
+    color: "#fff",
+  },
+  scrollControls: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  scrollBtn: {
+    flex: 1,
+    backgroundColor: "#2a8a2a",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  scrollBtnActive: {
+    backgroundColor: "#1a6a1a",
+  },
+  scrollStopBtn: {
+    flex: 1,
+    backgroundColor: "#555",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  controls: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: 5,
+    gap: 10,
   },
   playBtn: {
     flex: 1,
     backgroundColor: "#4a90d9",
-    paddingVertical: 18,
+    paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
   },
@@ -146,13 +275,13 @@ const rehearseStyles = StyleSheet.create({
   stopBtn: {
     flex: 1,
     backgroundColor: "#d94a4a",
-    paddingVertical: 18,
+    paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
   },
   controlText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
   },
 });
