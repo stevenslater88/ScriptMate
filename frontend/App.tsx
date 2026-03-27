@@ -763,10 +763,16 @@ export default function App() {
     try {
       const data = await AsyncStorage.getItem("scripts");
       if (data) {
-        setScripts(JSON.parse(data));
+        const parsed = JSON.parse(data);
+        setScripts(parsed);
+        console.log("LOADED SCRIPTS:", parsed.length);
+      } else {
+        setScripts([]);
+        console.log("LOADED SCRIPTS:", 0);
       }
     } catch (e) {
       console.log("Error loading scripts:", e);
+      setScripts([]);
     }
   };
 
@@ -789,13 +795,14 @@ export default function App() {
       allScripts.unshift(newScript);
       await AsyncStorage.setItem("scripts", JSON.stringify(allScripts));
 
+      console.log("SAVE SUCCESS");
       console.log("SCRIPT SAVED LOCALLY");
       
       setTitle("");
       setScriptText("");
       setScripts(allScripts);
       
-      Alert.alert("Saved", "Saved locally");
+      Alert.alert("Saved", "Script saved");
     } catch (e) {
       console.log("Error saving script:", e);
       Alert.alert("Error", "Failed to save");
