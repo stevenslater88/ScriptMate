@@ -3,9 +3,23 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList, S
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Speech from "expo-speech";
 
+// =============================================================================
+// SCRIPTMATE APP - Single File Structure
+// =============================================================================
+// Sections:
+// 1. RehearseScreen - Full screen playback (teleprompter + scene partner)
+// 2. App Component - Home screen (input + script list)
+// 3. Styles - All styling
+// =============================================================================
+
 console.log("APP STARTED");
 
-// REHEARSE SCREEN - Full screen cinematic view with teleprompter and scene partner modes
+// =============================================================================
+// REHEARSE SCREEN COMPONENT
+// =============================================================================
+// Modes: Teleprompter (auto-scroll) | Scene Partner (line-by-line)
+// Features: TTS playback, speed control, tap-to-position
+// =============================================================================
 function RehearseScreen({ script, onBack }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
@@ -164,7 +178,6 @@ function RehearseScreen({ script, onBack }) {
   // Play with natural pauses
   const handlePlay = async () => {
     console.log("PLAY PRESSED");
-    console.log("PLAYING SCRIPT:", script?.title);
     
     try {
       const textToSpeak = script?.content || "";
@@ -694,62 +707,9 @@ const rehearseStyles = StyleSheet.create({
   },
 });
 
-// Script View Screen Component (KEPT FOR COMPATIBILITY)
-function ScriptViewScreen({ script, onBack }) {
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const handlePlay = () => {
-    console.log("PLAY PRESSED - SCRIPT OBJECT:", script);
-    
-    const textToSpeak = script?.content || script?.raw_text || "";
-    console.log("TEXT TO SPEAK:", textToSpeak);
-
-    if (textToSpeak.length > 0) {
-      setIsPlaying(true);
-      Speech.speak(textToSpeak, {
-        onDone: () => setIsPlaying(false),
-        onStopped: () => setIsPlaying(false),
-        onError: () => setIsPlaying(false),
-      });
-    } else {
-      console.log("ERROR: No valid text found for speech");
-    }
-  };
-
-  const handleStop = () => {
-    Speech.stop();
-    setIsPlaying(false);
-  };
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.screenTitle}>{script.title || "Script"}</Text>
-
-      <ScrollView style={styles.scriptBox}>
-        <Text style={styles.scriptText}>{script.content}</Text>
-      </ScrollView>
-
-      <View style={styles.row}>
-        <TouchableOpacity 
-          style={[styles.playBtn, isPlaying && styles.playingBtn]} 
-          onPress={handlePlay}
-        >
-          <Text style={styles.btnText}>{isPlaying ? "Playing..." : "▶️ Play"}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.stopBtn} onPress={handleStop}>
-          <Text style={styles.btnText}>⏹ Stop</Text>
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity style={styles.backBtn} onPress={() => { Speech.stop(); onBack(); }}>
-        <Text style={styles.btnText}>Back</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-// Main App Component - SINGLE SCREEN
+// =============================================================================
+// MAIN APP COMPONENT
+// =============================================================================
 export default function App() {
   const [title, setTitle] = useState("");
   const [scriptText, setScriptText] = useState("");
@@ -799,7 +759,6 @@ export default function App() {
       await AsyncStorage.setItem("scripts", JSON.stringify(allScripts));
 
       console.log("SAVE SUCCESS");
-      console.log("SCRIPT SAVED LOCALLY");
       
       setTitle("");
       setScriptText("");
@@ -817,7 +776,9 @@ export default function App() {
     setScreen("rehearse");
   };
 
-  // Rehearse Screen (Full Screen Mode)
+  // =========================================================================
+  // REHEARSE SCREEN - Full screen playback mode
+  // =========================================================================
   if (screen === "rehearse" && selectedScript) {
     return (
       <RehearseScreen 
@@ -827,17 +788,9 @@ export default function App() {
     );
   }
 
-  // Script View Screen (kept for compatibility)
-  if (screen === "view" && selectedScript) {
-    return (
-      <ScriptViewScreen 
-        script={selectedScript} 
-        onBack={() => setScreen("home")} 
-      />
-    );
-  }
-
-  // Main Home Screen
+  // =========================================================================
+  // HOME SCREEN - Input form + Script list
+  // =========================================================================
   return (
     <View style={styles.container}>
       <Text style={styles.screenTitle}>ScriptMate</Text>
