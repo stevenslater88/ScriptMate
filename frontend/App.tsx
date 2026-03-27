@@ -163,6 +163,9 @@ function RehearseScreen({ script, onBack }) {
 
   // Play with natural pauses
   const handlePlay = async () => {
+    console.log("PLAY PRESSED");
+    console.log("PLAYING SCRIPT:", script?.title);
+    
     try {
       const textToSpeak = script?.content || "";
       if (textToSpeak.length === 0) return;
