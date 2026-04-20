@@ -6,7 +6,7 @@
  */
 
 // THE ONLY BACKEND URL - DO NOT CHANGE WITHOUT TESTING
-export const API_BASE_URL = 'https://save-script-verify.preview.emergentagent.com';
+export const API_BASE_URL = 'https://rehearse-app.preview.emergentagent.com';
 
 export const API_TIMEOUT = 15000;
 
