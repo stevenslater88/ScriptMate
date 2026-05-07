@@ -37,6 +37,14 @@ value: [{ id: number, title: string, content: string }]
 
 ## Completed Work
 
+### 2026-02 (Current Session) — EAS iOS Deploy Fix (expo-router plugin)
+- EAS production build was failing at `expo prebuild` with: `Failed to resolve plugin for module "expo-router"`. Root cause: Emergent's native deploy script's "Normalizing app.json" step auto-injects `expo-router` into the plugins array (it assumes a standard Emergent Expo template).
+- Fix: Added `expo-router@~6.0.22` plus its required SDK 54 peer deps as no-op dependencies (we don't import or use the router; `"main": "App.tsx"` keeps App.tsx as the entry):
+  - expo-router, expo-constants, expo-linking, expo-status-bar
+  - react-native-safe-area-context, react-native-screens (peer deps of expo-router)
+- Verified locally: `npx expo-doctor` 17/17 checks pass, `npx expo prebuild --platform ios` generates `ios/Podfile` successfully.
+- App.tsx remains untouched (still single-file offline; only imports react, react-native, AsyncStorage, expo-speech).
+
 ### 2026-02 (Current Session) — Deployment Stabilization
 - Deleted all orphaned legacy folders: `services/`, `store/`, `hooks/`, `components/`, `contexts/`, `scripts/`, `test_parser.ts`, `eslint.config.js`
 - Slimmed `package.json` to only required deps (react, react-native, expo, expo-speech, expo-status-bar, async-storage)
