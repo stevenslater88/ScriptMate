@@ -36,10 +36,17 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    // Safety timeout — spinner MUST resolve within 3s even if AsyncStorage hangs
+    const safety = setTimeout(() => { if (!cancelled) setCheckingOnboarding(false); }, 3000);
     (async () => {
-      if (await shouldShowOnboarding()) router.replace('/onboarding');
-      else setCheckingOnboarding(false);
+      try {
+        if (await shouldShowOnboarding()) router.replace('/onboarding');
+      } catch {}
+      if (!cancelled) setCheckingOnboarding(false);
+      clearTimeout(safety);
     })();
+    return () => { cancelled = true; clearTimeout(safety); };
   }, []);
 
   const initialize = useCallback(async () => {
