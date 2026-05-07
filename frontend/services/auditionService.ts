@@ -1,7 +1,5 @@
 // Audition Tracker Service - Enhanced with career dashboard data
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// expo-notifications disabled for Expo SDK 54 / Expo Go compatibility
-// import * as Notifications from 'expo-notifications';
 
 const AUDITIONS_KEY = '@scriptmate_auditions';
 
@@ -203,9 +201,6 @@ export const getPendingAuditions = async (): Promise<Audition[]> => {
 };
 
 const scheduleFollowUpNotification = async (audition: Audition): Promise<string | undefined> => {
-  // Notification scheduling disabled for Expo SDK 54 / Expo Go compatibility.
-  // Audition CRUD still works via AsyncStorage. Notifications can be re-enabled
-  // when building with expo-notifications native module (EAS build).
   return undefined;
 };
 
