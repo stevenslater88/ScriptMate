@@ -37,7 +37,6 @@
     "production": {
       "extends": "base",
       "autoIncrement": true,
-      "channel": "production",
       "ios": {
         "resourceClass": "m1-medium",
         "autoIncrement": "buildNumber"

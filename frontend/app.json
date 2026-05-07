@@ -8,6 +8,9 @@
     "scheme": "scriptmate",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "updates": {
+      "enabled": false
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.scriptmate.app",
