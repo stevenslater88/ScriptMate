@@ -1,9 +1,6 @@
 {
   "expo": {
     "name": "ScriptM8",
-    "slug": "scriptm8",
-    "plugins": [
-      "expo-web-browser"
-    ]
+    "slug": "scriptm8"
   }
 }
