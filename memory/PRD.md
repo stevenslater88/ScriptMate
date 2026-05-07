@@ -1,39 +1,66 @@
-# ScriptM8 — Product Requirements Document
-
-## Status: STABILIZATION MODE
+# ScriptM8 — Product Requirements
 
 ## Original Problem Statement
-ScriptM8 is an AI-powered script learning app for actors (Expo SDK 54 / React Native 0.81.5 + FastAPI). Core features are broken on installed Android builds because environment variables are not being compiled into the production build.
+Build a fully offline, single-file React Native (Expo) app for actors/performers to memorize and rehearse scripts. After multiple stabilization rounds, the user explicitly mandated **TRUE MINIMAL MODE**:
+- Single-file architecture (`App.tsx`)
+- No backend, no API calls, no `expo-router`, no complex navigation
+- Local storage only via `AsyncStorage`
+- Text-to-Speech via `expo-speech`
+- Teleprompter mode (auto-scroll, tap-to-position) and Scene Partner mode (line-by-line playback with natural pauses)
 
-## Root Cause (Confirmed)
-1. **Expo SDK 54 `process.env.EXPO_PUBLIC_*` regression** (GitHub #36503): Metro bundler fails to inline env vars in production builds.
-2. **`Constants.expoConfig.extra` delivery broken**: Config generated correctly at build time (verified via `getConfig()`), but at runtime only `["eas","router"]` keys are present — custom keys are stripped during delivery.
-3. **Previous `||` fallback chains with hardcoded defaults**: Should have worked but 3 builds (1046, 1047, 1056) all still failed. Build fingerprint was added to definitively prove whether new code is in the build.
+## Architecture
+```
+/app
+└── frontend/
+    ├── App.tsx          # SINGLE SOURCE OF TRUTH (all UI + logic, ~1000 LOC)
+    ├── package.json     # Minimal deps only
+    ├── app.json         # Minimal Expo config
+    ├── eas.json         # Build profiles (preview, production)
+    ├── babel.config.js  # babel-preset-expo only
+    ├── android/         # Native Android project for EAS builds
+    └── assets/          # Icons & splash
+```
 
-## Current Fix (Build fingerprint SM8-FIX-0315A, versionCode 1060)
-**Approach**: Zero abstraction. All critical config values are literal strings in source files. No `process.env`, no `Constants.expoConfig`, no resolve functions, no import chains for the critical path.
+Backend (FastAPI/MongoDB) is **NOT USED** by the app but is still running as a service (legacy artifact; safe to ignore).
 
-**Files changed**:
-- `app/_layout.tsx` — RC key is inline string `'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT'`, build fingerprint `SM8-FIX-0315A`
-- `services/apiConfig.ts` — Backend URL is inline string, no imports
-- `contexts/AuthContext.tsx` — Backend URL is inline string, no imports  
-- `services/diagnosticsService.ts` — Build fingerprint, hardcoded RC key display
-- `app/debug.tsx` — Shows build fingerprint prominently
-- `metro.config.js` — Removed persistent FileStore cache
-- `app.json` — versionCode 1060
+## Tech Stack
+- **Frontend**: React Native 0.81.5, Expo SDK ~54.0.34, TypeScript
+- **Storage**: `@react-native-async-storage/async-storage@2.2.0` (key: `"scripts"`)
+- **TTS**: `expo-speech` (local, on-device)
+- **Build**: EAS (CI uses Node 22.13.0, Yarn 1.22.22)
 
-## Pending — User Device Verification (P0)
-Build from current code and check:
-1. Debug screen shows `Build Fingerprint: SM8-FIX-0315A`
-2. If fingerprint is present → code IS in the build
-3. If fingerprint is absent → code is NOT in the build (build pipeline issue)
-4. If fingerprint present AND RC still fails → runtime issue beyond config injection
+## Data Model (AsyncStorage)
+```
+key: "scripts"
+value: [{ id: number, title: string, content: string }]
+```
 
-## Upcoming Tasks (P1)
-- Stabilize Self-Tape feature
+## Completed Work
 
-## Future / Backlog
-- Password protection for shared casting links
-- Director Mode with framing guides
-- ElevenLabs Scene Partner voices for premium
-- Backend server.py modular refactor
+### 2026-02 (Current Session) — Deployment Stabilization
+- Deleted all orphaned legacy folders: `services/`, `store/`, `hooks/`, `components/`, `contexts/`, `scripts/`, `test_parser.ts`, `eslint.config.js`
+- Slimmed `package.json` to only required deps (react, react-native, expo, expo-speech, expo-status-bar, async-storage)
+- Removed `resolutions` block that caused EAS `EOVERRIDE` conflicts
+- Cleaned `.env` of unused `EXPO_PUBLIC_*` keys (RevenueCat, Sentry, ElevenLabs)
+- Cleaned `eas.json` (removed obsolete env blocks for unused integrations)
+- Simplified `app.json` (removed `expo-web-browser` plugin reference)
+- Verified `yarn install` runs cleanly; supervisor expo service RUNNING
+- Deployment agent re-validation: **READY TO DEPLOY** (no blockers)
+
+### Prior Sessions
+- Rebuilt entire app into single-file `App.tsx` offline architecture
+- Implemented local script CRUD with AsyncStorage
+- Added Teleprompter (auto-scroll, tap-to-position) and Scene Partner modes
+- Added natural punctuation pauses for `expo-speech`
+- Removed `expo-router`, `zustand`, all backend/API logic, `expo-notifications`
+
+## Backlog / Future
+- **P2** — Optional voice picker (let user choose `expo-speech` voice from device list)
+- **P2** — Optional script export/import (share via clipboard or `expo-sharing` if reintroduced)
+- **P2** — Optional dark/light theme toggle
+
+## Critical Rules for Future Agents
+1. **DO NOT reintroduce a backend, API calls, `expo-router`, or complex navigation.** User explicitly ordered single-file offline app.
+2. **DO NOT bloat `package.json`.** Only add a dep if `App.tsx` actually imports it.
+3. **REMIND USER to "Save to GitHub"** before they trigger any EAS build (EAS pulls from GitHub, not preview env). This was a recurring blocker in past sessions.
+4. **Ngrok tunnel errors** in `expo.err.log` are intermittent ngrok flakiness — not a code issue. Ignore unless they prevent the service from staying RUNNING.
