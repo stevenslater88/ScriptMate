@@ -1,6 +1,7 @@
 // Audition Tracker Service - Enhanced with career dashboard data
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
+// expo-notifications disabled for Expo SDK 54 / Expo Go compatibility
+// import * as Notifications from 'expo-notifications';
 
 const AUDITIONS_KEY = '@scriptmate_auditions';
 
@@ -102,7 +103,7 @@ export const updateAudition = async (id: string, updates: Partial<Audition>): Pr
   const existing = auditions[index];
 
   if (existing.followUpNotificationId && updates.followUpDate !== existing.followUpDate) {
-    await Notifications.cancelScheduledNotificationAsync(existing.followUpNotificationId);
+    // Notification cancellation disabled for Expo SDK 54 compatibility
   }
 
   const updated: Audition = { ...existing, ...updates, updatedAt: new Date().toISOString() };
@@ -122,7 +123,7 @@ export const deleteAudition = async (id: string): Promise<boolean> => {
   const audition = auditions.find(a => a.id === id);
 
   if (audition?.followUpNotificationId) {
-    await Notifications.cancelScheduledNotificationAsync(audition.followUpNotificationId);
+    // Notification cancellation disabled for Expo SDK 54 compatibility
   }
 
   const filtered = auditions.filter(a => a.id !== id);
@@ -202,27 +203,10 @@ export const getPendingAuditions = async (): Promise<Audition[]> => {
 };
 
 const scheduleFollowUpNotification = async (audition: Audition): Promise<string | undefined> => {
-  if (!audition.followUpDate) return undefined;
-  try {
-    const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') {
-      const { status: newStatus } = await Notifications.requestPermissionsAsync();
-      if (newStatus !== 'granted') return undefined;
-    }
-    const followUpDate = new Date(audition.followUpDate);
-    if (followUpDate <= new Date()) return undefined;
-    const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Audition Follow-Up',
-        body: `Time to follow up on "${audition.projectName}" - ${audition.role}`,
-        data: { auditionId: audition.id },
-      },
-      trigger: { date: followUpDate },
-    });
-    return notificationId;
-  } catch {
-    return undefined;
-  }
+  // Notification scheduling disabled for Expo SDK 54 / Expo Go compatibility.
+  // Audition CRUD still works via AsyncStorage. Notifications can be re-enabled
+  // when building with expo-notifications native module (EAS build).
+  return undefined;
 };
 
 export interface AuditionFilters {
