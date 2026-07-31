@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList, ScrollView, SafeAreaView, StatusBar, Pressable } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Speech from "expo-speech";
+import { registerRootComponent } from "expo";
 
 console.log("APP STARTED");
 
@@ -997,3 +998,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 });
+
+registerRootComponent(App);

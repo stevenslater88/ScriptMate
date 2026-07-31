@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "ScriptM8",
-    "slug": "scriptm8",
     "ios": {
       "bundleIdentifier": "com.anonymous.scriptm8"
     },
+    "name": "ScriptM8",
+    "slug": "scriptm8",
     "updates": {
       "enabled": false
     }
