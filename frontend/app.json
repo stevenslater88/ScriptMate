@@ -4,6 +4,9 @@
     "slug": "scriptm8",
     "ios": {
       "bundleIdentifier": "com.anonymous.scriptm8"
+    },
+    "updates": {
+      "enabled": false
     }
   }
 }
