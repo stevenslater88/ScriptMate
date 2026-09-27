@@ -352,6 +352,54 @@ export default function RehearsalScreen() {
   });
 
   // Start listening for user's line
+  // In-memory cache of the granted state within this app session, so we don't
+  // even call the native getPermissionsAsync bridge more than once per session
+  // once we know permission is granted. Persisted native state on Android/iOS
+  // survives app restarts, so this cache is a defence-in-depth optimisation.
+  const speechPermissionGrantedRef = useRef(false);
+  const audioPermissionGrantedRef = useRef(false);
+
+  /**
+   * Ensure microphone/speech-recognition permission is granted BEFORE calling
+   * requestPermissionsAsync. We only request when the native state is
+   * NOT_DETERMINED / undetermined. If ALREADY GRANTED we skip. If DENIED we
+   * surface the existing explanation flow and do not re-prompt automatically.
+   * Returns true when the caller may proceed.
+   */
+  const ensureSpeechPermission = async (): Promise<boolean> => {
+    if (speechPermissionGrantedRef.current) return true;
+    try {
+      const current = await ExpoSpeechRecognitionModule.getPermissionsAsync();
+      if (current.granted) {
+        speechPermissionGrantedRef.current = true;
+        debugLog('ensureSpeechPermission: already granted, skipping request');
+        return true;
+      }
+      // Only prompt on the very first (undetermined) request. If the native
+      // state says the user previously denied and we can no longer request,
+      // point them at Settings instead of silently re-prompting.
+      if (current.canAskAgain === false) {
+        debugLog('ensureSpeechPermission: previously denied, canAskAgain=false');
+        Alert.alert(
+          'Microphone Access Needed',
+          'Speech recognition needs microphone access. Please enable it in Settings → Apps → ScriptM8 → Permissions.',
+        );
+        return false;
+      }
+      debugLog('ensureSpeechPermission: requesting (undetermined)');
+      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (result.granted) {
+        speechPermissionGrantedRef.current = true;
+        return true;
+      }
+      Alert.alert('Permission Required', 'Please grant microphone permission for speech recognition.');
+      return false;
+    } catch (e: any) {
+      debugLog(`ensureSpeechPermission: error - ${e?.message || 'unknown'}`);
+      return false;
+    }
+  };
+
   const startListening = async () => {
     debugLog('startListening called');
     if (!speechRecognitionAvailable) {
@@ -361,13 +409,8 @@ export default function RehearsalScreen() {
     }
 
     try {
-      debugLog('startListening: Requesting permissions...');
-      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      debugLog(`startListening: Permission result - ${result.granted ? 'granted' : 'denied'}`);
-      if (!result.granted) {
-        Alert.alert('Permission Required', 'Please grant microphone permission for speech recognition.');
-        return;
-      }
+      const ok = await ensureSpeechPermission();
+      if (!ok) return;
 
       setRecognizedText('');
       debugLog('startListening: Starting SR module...');
