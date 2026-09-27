@@ -548,11 +548,33 @@ export default function RecordScreen() {
           style={styles.scriptScroll}
           showsVerticalScrollIndicator={false}
           scrollEnabled={!teleprompterPlaying}
-          contentContainerStyle={{ 
-            paddingBottom: 100,
-            transform: teleprompterActive && teleprompterPlaying ? [{ translateY: Animated.multiply(teleprompterAnim, -1) }] : []
-          }}
+          contentContainerStyle={{ paddingBottom: 100 }}
         >
+          {/*
+            Teleprompter scroll animation.
+
+            IMPORTANT (Android 16 / Fabric): the animated transform MUST live
+            on this inner Animated.View. Earlier the transform was placed on
+            the outer <Animated.ScrollView>'s `contentContainerStyle`, which
+            is a raw style prop on the internal content wrapper — NOT an
+            animated node. Passing an `Animated.multiply(...)` result into
+            that raw style caused an immediate native crash on Samsung
+            SM-S918B when the teleprompter was toggled on during recording,
+            because Fabric's shadow-tree layout resolver could not interpret
+            the AnimatedInterpolation object.
+
+            Wrapping the content in an Animated.View places the animated
+            transform on a component that Animated proxies natively.
+            Regression: backend/tests/test_phase3_selftape_regression.py
+          */}
+          <Animated.View
+            style={{
+              transform:
+                teleprompterActive && teleprompterPlaying
+                  ? [{ translateY: Animated.multiply(teleprompterAnim, -1) }]
+                  : [],
+            }}
+          >
           {lines.map((line: any, index: number) => {
             const isMyLine = line.character === params.character;
             if (hideOthers && !isMyLine) {
@@ -584,6 +606,7 @@ export default function RecordScreen() {
               </View>
             );
           })}
+          </Animated.View>
         </Animated.ScrollView>
 
         {/* Teleprompter Controls Overlay */}

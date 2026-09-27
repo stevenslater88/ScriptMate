@@ -1,4 +1,12 @@
-import * as FileSystem from 'expo-file-system';
+// expo-file-system v19 (SDK 54) split the legacy top-level API into a
+// deprecation shim that THROWS AT RUNTIME. The classic FileSystem.* helpers
+// (getInfoAsync, copyAsync, makeDirectoryAsync, deleteAsync, documentDirectory,
+// getFreeDiskStorageAsync) remain available only under the `/legacy` submodule.
+// Importing from the top-level module here made every recording save fail on
+// Android SDK 54 builds (Samsung SM-S918B, Android 16 physical repro).
+// See: expo-file-system/build/legacyWarnings.d.ts — "This method will throw
+// in runtime."  Regression: backend/tests/test_phase3_selftape_regression.py
+import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
