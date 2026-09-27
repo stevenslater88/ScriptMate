@@ -20,7 +20,7 @@ import { DebugLog } from '../services/debugLogService';
 
 // BUILD FINGERPRINT — unique string to prove this code is in the compiled build.
 // If you see this on the debug screen, the code is present. If not, the build is stale.
-export const BUILD_FINGERPRINT = 'SM8-1108-DIAG';
+export const BUILD_FINGERPRINT = 'SM8-1110-QA';
 
 // ─── GLOBAL ERROR HANDLERS ───────────────────────────────────────────────
 // Install once at module load. Captures uncaught JS errors and unhandled

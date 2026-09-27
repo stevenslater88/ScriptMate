@@ -15,7 +15,7 @@ export const API_TIMEOUT = 15000;
 export const API_CONFIG_SOURCE = 'apiConfig.ts (hardcoded)';
 
 // Build identifier for tracking
-export const BUILD_ID = '1108-DIAG';
+export const BUILD_ID = '1110-QA';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DIAGNOSTIC: Log URL on module load (will appear in device logs)

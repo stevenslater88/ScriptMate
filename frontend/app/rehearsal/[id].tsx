@@ -804,6 +804,40 @@ export default function RehearsalScreen() {
   };
 
   // Recording functions (Premium only)
+  /**
+   * Ensure microphone permission is granted BEFORE calling
+   * Audio.requestPermissionsAsync. Same policy as ensureSpeechPermission:
+   * skip if already granted, prompt only when undetermined, show a Settings
+   * hint if permission was previously denied. Prevents repeated OS prompts
+   * every time the Premium record button is tapped.
+   */
+  const ensureAudioPermission = async (): Promise<boolean> => {
+    if (audioPermissionGrantedRef.current) return true;
+    try {
+      const current = await Audio.getPermissionsAsync();
+      if (current.status === 'granted') {
+        audioPermissionGrantedRef.current = true;
+        return true;
+      }
+      if (current.canAskAgain === false) {
+        Alert.alert(
+          'Microphone Access Needed',
+          'Recording needs microphone access. Please enable it in Settings → Apps → ScriptM8 → Permissions.',
+        );
+        return false;
+      }
+      const result = await Audio.requestPermissionsAsync();
+      if (result.status === 'granted') {
+        audioPermissionGrantedRef.current = true;
+        return true;
+      }
+      Alert.alert('Permission Required', 'Please grant microphone permission to record');
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
   const startRecording = async () => {
     if (!isPremium) {
       Alert.alert('Premium Feature', 'Recording requires Premium subscription');
@@ -811,11 +845,8 @@ export default function RehearsalScreen() {
     }
 
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant microphone permission to record');
-        return;
-      }
+      const ok = await ensureAudioPermission();
+      if (!ok) return;
 
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,

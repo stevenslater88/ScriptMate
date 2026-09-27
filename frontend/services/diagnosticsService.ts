@@ -9,18 +9,18 @@ import { API_BASE_URL, API_CONFIG_SOURCE } from './apiConfig';
 
 // Build fingerprint — imported from _layout.tsx would create a circular dependency,
 // so we duplicate the exact same value here.
-export const BUILD_FINGERPRINT = 'SM8-1108-DIAG';
+export const BUILD_FINGERPRINT = 'SM8-1110-QA';
 
 // BUILD SOURCE VERIFICATION - This proves which code was actually built
 // If device shows different values, the build is from different code
 export const BUILD_PROOF = {
   branch: 'main',
   commit: 'pending', // Will be set after GitHub push
-  build: 1102,
+  build: 1110,
   backendUrl: API_BASE_URL,
   configSource: API_CONFIG_SOURCE,
-  timestamp: '2026-03-19T00:00:00Z',
-  marker: `BUILD_PROOF: branch=main build=1102 backend=${API_BASE_URL}`,
+  timestamp: '2026-02-27T00:00:00Z',
+  marker: `BUILD_PROOF: branch=main build=1110 backend=${API_BASE_URL}`,
 };
 
 // Feature Flags - HARDCODED for stabilization mode
