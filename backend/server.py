@@ -864,8 +864,22 @@ async def check_user_limits(user_id: str, action: str) -> Dict[str, Any]:
         today = datetime.utcnow().strftime("%Y-%m-%d")
         if user.get("last_rehearsal_date") == today:
             if user.get("rehearsals_today", 0) >= limits["max_rehearsals_per_day"]:
-                result["allowed"] = False
-                result["upgrade_reason"] = f"You've used all {limits['max_rehearsals_per_day']} rehearsals for today. Upgrade to Premium for unlimited rehearsals!"
+                # ─── QA BYPASS (isolated, env-gated) ────────────────────────
+                # Setting QA_UNLIMITED_REHEARSALS=true in the backend .env allows
+                # unlimited rehearsals for repeated Samsung regression testing.
+                # This is a DEV/QA-only flag and MUST remain absent (or "false")
+                # in the production environment. Production 5-per-day limit is
+                # unchanged when the flag is not set.
+                if os.environ.get("QA_UNLIMITED_REHEARSALS", "").lower() == "true":
+                    logger.warning(
+                        "[QA_BYPASS] Rehearsal limit bypassed for user_id=%s "
+                        "(rehearsals_today=%s, limit=%s). Disable QA_UNLIMITED_REHEARSALS in production.",
+                        user.get("id"), user.get("rehearsals_today"), limits["max_rehearsals_per_day"],
+                    )
+                    result["qa_bypass"] = True
+                else:
+                    result["allowed"] = False
+                    result["upgrade_reason"] = f"You've used all {limits['max_rehearsals_per_day']} rehearsals for today. Upgrade to Premium for unlimited rehearsals!"
     
     return result
 
