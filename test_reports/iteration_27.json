@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 27 — Upload/Import fix verification. All 13 requested STEPS PASS. The hardcoded 'script-recovery-1' URL has been removed from /app/frontend/app/upload.tsx (line 25 now imports API_BASE_URL from '../services/apiConfig'). Multipart TXT/PDF/DOCX uploads, base64 fallback, list/open, and rehearsal on uploaded script all work end-to-end against the live backend. /upload web bundle serves HTTP 200. Core regression (paste → create → list → open → rehearse) still passes. The 4 remaining 'script-recovery-1' string occurrences in the bundle are the cosmetic diagnostic strings in apiConfig.ts/appConfig.ts (out of scope per request).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_results_per_step": {
+    "STEP1_upload_bundle_HTTP200": "PASS (curl /upload → 200, 57541 bytes; entry.bundle → 200, 10.3MB)",
+    "STEP2_endpoints_exist": "PASS (/api/scripts/upload and /api/scripts/upload-base64 respond with 4xx to empty payloads, not 404)",
+    "STEP3_txt_paste_flow": "PASS (POST /api/scripts returns 200 with id)",
+    "STEP4_txt_multipart_upload": "PASS (script id returned; characters + lines parsed)",
+    "STEP5_pdf_multipart_upload": "PASS (real PDF built with reportlab, parsed by backend, id returned)",
+    "STEP6_docx_multipart_upload": "PASS (real DOCX built with python-docx, parsed by backend, id returned)",
+    "STEP7_base64_fallback": "PASS",
+    "STEP8_error_handling": "PASS (empty multipart → 422, empty base64 json → 400; no 500/crash)",
+    "STEP9_uploaded_in_list": "PASS (GET /api/scripts?user_id=test-upload-user-iter27 contains uploaded script)",
+    "STEP10_open_uploaded_script": "PASS (GET /api/scripts/{id} returns parsed characters + lines)",
+    "STEP11_rehearsal_on_uploaded": "PASS (POST /api/rehearsals returns 200 with full_read + alloy)",
+    "STEP12_static_code_verification": "PASS (upload.tsx imports API_BASE_URL from '../services/apiConfig'; no local `const API_BASE_URL`; no 'script-recovery-1.preview.emergentagent.com' string)",
+    "STEP13_core_regression": "PASS (paste/list/open/rehearse chain green — same code path as iteration_25)"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration27_upload_fix.py",
+    "/app/test_reports/pytest/iteration27_upload_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix confirmed correct: upload.tsx now uses shared API_BASE_URL from services/apiConfig.ts.",
+    "Note (out of scope but worth flagging for a later pass): apiConfig.ts lines 36-42 still log a WARNING to console when API_BASE_URL does NOT contain 'script-recovery-1' — this is now inverted (the correct domain is save-script-verify), so every device will emit a false-positive warning on boot. Consider removing or updating that diagnostic string. Also appConfig.ts DEFAULTS.BACKEND_URL still hardcodes 'script-recovery-1.preview.emergentagent.com' — cosmetic only (diagnosticsService), but stale."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration27_upload_fix.py (new)"
+  ],
+  "success_rate": { "backend": "100% (12/12)", "frontend": "100% (bundle load + static verification)" },
+  "seed_data_creation": "Created 4 TEST_iter27_* scripts under user_id=test-upload-user-iter27 via paste, txt-multipart, pdf-multipart, docx-multipart, and base64 flows.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend upload endpoints fully verified. If future changes touch upload flow, rerun /app/backend/tests/test_iteration27_upload_fix.py — it exercises all 3 file types + base64 + list/open/rehearse. reportlab and python-docx are installed in the test env."
+}
