@@ -4,7 +4,7 @@ import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 
-import { API_BASE_URL, API_TIMEOUT, BUILD_ID, getApiDiagnostics } from '../services/apiConfig';
+import { API_BASE_URL, API_TIMEOUT, API_TIMEOUT_LLM, BUILD_ID, getApiDiagnostics } from '../services/apiConfig';
 import { isDevTestMode } from '../services/devTestMode';
 import { checkPremiumAccess } from '../services/revenuecat';
 import { DebugLog } from '../services/debugLogService';
@@ -406,7 +406,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         title,
         raw_text: rawText,
         user_id: deviceId,
-      }, { timeout: API_TIMEOUT });
+      }, { timeout: API_TIMEOUT_LLM });
       
       const durationMs = Date.now() - startTime;
       const newScript = response.data;

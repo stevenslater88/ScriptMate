@@ -97,6 +97,41 @@ Changes (4 files):
 
 **Awaiting real-device Android APK test.**
 
+### 2026-02 — POST /api/scripts intermittent timeout ("Network Error, no status, ~15s") — BUILD 1110-QA
+
+**Real-device symptom (Samsung, 1110-QA):** After a successful rehearsal creation, attempting to paste-save the same script twice failed:
+```
+POST https://scriptmate-8.emergent.host/api/scripts
+Axios Network Error • HTTP status: no status • Duration: ~15s
+title=Jack, textLen=931
+```
+`createRehearsal` immediately before had succeeded against the same base URL, ruling out DNS/URL/proxy.
+
+**Root cause (reproduced):**
+- Frontend `apiConfig.ts` set `API_TIMEOUT = 15000` (15s) — used uniformly for every axios call including `POST /api/scripts`.
+- Backend `POST /api/scripts` invokes `parse_script_with_ai` (LiteLLM → OpenAI GPT-4o) synchronously in the request handler.
+- Production baseline latency for a ~931 char script: **~3.6–4.4s median**.
+- Under concurrent burst (measured 6× parallel POSTs against production): **one request spiked to 24.3s** while the rest finished in ~4s. This matches OpenAI's documented P99 variance / LiteLLM retry behaviour.
+- Any request whose GPT-4o call exceeded 15s → axios client abort → "Network Error / no status / ~15s duration" — exactly the field symptom.
+
+**Fix — smallest safe change (2 files, +9/-2 lines, no backend changes):**
+1. `frontend/services/apiConfig.ts`: added `API_TIMEOUT_LLM = 60000` constant with documentation of the empirical latency window. `API_TIMEOUT` (15s) left unchanged for all other calls.
+2. `frontend/store/scriptStore.ts`: `createScript` axios POST now uses `API_TIMEOUT_LLM` instead of `API_TIMEOUT`. All other axios calls (GET /scripts, GET /scripts/:id, PUT /scripts/:id, DELETE /scripts/:id) still use the aggressive 15s default — they don't hit an LLM.
+
+**Regression test:** `backend/tests/test_scripts_create_timeout.py` (4 tests, all PASS against both preview and production):
+- `test_apiconfig_declares_extended_llm_timeout` — apiConfig must export `API_TIMEOUT_LLM ≥ 30000`.
+- `test_scriptstore_uses_llm_timeout_for_create_script` — createScript must reference the extended constant.
+- `test_post_scripts_single_request_under_llm_sla` — endpoint returns 200 within 60s with characters+lines.
+- `test_post_scripts_burst_never_5xx_within_sla` — 4× concurrent bursts, no 5xx, all within 60s.
+
+**What was NOT touched (per Master Prompt):**
+- Import pipeline, rehearsal engine, end-of-rehearsal fix, API URL, `parse_script_with_ai` behaviour, backend routes, 18 pre-existing backend lint issues.
+
+**Verification status:**
+- ✅ Reproduced the failure (24.3s GPT-4o burst spike > 15s Axios timeout)
+- ✅ Regression tests pass against production (`https://scriptmate-8.emergent.host`) and preview
+- ⏳ Awaiting user's Samsung 1110-QA acceptance test (paste-save + Rehearsal → final line → Stats)
+
 **Root causes identified (real Android device evidence):**
 - **TXT "empty script" perception**: After loading a TXT file, the code populated `scriptText` state but stayed on the File tab which has NO visible text preview and NO Save button. User had no visible feedback of loaded content.
 - **PDF/DOCX Android native crash**: `FormData.append({uri:'content://…', type, name})` triggers a native SIGSEGV in RN's multipart encoder on new architecture when the ContentResolver stream can't be re-opened. Base64 fallback existed but the crash happened INSIDE the native FormData call before axios could throw.

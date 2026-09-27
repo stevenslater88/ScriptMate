@@ -11,6 +11,14 @@ export const API_BASE_URL =
 
 export const API_TIMEOUT = 15000;
 
+// Extended timeout for endpoints whose latency is dominated by an upstream
+// LLM call (currently: POST /api/scripts, which parses via GPT-4o).
+// Empirically observed: median ~4s, P99 bursts up to ~25s. A 15s Axios
+// timeout was aborting these requests intermittently on real devices with
+// "Network Error / no HTTP status" (reproduced under concurrent burst load).
+// See regression: backend/tests/test_scripts_create_timeout.py
+export const API_TIMEOUT_LLM = 60000;
+
 // For diagnostics display
 export const API_CONFIG_SOURCE = 'apiConfig.ts (hardcoded)';
 
