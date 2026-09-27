@@ -17,6 +17,7 @@ import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { useScriptStore } from '../../store/scriptStore';
+import { DebugLog } from '../../services/debugLogService';
 
 // Safely import speech recognition - it may not be available on all devices
 let ExpoSpeechRecognitionModule: any = null;
@@ -470,14 +471,19 @@ export default function RehearsalScreen() {
     loadData();
 
     return () => {
-      Speech.stop();
+      // Crash-safe unmount cleanup — each native module call individually
+      // guarded so a double-teardown or already-stopped state can never
+      // escalate to an unhandled promise rejection / native SIGSEGV.
+      try { Promise.resolve(Speech.stop()).catch(() => {}); } catch { /* ignore */ }
       isSpeakingRef.current = false;
       speakingLineIndexRef.current = null;
       if (speechTimeoutRef.current) {
-        clearTimeout(speechTimeoutRef.current);
+        try { clearTimeout(speechTimeoutRef.current); } catch { /* ignore */ }
       }
       if (recording) {
-        recording.stopAndUnloadAsync();
+        try {
+          Promise.resolve(recording.stopAndUnloadAsync()).catch(() => {});
+        } catch { /* ignore */ }
       }
     };
   }, [id]);
@@ -631,6 +637,86 @@ export default function RehearsalScreen() {
     }
   }, [id, completedLines, missedLines, weakLines, updateRehearsal]);
 
+  // ─── END-OF-REHEARSAL FINALIZATION ─────────────────────────────────────
+  // A single, idempotent, crash-safe finalization path. Every "we're done"
+  // trigger (last line completed, missing next line, restart, exit) must
+  // route through this function so cleanup and diagnostics happen exactly
+  // once, no unhandled promise rejections can escape, and no native module
+  // is torn down twice.
+  const finalizeGuardRef = useRef(false);
+  const finalizeRehearsal = useCallback(async (reason: string) => {
+    if (finalizeGuardRef.current) {
+      DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'finalize skipped (already ran)', { reason });
+      return;
+    }
+    finalizeGuardRef.current = true;
+    DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'rehearsal-finish-start', { reason });
+
+    // 1. Stop TTS (never throw to caller)
+    try {
+      DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'audio-cleanup-start', {});
+      await Promise.resolve(Speech.stop()).catch(() => {});
+      isSpeakingRef.current = false;
+      speakingLineIndexRef.current = null;
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+        speechTimeoutRef.current = null;
+      }
+      DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'audio-cleanup-success', {});
+    } catch (audioErr: any) {
+      DebugLog.errorCaught('audio-cleanup', audioErr);
+    }
+
+    // 2. Stop speech-recognition (guard against native re-entry)
+    try {
+      DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'speech-cleanup-start', {});
+      if (isListening) {
+        try { ExpoSpeechRecognitionModule.stop(); } catch { /* already stopped */ }
+      }
+      DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'speech-cleanup-success', {});
+    } catch (srErr: any) {
+      DebugLog.errorCaught('speech-cleanup', srErr);
+    }
+
+    // 3. Compute + persist final progress (best-effort — never throw)
+    try {
+      DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'stats-calculation-start', {
+        totalLines: lines.length,
+        completedCount: completedLines.length,
+        userChar: userCharacter,
+      });
+      const finalIndex = lines.length;
+      if (id) {
+        await updateRehearsal(id, {
+          current_line_index: finalIndex,
+          completed_lines: completedLines,
+          missed_lines: missedLines,
+          weak_lines: weakLines,
+        }).catch((upErr: any) => {
+          DebugLog.errorCaught('final-updateRehearsal', upErr);
+        });
+      }
+      DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'stats-calculation-success', {
+        completed: completedLines.length,
+        missed: missedLines.length,
+        weak: weakLines.length,
+      });
+    } catch (statsErr: any) {
+      DebugLog.errorCaught('stats-calculation', statsErr);
+    }
+
+    // 4. Flip state to 'finished' so the completion UI renders
+    try {
+      DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'stats-navigation-start', {});
+      setState('finished');
+      DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'stats-navigation-success', {});
+    } catch (navErr: any) {
+      DebugLog.errorCaught('stats-navigation', navErr);
+    }
+
+    DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'rehearsal-finish-complete', { reason });
+  }, [id, lines.length, completedLines, missedLines, weakLines, userCharacter, isListening, updateRehearsal]);
+
   // Advance to next line
   const advanceToNextLine = useCallback(() => {
     try {
@@ -639,11 +725,12 @@ export default function RehearsalScreen() {
       const currentIdx = currentLineIndexRef.current;
       const nextIndex = currentIdx + 1;
       console.log('[Rehearsal] Advancing from line:', currentIdx, 'to line:', nextIndex, 'of', lines.length);
-      
+
       if (nextIndex >= lines.length) {
-        console.log('[Rehearsal] Finished!');
-        setState('finished');
-        saveProgress(nextIndex);
+        DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'final-line-complete', { atIndex: currentIdx });
+        // Fire and forget — finalizeRehearsal has its own outer try/catch and can
+        // never throw to the caller.
+        finalizeRehearsal('end-of-scene').catch(() => {});
         return;
       }
 
@@ -651,7 +738,7 @@ export default function RehearsalScreen() {
       setCompletedLines((prev) => [...prev, currentIdx]);
       setCurrentLineIndex(nextIndex);
       currentLineIndexRef.current = nextIndex;
-      
+
       // Reset speaking state for next line - IMPORTANT: clear before deciding to speak
       speakingLineIndexRef.current = null;
       advanceProcessedRef.current = false;
@@ -659,10 +746,13 @@ export default function RehearsalScreen() {
 
       const nextLine = lines[nextIndex];
       console.log('[Rehearsal] Next line character:', nextLine?.character, 'User:', userCharacter);
-      
+
       if (!nextLine) {
         console.error('[Rehearsal] nextLine is undefined at index:', nextIndex);
-        setState('finished');
+        DebugLog.errorCaught('advance-null-line', new Error(`nextLine undefined at ${nextIndex}`), {
+          nextIndex, totalLines: lines.length,
+        });
+        finalizeRehearsal('null-next-line').catch(() => {});
         return;
       }
       
@@ -929,19 +1019,38 @@ export default function RehearsalScreen() {
     ]);
   };
 
-  // Calculate stats
+  // Calculate stats — bulletproof: all values coerced to finite numbers.
+  // A failure here must not crash the end-of-scene render.
   const getStats = () => {
-    const totalUserLines = lines.filter(l => l.character === userCharacter).length;
-    const completedUserLines = linePerformances.length;
-    const avgHesitation = linePerformances.length > 0 
-      ? linePerformances.reduce((sum, p) => sum + p.hesitationTime, 0) / linePerformances.length 
-      : 0;
-    const hintsUsed = linePerformances.filter(p => p.hintUsed).length;
-    const accuracy = totalUserLines > 0 
-      ? Math.round(((completedUserLines - missedLines.length) / totalUserLines) * 100) 
-      : 0;
+    try {
+      const safeLines = Array.isArray(lines) ? lines : [];
+      const safePerformances = Array.isArray(linePerformances) ? linePerformances : [];
+      const safeMissed = Array.isArray(missedLines) ? missedLines : [];
 
-    return { totalUserLines, completedUserLines, avgHesitation, hintsUsed, accuracy };
+      const totalUserLines = safeLines.filter(l => l && l.character === userCharacter).length;
+      const completedUserLines = safePerformances.length;
+
+      const totalHesitation = safePerformances.reduce((sum, p) => {
+        const v = Number(p?.hesitationTime);
+        return sum + (Number.isFinite(v) ? v : 0);
+      }, 0);
+      const avgHesitationRaw = safePerformances.length > 0
+        ? totalHesitation / safePerformances.length
+        : 0;
+      const avgHesitation = Number.isFinite(avgHesitationRaw) ? avgHesitationRaw : 0;
+
+      const hintsUsed = safePerformances.filter(p => p && p.hintUsed).length;
+
+      const accuracyRaw = totalUserLines > 0
+        ? Math.round(((completedUserLines - safeMissed.length) / totalUserLines) * 100)
+        : 0;
+      const accuracy = Number.isFinite(accuracyRaw) ? Math.max(0, Math.min(100, accuracyRaw)) : 0;
+
+      return { totalUserLines, completedUserLines, avgHesitation, hintsUsed, accuracy };
+    } catch (e: any) {
+      DebugLog.errorCaught('getStats', e);
+      return { totalUserLines: 0, completedUserLines: 0, avgHesitation: 0, hintsUsed: 0, accuracy: 0 };
+    }
   };
 
   // Auto-scroll to current line
@@ -1060,7 +1169,7 @@ export default function RehearsalScreen() {
             <Ionicons name="checkmark-circle" size={64} color="#10b981" />
             <Text style={styles.finishedTitle}>Scene Complete!</Text>
             <Text style={styles.finishedSubtitle}>
-              Accuracy: {stats.accuracy}% • Avg. Response: {stats.avgHesitation.toFixed(1)}s
+              Accuracy: {Number.isFinite(stats.accuracy) ? stats.accuracy : 0}% • Avg. Response: {(Number.isFinite(stats.avgHesitation) ? stats.avgHesitation : 0).toFixed(1)}s
             </Text>
             {weakLines.length > 0 && (
               <Text style={styles.weakLinesText}>
