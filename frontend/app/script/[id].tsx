@@ -20,12 +20,12 @@ import { trackUpgradeTriggered } from '../../services/analyticsService';
 import VoiceAssignment from '../../components/VoiceAssignment';
 
 const VOICE_OPTIONS = [
-  { id: 'alloy', name: 'Alloy', description: 'Neutral, balanced' },
-  { id: 'echo', name: 'Echo', description: 'Male, warm' },
-  { id: 'fable', name: 'Fable', description: 'British accent' },
-  { id: 'onyx', name: 'Onyx', description: 'Deep, authoritative' },
-  { id: 'nova', name: 'Nova', description: 'Female, energetic' },
-  { id: 'shimmer', name: 'Shimmer', description: 'Female, soft' },
+  { id: 'alloy', name: 'Alloy', description: 'Neutral, balanced', premium: false },
+  { id: 'echo', name: 'Echo', description: 'Male, warm', premium: true },
+  { id: 'fable', name: 'Fable', description: 'British accent', premium: true },
+  { id: 'onyx', name: 'Onyx', description: 'Deep, authoritative', premium: true },
+  { id: 'nova', name: 'Nova', description: 'Female, energetic', premium: true },
+  { id: 'shimmer', name: 'Shimmer', description: 'Female, soft', premium: true },
 ];
 
 const READER_STYLES = [
@@ -84,7 +84,13 @@ export default function ScriptDetailScreen() {
     const loadSavedSettings = async () => {
       try {
         const savedSettings = await getSettings();
-        setSelectedVoice(savedSettings.default_voice);
+        // Free-tier guard: if saved voice is a premium voice and user isn't premium,
+        // fall back to 'alloy' to prevent avoidable 403 on rehearsal creation.
+        const savedVoiceEntry = VOICE_OPTIONS.find(v => v.id === savedSettings.default_voice);
+        const safeVoice = (savedVoiceEntry?.premium && !isPremium)
+          ? 'alloy'
+          : savedSettings.default_voice;
+        setSelectedVoice(safeVoice);
         setVoiceSpeed(savedSettings.default_voice_speed);
         setSettingsLoaded(true);
       } catch (error) {
@@ -93,7 +99,7 @@ export default function ScriptDetailScreen() {
       }
     };
     loadSavedSettings();
-  }, []);
+  }, [isPremium]);
 
   useEffect(() => {
     if (id) {
@@ -552,24 +558,44 @@ export default function ScriptDetailScreen() {
               </View>
 
               <Text style={styles.modalSectionTitle}>AI Voice</Text>
-              {VOICE_OPTIONS.map((voice) => (
-                <TouchableOpacity
-                  key={voice.id}
-                  style={[
-                    styles.voiceOption,
-                    selectedVoice === voice.id && styles.voiceOptionSelected,
-                  ]}
-                  onPress={() => setSelectedVoice(voice.id)}
-                >
-                  <View style={styles.voiceInfo}>
-                    <Text style={styles.voiceName}>{voice.name}</Text>
-                    <Text style={styles.voiceDescription}>{voice.description}</Text>
-                  </View>
-                  {selectedVoice === voice.id && (
-                    <Ionicons name="checkmark-circle" size={24} color="#6366f1" />
-                  )}
-                </TouchableOpacity>
-              ))}
+              {VOICE_OPTIONS.map((voice) => {
+                const isLocked = voice.premium && !isPremium;
+                return (
+                  <TouchableOpacity
+                    key={voice.id}
+                    style={[
+                      styles.voiceOption,
+                      selectedVoice === voice.id && !isLocked && styles.voiceOptionSelected,
+                      isLocked && { opacity: 0.55 },
+                    ]}
+                    onPress={() => {
+                      if (isLocked) {
+                        trackUpgradeTriggered('script_detail_voice_' + voice.id);
+                        setShowSettings(false);
+                        router.push('/premium');
+                        return;
+                      }
+                      setSelectedVoice(voice.id);
+                    }}
+                  >
+                    <View style={styles.voiceInfo}>
+                      <Text style={styles.voiceName}>
+                        {voice.name}
+                        {isLocked ? '  🔒' : ''}
+                      </Text>
+                      <Text style={styles.voiceDescription}>
+                        {isLocked ? 'Premium' : voice.description}
+                      </Text>
+                    </View>
+                    {selectedVoice === voice.id && !isLocked && (
+                      <Ionicons name="checkmark-circle" size={24} color="#6366f1" />
+                    )}
+                    {isLocked && (
+                      <Ionicons name="lock-closed" size={16} color="#f59e0b" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
             <TouchableOpacity
               style={styles.modalDoneButton}
