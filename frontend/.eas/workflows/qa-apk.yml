@@ -1,5 +1,7 @@
 # EAS Workflow — ScriptMate QA APK
 #
+# Trigger marker: 2026-02 initial pipeline verification run.
+#
 # Purpose:
 #   Automatically build a signed Android QA APK on every push to `main`
 #   using the existing `preview` profile from ../eas.json.
