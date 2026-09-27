@@ -35,7 +35,35 @@
 ### 2026-02 — Main rehearsal journey verified (testing_agent iteration_25)
 All 12 rehearsal-journey steps PASS. See `/app/test_reports/iteration_25.json`.
 
-### 2026-02 — Upload/Import unification (BUILD 1108-DIAG, Phase 3)
+### 2026-02 — End-of-Rehearsal Crash Fix (BUILD 1110-QA)
+
+**Real-device symptom:** rehearsal reached last line successfully, then app crashed with "ScriptMate Pro closed because this app has a bug" — Scene Complete / Stats never rendered.
+
+**Root cause:** `advanceToNextLine` at end-of-scene called `setState('finished')` + fire-and-forget `saveProgress(nextIndex)` without try/catch or `.catch()`. Multiple parallel async hazards during the finalization transition:
+1. `saveProgress → updateRehearsal` axios call — no `.catch()` → unhandled promise rejection.
+2. Component unmount cleanup called `Speech.stop()` and `recording.stopAndUnloadAsync()` without individual try/catch or promise chain protection → native SIGSEGV on Android when the underlying resource was already released.
+3. `getStats()` could return `NaN` for `avgHesitation` if any `hesitationTime` was undefined; `stats.avgHesitation.toFixed(1)` would then evaluate fine but `stats.accuracy` (`Math.round(NaN)`) breaks rendering.
+4. SR event listeners not gated when state became `finished` — a late `result`/`end` event could call `stopListening()` while native module was mid-teardown.
+
+**Fix (one file):** `frontend/app/rehearsal/[id].tsx`
+- Added `finalizeRehearsal(reason)` — a single idempotent async function guarded by `finalizeGuardRef`. Wraps all 4 finalization steps (audio-cleanup, speech-cleanup, stats-calculation-and-persistence, state-flip) in individual try/catch. `Speech.stop()` and `ExpoSpeechRecognitionModule.stop()` calls swallowed via `Promise.resolve(...).catch(() => {})`. `updateRehearsal(...)` has `.catch(errorCaught)`. Emits 11 diagnostic markers per spec: `rehearsal-finish-start`, `final-line-complete`, `audio-cleanup-start/success`, `speech-cleanup-start/success`, `stats-calculation-start/success`, `stats-navigation-start/success`, `rehearsal-finish-complete`.
+- `advanceToNextLine` end-of-scene branch now dispatches `finalizeRehearsal('end-of-scene').catch(()=>{})` instead of raw `setState('finished') + saveProgress`.
+- Null-next-line branch also routes through `finalizeRehearsal('null-next-line')`.
+- Unmount cleanup effect now wraps `Speech.stop()` and `recording.stopAndUnloadAsync()` in `Promise.resolve(...).catch(() => {})` + outer `try/catch`.
+- `getStats()` hardened: `Array.isArray()` guards on `lines/linePerformances/missedLines`, `Number.isFinite()` checks on every arithmetic operation, `Math.max(0, Math.min(100, accuracy))` clamp, outer try/catch returning zero-values on any unexpected error.
+- Finished UI at `Accuracy: {stats.accuracy}%` line hardened with `Number.isFinite()` fallback.
+
+**Verification (testing_agent iteration_31 — PASSED):**
+- Playwright drove a 2-line SARAH/MIKE rehearsal through completion: **Scene Complete!** rendered with `Accuracy: 100% • Avg. Response: 3.1s`, **zero unhandled promise rejections**, **zero page errors**.
+- All 11 diagnostic markers appeared in the correct order in console.
+- Run Again correctly reset the guard and returned to `state=idle`.
+- Backend regressions 4/4 pytest passing: extraction-only contract (no `id`, no persistence), paste flow `is_user_character=true`, QA bypass on/off both correct.
+- Production limit reverse-test: `QA_UNLIMITED_REHEARSALS=false` returned exact HTTP 403 with production message.
+- Build markers verified: `BUILD_ID='1110-QA'`, `BUILD_FINGERPRINT='SM8-1110-QA'`, `BUILD_PROOF.build=1110` — all consistent.
+- Bug Report diagnostic report structure verified: all 10 sections present, credential-key redaction applied, fingerprint `SM8-1110-QA` in report body.
+
+**Files changed in this task:** `frontend/app/rehearsal/[id].tsx` only.
+**No dependency changes. No deletions. No changes to rehearsal engine logic, TTS, voice gating, Premium/entitlement, backend endpoints, or unrelated features.**
 
 **Two real-device symptoms after previous fix:**
 - After successful PDF import, an unrelated `POST /api/scripts` from `handleSubmit` fails 15s later with Network Error → user perceives as "import save failed".

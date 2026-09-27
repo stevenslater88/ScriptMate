@@ -1,0 +1,28 @@
+{
+  "summary": "Iter31 verification of the reported end-of-scene rehearsal crash + full regression suite. FIX VERIFIED. Playwright drove a 2-line SARAH/MIKE rehearsal on /rehearsal/{id} through 'Start Scene' → 'Done' → completion: 'Scene Complete!' rendered with Accuracy: 100% • Avg. Response: 3.1s, ZERO page errors, ZERO unhandled promise rejections. All 11 required diagnostic markers appeared in the correct order in console (final-line-complete → rehearsal-finish-start → audio-cleanup-start → audio-cleanup-success → speech-cleanup-start → speech-cleanup-success → stats-calculation-start → stats-calculation-success → stats-navigation-start → stats-navigation-success → rehearsal-finish-complete). 'Run Again' cleanly reset the scene to Ready-to-Rehearse (state=idle), proving guard reset. Backend regressions: 4/4 pytest passing (extraction-only contract on /api/scripts/upload and /api/scripts/upload-base64 — no 'id' field, no scripts row persisted; paste flow POST /api/scripts + PUT user_character correctly sets is_user_character=true; QA_UNLIMITED_REHEARSALS=true bypass returns 200 for rehearsals_today=5 free user). Production limit reverse-test: temporarily flipped QA_UNLIMITED_REHEARSALS=false + restarted backend → same 6th rehearsal returned HTTP 403 with exact production message 'You've used all 5 rehearsals for today. Upgrade to Premium for unlimited rehearsals!'. Env restored to QA_UNLIMITED_REHEARSALS=true and backend restarted. Build markers verified via grep: BUILD_ID='1110-QA' (apiConfig.ts:18), BUILD_FINGERPRINT='SM8-1110-QA' (diagnosticsService.ts:12 + _layout.tsx:23), BUILD_PROOF.build=1110. Bug report structure verified via code inspection: BUILD/DEVICE/TIME/NAVIGATION/OPERATION/API/IMPORT/ERROR/RECENT LOG/NATIVE CRASH sections all present in generateChatGPTReport; stripSensitiveDeep applied to metadata to prevent credential leakage; fingerprint SM8-1110-QA emitted in report body.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration31_rehearsal_crash_regression.py",
+    "/app/test_reports/pytest/iter31_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Diagnostic banner spam ('SCRIPTM8 API CONFIG', 'CORRECT_DOMAIN: NO', build fingerprint prints) fires on every page load — cosmetic, gate behind __DEV__ or a debug flag.",
+    "console.error '[Rehearsal] Speech error: Error' appears during web playback due to expo-speech synthesis error on RN-Web after native SR module init — it is caught by the outer try/catch and does NOT prevent finalization; consider downgrading to warn on web to reduce noise.",
+    "Start Scene / Done / Run Again buttons have no testID/data-testid attributes on rehearsal/[id].tsx — Playwright had to fall back to text selectors. Adding testIDs would make automation more robust.",
+    "The idempotency 'finalize skipped (already ran)' marker was not exercised in the driven flow (only reachable via re-entry of same instance which doesn't happen with the fire-and-forget guard). Guard logic verified by code inspection at lines 646-653."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (4/4 pytest + prod-limit reverse curl)", "frontend": "100% (end-to-end rehearsal completes, all 11 markers, Scene Complete UI valid, Run Again resets)"},
+  "test_credentials": "device_id=TEST_iter31_playwright (transient); other tests generate per-run uuid device_ids.",
+  "seed_data_creation": "One script + rehearsal seeded via API for Playwright drive-through (title=TEST_iter31_pw). pytest fixtures create/tear down TEST_-prefixed scripts, rehearsals, and users automatically.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "End-of-scene crash fix is verified and stable. QA_UNLIMITED_REHEARSALS=true is currently set in backend/.env (as required for further QA). For next iteration if diagnostic markers need to be persisted-to-AsyncStorage verification, run on native (iOS/Android) since web AsyncStorage uses localStorage wrapper. Extraction endpoints contract (no 'id', no persistence) is now covered by test_iteration31_rehearsal_crash_regression.py — keep this file as regression baseline.",
+  "rca of the issue": "Original crash was in the end-of-scene → finalization → stats transition. Fix (already applied by main agent, verified here): finalizeRehearsal() at rehearsal/[id].tsx:647 now wraps all 4 finalization steps (audio-cleanup, speech-cleanup, stats-calculation, stats-navigation) in individual try/catch, uses Promise.resolve(Speech.stop()).catch() to swallow native rejections, and is guarded by finalizeGuardRef to ensure idempotency. advanceToNextLine at line 721 no longer setState('finished') directly — it dispatches finalizeRehearsal('end-of-scene') and swallows any thrown promise. getStats() at line 947 now hardened with Array.isArray + Number.isFinite fallbacks. Finished UI at line 1170 uses Number.isFinite guards on stats.accuracy and stats.avgHesitation before rendering. Result: rehearsal reaches Scene Complete without crash on web bundle."
+}
