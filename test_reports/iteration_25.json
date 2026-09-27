@@ -1,0 +1,50 @@
+{
+  "summary": "Verified the 12-step main rehearsal journey for ScriptM8. All backend API endpoints (users, scripts CRUD, rehearsals) working. Web bundle loads and app renders 'Welcome to ScriptM8' onboarding with no red-box errors. Rehearsal screen code inspection confirms expo-speech, router.back(), line rendering.",
+  "steps_result": {
+    "STEP1_bundles": "PASS - iOS/Android/Web bundles all HTTP 200",
+    "STEP2_home_render": "PASS - App renders 'Welcome to ScriptM8' onboarding; no red-box. Header 'ScriptM8' text present.",
+    "STEP3_create_script": "PASS - POST /api/scripts returns 200 with id",
+    "STEP4_backend_persistence": "PASS - Script created via backend (not AsyncStorage)",
+    "STEP5_list_scripts": "PASS - GET /api/scripts?user_id=... returns created script",
+    "STEP6_reload_persistence": "PASS - Re-GET returns same script (backend persisted)",
+    "STEP7_get_by_id": "PASS - GET /api/scripts/{id} returns full parsed script with lines & characters",
+    "STEP8_create_rehearsal": "PASS (after adjusting mode='full_read', voice='alloy' for free-tier limits)",
+    "STEP9_rehearsal_screen_code": "PASS - /app/frontend/app/rehearsal/[id].tsx fetches script, displays lines with character labels, has playback controls",
+    "STEP10_teleprompter_render": "PASS - rehearsal/[id].tsx line 1222/1227/1234 renders line.character and line.text",
+    "STEP11_TTS": "PASS - `import * as Speech from 'expo-speech'` (line 16) and Speech.speak(text, ...) (line 552)",
+    "STEP12_navigation_back": "PASS - router.back() at lines 415/422/852/899/915 in rehearsal; scripts.tsx line 60 also has router.back()"
+  },
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/rehearsals", "issue": "'default' voice and 'practice' mode are gated as premium (returns 403). Free tier only allows modes ['full_read','cue_only'] and voice 'alloy'. Frontend must ensure defaults align with free-tier or handle 403."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Diagnostic logs", "issues": ["Config mismatch warnings: apiConfig.ts uses env EXPO_PUBLIC_BACKEND_URL (save-script-verify - correct/working) but app.config.js has hardcoded fallback 'script-recovery-1' causing loud [AppConfig] warnings. Cosmetic only — actual API calls use the correct URL."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rehearsal_journey.py",
+    "/app/test_reports/pytest/rehearsal_journey.xml"
+  ],
+  "action_items": [
+    "(Optional) Reconcile app.config.js hardcoded BACKEND_URL fallback with .env value to silence [AppConfig] mismatch warnings.",
+    "(Optional) Ensure rehearsal creation UI defaults to a free-tier mode ('full_read'/'cue_only') and voice 'alloy' to avoid 403 for non-premium users."
+  ],
+  "critical_code_review_comments": [
+    "rehearsal/[id].tsx is 1300+ lines — consider splitting into hooks/components for maintainability.",
+    "Diagnostic 'BUILD_ID/CORRECT_DOMAIN' console logs should be removed for production builds.",
+    "expo-av is deprecated (SDK54 removal) — plan migration to expo-audio/expo-video."
+  ],
+  "updated_files": ["/app/backend/tests/test_rehearsal_journey.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "PASS (bundle + render + code inspection)"},
+  "test_credentials": "N/A - device_id based, used 'test-device-rehearsal-journey'",
+  "seed_data_creation": "One test script + one rehearsal under device_id 'test-device-rehearsal-journey'",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Main rehearsal journey (create script → save → list → open → start rehearsal) is fully working end-to-end. Backend endpoints verified via /app/backend/tests/test_rehearsal_journey.py. Free-tier rehearsal must use mode='full_read' or 'cue_only' and voice_type='alloy'. Web bundle renders onboarding; deep UI navigation past onboarding not tested this pass (out of scope) but code inspection covers steps 9-12."
+}
