@@ -117,7 +117,19 @@ export const useRevenueCat = (userId?: string): UseRevenueCatReturn => {
 
   // Derived state - use production offering
   const currentOffering = getProductionOffering(offerings);
-  const isPremium = devTestModeActive || customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
+  // ─── Central entitlement resolution (single source of truth) ─────────────
+  // The store's `isPremium` is backend-driven via GET /api/users/{id}/limits
+  // and therefore already reflects the QA_PREMIUM env bypass, a real Stripe
+  // subscription_tier, and any future server-side entitlement. Reading it
+  // here means EVERY gate that consumes `useRevenueCat().isPremium` (self-
+  // tape, acting coach, dialect coach, auditions, recall, script detail,
+  // etc.) inherits QA_PREMIUM without a per-screen patch.
+  //
+  // Production safety: when the backend has QA_PREMIUM unset or "false",
+  // `storeIsPremium` is byte-identical to the RevenueCat-derived value it
+  // was fetched from, so this OR is a no-op in production.
+  const storeIsPremium = useScriptStore((state) => state.isPremium);
+  const isPremium = storeIsPremium || devTestModeActive || customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
   
   // Get packages from production offering
   // Match by packageType first, then by identifier (for flexibility)

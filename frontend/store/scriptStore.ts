@@ -320,8 +320,14 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     try {
       const devMode = await isDevTestMode();
       const rcPremium = await checkPremiumAccess();
-      console.log(`[ScriptStore] refreshPremiumStatus: devMode=${devMode}, rcPremium=${rcPremium}`);
-      set({ isPremium: devMode || rcPremium });
+      // Refresh backend limits so the QA_PREMIUM env bypass (or a real
+      // server-side subscription_tier) is honoured after this refresh.
+      // Without this, refreshPremiumStatus() would clobber a valid QA
+      // premium flag with a plain RC-derived value.
+      await get().fetchUserLimits();
+      const backendPremium = get().isPremium;
+      console.log(`[ScriptStore] refreshPremiumStatus: devMode=${devMode}, rcPremium=${rcPremium}, backendPremium=${backendPremium}`);
+      set({ isPremium: backendPremium || devMode || rcPremium });
     } catch (error) {
       console.error('[ScriptStore] Error refreshing premium status:', error);
     }
