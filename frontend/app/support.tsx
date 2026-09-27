@@ -49,6 +49,7 @@ export default function SupportScreen() {
 
         <TextInput
           placeholder="Issue title"
+          placeholderTextColor="#6b7280"
           value={title}
           onChangeText={setTitle}
           style={styles.input}
@@ -57,6 +58,7 @@ export default function SupportScreen() {
 
         <TextInput
           placeholder="Describe the issue..."
+          placeholderTextColor="#6b7280"
           value={description}
           onChangeText={setDescription}
           multiline
@@ -114,12 +116,12 @@ export default function SupportScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#0a0a0f' },
 
   tabs: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#1f2937',
   },
 
   tab: {
@@ -134,7 +136,7 @@ const styles = StyleSheet.create({
   },
 
   tabText: {
-    color: '#6b7280',
+    color: '#9ca3af',
     fontWeight: '500',
   },
 
@@ -151,24 +153,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 15,
+    color: '#f9fafb',
   },
 
   question: {
     fontWeight: '600',
     marginTop: 10,
+    color: '#e5e7eb',
   },
 
   answer: {
-    color: '#555',
+    color: '#9ca3af',
     marginBottom: 10,
   },
 
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#374151',
     padding: 10,
     marginBottom: 10,
     borderRadius: 6,
+    backgroundColor: '#111827',
+    color: '#f9fafb',
   },
 
   button: {
