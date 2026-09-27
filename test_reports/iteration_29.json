@@ -1,0 +1,31 @@
+{
+  "summary": "Iter29 support-screen restoration verified. Static: support.tsx is 186 lines (target ~175), FAQ + Report Issue tabs w/ testIDs, no markdown fences, default export SupportScreen, useState imported. Bundles compile (web/ios/android all HTTP 200). Home /support NavRow present at line 174 with testId 'support-row'. All 12 regressions verified via grep + 4-test pytest suite (scripts POST/GET/list + rehearsals free-tier). Frontend UI test via Playwright confirms Support screen renders in web, tab switching works, Report Issue form fields fillable, Submit clicks and produces 'Report Sent' alert. 34 route .tsx files present under app/ (meets 34+ requirement).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/support", "issues": ["FAQ answer text uses hardcoded '#555' and input borders '#ddd' with no dark-mode handling; on the app's dark background the FAQ answers and TextInput placeholders have very low contrast (see screenshot). Restored code preserves original behavior as requested, but the theme mismatch is user-visible."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_support_regression.py",
+    "/app/test_reports/pytest/iter29_results.xml"
+  ],
+  "action_items": [
+    "Optional follow-up: apply dark-theme colors to /app/frontend/app/support.tsx (contrast issue only; out of scope for this pass per user directive)."
+  ],
+  "critical_code_review_comments": [
+    "support.tsx hardcodes light-theme colors (#555, #ddd, white bg) but app renders on dark bg → readability regression versus rest of app; consider using theme tokens.",
+    "Report Issue currently client-only Alert (no backend call) — matches prior behavior as documented; if analytics/tickets are desired, would need /api/support endpoint."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_support_regression.py"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (support flow verified)"},
+  "test_credentials": "device_id=test-support-iter29",
+  "seed_data_creation": "One TEST_iter29_support script created via backend for regression flow (script id captured, used in rehearsal create).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Support screen restoration is complete and green. Backend accepts POST /api/scripts with fields {user_id,title,raw_text} (not 'content'); POST /api/rehearsals requires user_character in addition to script_id/mode/voice_type — encoded in test_support_regression.py for future reuse. Contrast issue on /support is cosmetic and reported only; no code change requested this pass."
+}
