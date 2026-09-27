@@ -21,7 +21,8 @@ export const initSentry = () => {
 
     Sentry.init({
       dsn,
-      tracesSampleRate: 0.5,
+      tracesSampleRate: 0,
+      enableAutoPerformanceTracing: false,
       environment: __DEV__ ? 'development' : 'production',
       enabled: !__DEV__,
       debug: false,
