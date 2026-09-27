@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 28 — Verified the Sentry auto-instrumentation fix in /app/frontend/services/sentryService.ts. STEP 1: confirmed Sentry.init now has `tracesSampleRate: 0` and `enableAutoPerformanceTracing: false` (lines 24-25), with `enabled: !__DEV__` preserved (line 27). STEP 2: iOS, Android, and Web Metro bundles all compile with HTTP 200 (sizes ~10.6MB / ~10.6MB / ~8.9MB, valid JS output). STEP 3-5: Backend POST /api/scripts, POST /api/users, POST /api/rehearsals (free-tier defaults: mode=full_read, voice=alloy) all return 200/201 — server-side path unchanged. STEP 6: `git status` clean; last commit shows only frontend/services/sentryService.ts changed (2 insertions, 1 deletion). Note: The actual Android APK production+newArch reproduction cannot be tested here — it requires a real device install.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration28_sentry_fix.py",
+    "/app/test_reports/pytest/iteration28_results.xml"
+  ],
+  "action_items": [
+    "Definitive verification requires the user to install a new APK build on their Samsung device and re-attempt Save Script (out of scope for automated testing)."
+  ],
+  "critical_code_review_comments": [
+    "sentryService.ts change is minimal and correctly scoped: only disables performance/XHR auto-instrumentation while preserving crash reporting via `enabled: !__DEV__`. No side effects on other capture helpers.",
+    "The change is surgical — no changes to axios interceptors, no changes to any store or component. Low regression risk."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration28_sentry_fix.py"],
+  "success_rate": {"backend": "100% (3/3)", "frontend": "N/A — bundle compile check only (3/3 platforms HTTP 200)"},
+  "seed_data_creation": "Created TEST_iter28_sentry_fix_user device and one TEST_iter28_sentry script via API for rehearsal creation test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter28 confirms the Sentry-only fix. Definitive Android APK test is manual/user-side. If the user reports Save Script still fails on device, next steps would be: (1) check that RN new-arch axios uses fetch adapter, (2) inspect Sentry native module version compat with @sentry/react-native v7.2 + RN new arch, (3) consider fully removing @sentry/react-native from production build as a hard fallback.",
+  "rca of the issue": "Root cause (as noted by main agent): @sentry/react-native v7.2 auto-instrumentation of XMLHttpRequest under React Native New Architecture on Android silently breaks axios POST requests (Save Script fails with 'no status'). Chrome + server-side curl work because they bypass the RN XHR shim. Mitigation applied: disable performance/XHR auto-instrumentation via tracesSampleRate=0 and enableAutoPerformanceTracing=false; crash reporting still active in production."
+}
