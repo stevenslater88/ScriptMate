@@ -844,7 +844,25 @@ async def check_user_limits(user_id: str, action: str) -> Dict[str, Any]:
                     {"id": user["id"]},
                     {"$set": {"subscription_tier": "free"}}
                 )
-    
+
+    # ─── QA BYPASS (isolated, env-gated) ─────────────────────────────────────
+    # Setting QA_PREMIUM=true in the backend .env grants the caller full
+    # Premium-tier entitlements for the duration of this request only. It does
+    # NOT mutate the user record in Mongo, does NOT touch RevenueCat, and does
+    # NOT change the response of any endpoint that reads subscription_tier
+    # directly (only endpoints that route through check_user_limits() or
+    # GET /users/{id}/limits inherit the override). This flag is DEV/QA-only
+    # and MUST remain absent (or "false") in the production environment.
+    # Production entitlement logic is unchanged when the flag is not set.
+    qa_premium = os.environ.get("QA_PREMIUM", "").lower() == "true"
+    if qa_premium and tier != "premium":
+        logger.warning(
+            "[QA_BYPASS] Premium entitlement granted for user_id=%s "
+            "(real_tier=%s). Disable QA_PREMIUM in production.",
+            user_id, tier,
+        )
+        tier = "premium"
+
     limits = get_tier_limits(tier)
     
     result = {
@@ -853,6 +871,8 @@ async def check_user_limits(user_id: str, action: str) -> Dict[str, Any]:
         "limits": limits,
         "upgrade_reason": None
     }
+    if qa_premium:
+        result["qa_premium_bypass"] = True
     
     if action == "create_script" and user:
         scripts_count = await db.scripts.count_documents({"user_id": user["id"]})
@@ -1100,7 +1120,22 @@ async def get_user_limits(device_id: str):
         if tier == "premium" and user.get("subscription_end"):
             if datetime.utcnow() > user["subscription_end"]:
                 tier = "free"
-    
+
+    # ─── QA BYPASS (isolated, env-gated, mirrors check_user_limits) ──────────
+    # See docstring on check_user_limits() above. When QA_PREMIUM=true the
+    # response reports premium entitlements without mutating the user row.
+    # Absent flag → identical behaviour to production.
+    qa_premium = os.environ.get("QA_PREMIUM", "").lower() == "true"
+    qa_override_applied = False
+    if qa_premium and tier != "premium":
+        logger.warning(
+            "[QA_BYPASS] get_user_limits returning premium for device_id=%s "
+            "(real_tier=%s). Disable QA_PREMIUM in production.",
+            device_id, tier,
+        )
+        tier = "premium"
+        qa_override_applied = True
+
     limits = get_tier_limits(tier)
     
     # Get current usage
@@ -1112,7 +1147,7 @@ async def get_user_limits(device_id: str):
         if user.get("last_rehearsal_date") == today:
             rehearsals_today = user.get("rehearsals_today", 0)
     
-    return {
+    response = {
         "tier": tier,
         "limits": limits,
         "usage": {
@@ -1124,6 +1159,9 @@ async def get_user_limits(device_id: str):
         "is_premium": tier == "premium",
         "subscription_end": user.get("subscription_end") if user else None,
     }
+    if qa_override_applied:
+        response["qa_premium_bypass"] = True
+    return response
 
 @api_router.get("/subscription/plans")
 async def get_subscription_plans(region: str = "US"):

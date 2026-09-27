@@ -132,6 +132,59 @@ title=Jack, textLen=931
 - ✅ Regression tests pass against production (`https://scriptmate-8.emergent.host`) and preview
 - ⏳ Awaiting user's Samsung 1110-QA acceptance test (paste-save + Rehearsal → final line → Stats)
 
+### 2026-02 — Phase 2 Blocker: 'character' mode Premium error — BUILD 1110-QA
+
+**Real-device symptom (Samsung, 1110-QA):** Tapping the "Character" training-mode card on the script detail screen produced:
+> "Error — 'character' mode requires Premium. Upgrade to unlock all training modes!"
+
+**Root cause (reproduced via curl):** `MODE_OPTIONS` in `frontend/app/script/[id].tsx:52` offered `{ id: 'character', name: 'Character', premium: false, ... }`. That mode ID exists in NEITHER `FREE_TIER_LIMITS.available_modes` (`['full_read','cue_only']`) NOR `PREMIUM_TIER_LIMITS.available_modes` (6 modes: `full_read`, `cue_only`, `performance`, `missing_words`, `first_letter`, `loop`). Selecting it always hits the mode-gate branch in `check_user_limits` and returns 403 with the misleading "requires Premium" message — even for a real Premium user. Its stated behaviour ("focus on your character lines only") is functionally identical to `full_read` (reader plays every non-user character). Grep confirmed zero code references to `mode === 'character'` — pure dead UI.
+
+**Fix — smallest safe change (1 file, 1 removed entry):** removed the orphan `MODE_OPTIONS` row in `frontend/app/script/[id].tsx`. Premium gating on `performance` and `loop` remains intact. Backend and rehearsal engine untouched.
+
+**Regression test:** `backend/tests/test_phase2_character_mode_gate.py` (7 tests):
+- Free tier can create `full_read` (Phase 1 baseline).
+- Free tier can create `cue_only`.
+- `MODE_OPTIONS` no longer contains the orphan `id: 'character'`.
+- `MODE_OPTIONS` preserves `full_read`, `cue_only`, `performance`, `loop` entries.
+- Premium modes (`performance`, `loop`) still marked `premium: true`.
+- Backend still rejects `mode='character'` from stale clients (defence in depth).
+- Free-tier `performance`/`loop` still 403 when `QA_PREMIUM=false` (skipped when QA_PREMIUM=true on the running backend).
+
+### 2026-02 — QA Premium bypass (`QA_PREMIUM=true`) — BUILD 1110-QA
+
+**Purpose:** allow physical QA on Premium-gated flows without granting real Premium in production. Mirrors the `QA_UNLIMITED_REHEARSALS` pattern.
+
+**Contract:**
+- Backend `.env` flag `QA_PREMIUM=true` grants full Premium tier for the duration of a single request.
+- Does NOT mutate the user row in Mongo. Does NOT touch RevenueCat. Does NOT change any endpoint that reads `subscription_tier` directly.
+- Only affects endpoints routed through `check_user_limits()` and `GET /users/{id}/limits`.
+- When absent or `"false"`, entitlement logic is byte-identical to production.
+
+**Files changed (backend-only, +44/-6 lines):**
+- `backend/server.py::check_user_limits` — env-gated override that flips tier to `"premium"` when `QA_PREMIUM=true` (before `get_tier_limits`); logs `[QA_BYPASS]` warning; surfaces `qa_premium_bypass: True` on the returned dict.
+- `backend/server.py::get_user_limits` — mirror of the same override so `is_premium=True` propagates to the frontend `fetchUserLimits()` naturally.
+- `backend/.env` — added `QA_PREMIUM=true` for the running QA build.
+
+**Frontend: zero changes.** The frontend `isPremium` is already driven by `GET /users/{id}/limits.is_premium`; the backend override propagates automatically. `revenuecat.ts` is completely untouched.
+
+**Production protection:**
+- Flag lives in backend env only — never bundled with the Android APK.
+- `backend/.env` is gitignored — production deploys must explicitly set (or omit) the flag on the server.
+- Strict-string gate: `os.environ.get("QA_PREMIUM", "").lower() == "true"` — only the exact literal enables the bypass. Typos like `"yes"`, `"1"`, `"on"` will NOT activate it.
+- Every bypass emits a `[QA_BYPASS]` log line naming the affected `user_id` and the real tier.
+
+**Regression test:** `backend/tests/test_qa_premium_bypass.py` (13 tests, all PASS):
+- A. `GET /users/{id}/limits` reports `is_premium=True`, tier=`"premium"`, all 6 modes, all 6 voices when flag on.
+- B. All 4 premium-only rehearsal modes (`performance`, `loop`, `missing_words`, `first_letter`) creatable when flag on.
+- B. All 5 premium-only voices (`nova`, `onyx`, `shimmer`, `echo`, `fable`) creatable when flag on.
+- C. Static assertion: both `check_user_limits` and `get_user_limits` use the exact strict-string env guard, no unsafe patterns (`os.environ["QA_PREMIUM"]`, missing `.lower()`).
+- D. `frontend/services/revenuecat.ts` and `frontend/store/scriptStore.ts` do NOT reference `QA_PREMIUM` — bypass is purely backend.
+- E. Env-value semantics test locking the strict `.lower() == "true"` gate.
+
+**Cross-suite hardening:** existing `test_phase2_rehearsal_contract.py` and `test_phase2_character_mode_gate.py` now detect `QA_PREMIUM=true` via a probe call and `pytest.skip` the free-tier gating tests that cannot run in that mode; they still run normally with the flag off.
+
+**Awaiting real-device Android APK test with `QA_PREMIUM=true` on the QA backend.**
+
 **Root causes identified (real Android device evidence):**
 - **TXT "empty script" perception**: After loading a TXT file, the code populated `scriptText` state but stayed on the File tab which has NO visible text preview and NO Save button. User had no visible feedback of loaded content.
 - **PDF/DOCX Android native crash**: `FormData.append({uri:'content://…', type, name})` triggers a native SIGSEGV in RN's multipart encoder on new architecture when the ContentResolver stream can't be re-opened. Base64 fallback existed but the crash happened INSIDE the native FormData call before axios could throw.

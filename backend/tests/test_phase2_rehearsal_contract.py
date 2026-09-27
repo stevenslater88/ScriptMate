@@ -117,8 +117,22 @@ class TestRehearsalTotalLines:
 
 # ---- Tests: paywall gating on free tier ----
 
+def _qa_premium_active() -> bool:
+    """Return True if the running backend has QA_PREMIUM=true. When on, every
+    user is reported as premium and free-tier paywall assertions cannot run."""
+    try:
+        probe = f"phase2-probe-{uuid.uuid4().hex[:8]}"
+        requests.post(f"{API}/users", json={"device_id": probe}, timeout=10)
+        r = requests.get(f"{API}/users/{probe}/limits", timeout=10)
+        return bool(r.ok and r.json().get("qa_premium_bypass") is True)
+    except Exception:
+        return False
+
+
 class TestRehearsalPaywall:
     def test_invalid_mode_returns_403(self, created_script, device_id):
+        if _qa_premium_active():
+            pytest.skip("QA_PREMIUM=true — free-tier gating not exercisable on this backend")
         r = requests.post(f"{API}/rehearsals", json={
             "script_id": created_script["id"], "user_id": device_id,
             "user_character": created_script["lines"][0]["character"],
@@ -129,6 +143,8 @@ class TestRehearsalPaywall:
         assert "Premium" in r.text or "upgrade" in r.text.lower()
 
     def test_premium_voice_returns_403(self, created_script, device_id):
+        if _qa_premium_active():
+            pytest.skip("QA_PREMIUM=true — free-tier gating not exercisable on this backend")
         r = requests.post(f"{API}/rehearsals", json={
             "script_id": created_script["id"], "user_id": device_id,
             "user_character": created_script["lines"][0]["character"],
