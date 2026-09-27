@@ -35,7 +35,39 @@
 ### 2026-02 — Main rehearsal journey verified (testing_agent iteration_25)
 All 12 rehearsal-journey steps PASS. See `/app/test_reports/iteration_25.json`.
 
-### 2026-02 — Upload/Import stabilization + Diagnostics overhaul (BUILD 1108-DIAG)
+### 2026-02 — Upload/Import unification (BUILD 1108-DIAG, Phase 3)
+
+**Two real-device symptoms after previous fix:**
+- After successful PDF import, an unrelated `POST /api/scripts` from `handleSubmit` fails 15s later with Network Error → user perceives as "import save failed".
+- Imported scripts (PDF/DOCX/TXT) reach `/script/{id}` but **pressing Rehearse does nothing** — button silently disabled.
+
+**Root cause:** Two independent save paths existed. `upload-base64` persisted a Script directly; the paste path used `POST /api/scripts` via `script-parser.tsx`. Imported scripts skipped the character-selection step, so `is_user_character` was never set → line 489 of `script/[id].tsx` `disabled={!selectedCharacter || starting}` → Rehearse button inert.
+
+**Fix — approved option A: unify at the parser stage. Extraction-only endpoints + AsyncStorage stash + shared `/script-parser` flow.**
+
+Changes (4 files):
+1. **`backend/server.py` — `/scripts/upload` and `/scripts/upload-base64`**: converted from persistence to extraction-only. Now return `{raw_text, filename, title, size_bytes, source}`. **No `id` returned**, **no Mongo write**. Contract documented in docstrings. Verified via curl: 6/6 test payloads (TXT/PDF/DOCX × multipart/base64) return raw_text without persisting.
+2. **`frontend/app/upload.tsx`**: after successful extraction, stash `raw_text` + `title` into `AsyncStorage['pending_script_rawtext' / 'pending_script_title']` and `router.push('/script-parser?fromStorage=1&title=…')`. Same path Smart Parse V2 uses. Interstitial "Success — View Script" alert removed. Removed dead `scriptId` references.
+3. **`frontend/app/script/[id].tsx`**: comprehensive rehearse-button diagnostics — `DebugLog.setScreen`, `DebugLog.log('SCREEN_VIEW'...)`, `DebugLog.log('DIAGNOSTIC', 'Loaded script', {…})` with charactersCount, linesCount, hasUserCharacter, userCharacterName, firstThreeCharacters. `handleStartRehearsal` now logs `rehearse-btn` button press + start-rehearsal operation with full state + createRehearsal API request/response + navigation + errors (including if character not selected).
+
+**Architecture (post-fix):**
+- **ONE persistence owner**: `POST /api/scripts` via `script-parser.tsx handleSave`.
+- **ONE entry to rehearsal**: paste, TXT, PDF, DOCX all route through `/script-parser` → user picks character → `createScript` + `updateScript(user_character)` → `/script/{id}` with `is_user_character=true` set → Rehearse enabled.
+- **No duplicate saves possible.**
+
+**Verification:**
+- Backend contract: 6/6 extraction paths return `{raw_text, title, filename, source}` with `has_id=False` and 0 rows persisted ✅
+- Frontend web E2E: simulated PDF import (via AsyncStorage stash + navigate to `/script-parser?fromStorage=1`) → parser rendered 2 chars/4 lines → picked JACK → save → DB shows `is_user_character=true` for JACK → `/script/{id}` auto-selected JACK → Rehearse button opacity 1, aria-disabled None → click → `createRehearsal` 200 → nav to `/rehearsal/{id}` succeeded ✅
+- Diagnostic report post-navigation contains full trace: SCREEN_VIEW → DIAGNOSTIC "Loaded script" → BUTTON_PRESS rehearse-btn → FUNCTION_START start-rehearsal → API_REQUEST → API_RESPONSE → NAVIGATION → rehearsal opens ✅
+
+**Files changed in this task:**
+- `backend/server.py`
+- `frontend/app/upload.tsx`
+- `frontend/app/script/[id].tsx`
+
+**No dependency changes. No new packages. No feature deletion.** Rehearsal engine, teleprompter, TTS, voice gating, self-tape, auditions, daily-drill, RevenueCat, ElevenLabs, Sentry, script parser core, library, Bug Report / diagnostics infrastructure — all untouched.
+
+**Awaiting real-device Android APK test.**
 
 **Root causes identified (real Android device evidence):**
 - **TXT "empty script" perception**: After loading a TXT file, the code populated `scriptText` state but stayed on the File tab which has NO visible text preview and NO Save button. User had no visible feedback of loaded content.

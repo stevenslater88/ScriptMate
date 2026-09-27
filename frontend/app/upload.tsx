@@ -298,7 +298,7 @@ export default function UploadScreen() {
             },
             { headers: { 'Content-Type': 'application/json' }, timeout: UPLOAD_TIMEOUT }
           );
-          DebugLog.importStage(`${fileType}-base64-ok`, { status: resp?.status, durationMs: Date.now() - t0, scriptId: resp?.data?.id });
+          DebugLog.importStage(`${fileType}-base64-ok`, { status: resp?.status, durationMs: Date.now() - t0, chars: resp?.data?.raw_text?.length || 0 });
           return resp;
         } catch (err: any) {
           const status = err?.response?.status ?? 'no status';
@@ -317,7 +317,7 @@ export default function UploadScreen() {
         DebugLog.importStage(`${fileType}-formdata-post`, { url: uploadUrl });
         try {
           const resp = await axios.post(uploadUrl, formData, { timeout: UPLOAD_TIMEOUT });
-          DebugLog.importStage(`${fileType}-formdata-ok`, { status: resp?.status, durationMs: Date.now() - t0, scriptId: resp?.data?.id });
+          DebugLog.importStage(`${fileType}-formdata-ok`, { status: resp?.status, durationMs: Date.now() - t0, chars: resp?.data?.raw_text?.length || 0 });
           return resp;
         } catch (err: any) {
           const status = err?.response?.status ?? 'no status';
@@ -353,27 +353,64 @@ export default function UploadScreen() {
         throw uploadErr;
       }
 
-      console.log('[Upload] Server response received, id:', response?.data?.id);
-      const scriptId = response?.data?.id;
-      if (!scriptId) {
-        DebugLog.errorCaught(`${fileType}-no-script-id`, new Error('Server response missing id'));
-        Alert.alert('Upload Failed', 'Server did not return a script id.');
+      // Extract raw_text from response; endpoints now return {raw_text, filename, title, size_bytes, source}
+      const extractedText = response?.data?.raw_text;
+      const suggestedTitle = response?.data?.title || (file.name || 'Untitled').replace(/\.[^/.]+$/, '');
+      const extractedLen = typeof extractedText === 'string' ? extractedText.length : 0;
+      console.log(`[Upload] Extraction complete. chars=${extractedLen}, source=${response?.data?.source}`);
+
+      if (!extractedText || !extractedText.trim()) {
+        DebugLog.errorCaught(`${fileType}-no-text`, new Error('Server returned no raw_text'));
+        Alert.alert('Import Failed', 'No readable text was extracted from the file.');
         setLoading(false);
         DebugLog.clearOperation();
         return;
       }
-      DebugLog.importStage(`${fileType}-import-success`, { scriptId });
+
+      // ► UNIFIED FLOW: Route to /script-parser via AsyncStorage — same path
+      //   the Paste Text → Smart Parse V2 button uses. This means:
+      //   1. User reviews extracted text, picks character in the parser.
+      //   2. handleSave in script-parser.tsx is the SINGLE owner of
+      //      POST /api/scripts persistence.
+      //   3. updateScript(user_character) fires from the parser, so the
+      //      resulting Script has is_user_character set → Rehearse button
+      //      is enabled on /script/{id}.
+      try {
+        await AsyncStorage.setItem('pending_script_rawtext', extractedText);
+        await AsyncStorage.setItem('pending_script_title', suggestedTitle);
+        DebugLog.importStage(`${fileType}-stashed-for-parser`, {
+          chars: extractedLen,
+          title: suggestedTitle.substring(0, 40),
+        });
+      } catch (stashErr: any) {
+        DebugLog.errorCaught(`${fileType}-asyncstorage-stash`, stashErr);
+        Alert.alert('Import Failed', 'Could not stage extracted text for parsing. Please retry.');
+        setLoading(false);
+        DebugLog.clearOperation();
+        return;
+      }
+
+      DebugLog.importStage(`${fileType}-import-success`, {
+        chars: extractedLen,
+        title: suggestedTitle.substring(0, 40),
+      });
       DebugLog.clearOperation();
       setLoading(false);
-      Alert.alert('Success', 'Script uploaded and parsed successfully!', [
-        {
-          text: 'View Script',
-          onPress: () => {
-            try { router.replace(`/script/${scriptId}`); }
-            catch (navErr: any) { DebugLog.errorCaught('post-upload-nav', navErr); }
-          },
-        },
-      ]);
+
+      // Navigate straight to the parser — same as Smart Parse V2 (no interstitial alert).
+      DebugLog.navigation('UploadScreen', 'script-parser', {
+        source: fileType,
+        chars: extractedLen,
+      });
+      try {
+        router.push({
+          pathname: '/script-parser',
+          params: { title: suggestedTitle, fromStorage: '1' },
+        });
+      } catch (navErr: any) {
+        DebugLog.errorCaught('post-upload-nav', navErr);
+        Alert.alert('Navigation Error', 'Could not open the parser. Please retry.');
+      }
     } catch (error: any) {
       // Outer guard: no exception from here on may crash the app.
       try {

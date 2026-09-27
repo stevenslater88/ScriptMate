@@ -18,6 +18,7 @@ import { getSettings, saveSettings } from '../../services/syncService';
 import useRevenueCat from '../../hooks/useRevenueCat';
 import { trackUpgradeTriggered } from '../../services/analyticsService';
 import VoiceAssignment from '../../components/VoiceAssignment';
+import { DebugLog } from '../../services/debugLogService';
 
 const VOICE_OPTIONS = [
   { id: 'alloy', name: 'Alloy', description: 'Neutral, balanced', premium: false },
@@ -103,6 +104,8 @@ export default function ScriptDetailScreen() {
 
   useEffect(() => {
     if (id) {
+      DebugLog.setScreen('ScriptScreen');
+      DebugLog.log('SCREEN_VIEW', 'ScriptScreen', 'Opened script screen', { scriptId: id });
       fetchScript(id);
     }
   }, [id]);
@@ -111,6 +114,15 @@ export default function ScriptDetailScreen() {
     if (currentScript) {
       const characters = currentScript.characters || [];
       const userChar = characters.find((c) => c.is_user_character);
+      DebugLog.log('DIAGNOSTIC', 'ScriptScreen', 'Loaded script', {
+        scriptId: currentScript.id,
+        title: currentScript.title?.substring(0, 40),
+        charactersCount: characters.length,
+        linesCount: currentScript.lines?.length || 0,
+        hasUserCharacter: !!userChar,
+        userCharacterName: userChar?.name,
+        firstThreeCharacters: characters.slice(0, 3).map(c => c.name).join(', '),
+      });
       if (userChar) {
         setSelectedCharacter(userChar.name);
       }
@@ -141,20 +153,60 @@ export default function ScriptDetailScreen() {
   };
 
   const handleStartRehearsal = async () => {
+    // Diagnostic: record the exact state at the moment the Rehearse button was pressed.
+    DebugLog.buttonPress('rehearse-btn', 'ScriptScreen');
+    const chars = currentScript?.characters || [];
+    const userChar = chars.find((c: any) => c.is_user_character);
+    DebugLog.setOperation('start-rehearsal', {
+      scriptId: id,
+      title: currentScript?.title?.substring(0, 40),
+      selectedCharacter,
+      selectedMode,
+      selectedVoice,
+      charactersCount: chars.length,
+      hasUserCharacterInDb: !!userChar,
+      userCharacterInDb: userChar?.name,
+      linesCount: currentScript?.lines?.length || 0,
+    });
+
     if (!selectedCharacter) {
+      DebugLog.errorCaught('rehearse-no-character', new Error('No character selected'), {
+        charactersCount: chars.length,
+        firstCharacter: chars[0]?.name,
+      });
       Alert.alert('Select Character', 'Please select your character before starting rehearsal');
+      DebugLog.clearOperation();
       return;
     }
 
     setStarting(true);
     try {
+      DebugLog.log('API_REQUEST', 'ScriptScreen', 'createRehearsal', {
+        scriptId: id, character: selectedCharacter, mode: selectedMode, voice: selectedVoice,
+      });
       const rehearsal = await createRehearsal(id!, selectedCharacter, selectedMode, selectedVoice);
       if (rehearsal) {
-        router.push(`/rehearsal/${rehearsal.id}`);
+        DebugLog.log('API_RESPONSE', 'ScriptScreen', 'createRehearsal ok', { rehearsalId: rehearsal.id });
+        try {
+          DebugLog.navigation('ScriptScreen', `rehearsal/${rehearsal.id}`);
+          router.push(`/rehearsal/${rehearsal.id}`);
+        } catch (navErr: any) {
+          DebugLog.errorCaught('rehearsal-nav', navErr, { rehearsalId: rehearsal.id });
+          Alert.alert('Navigation Error', 'Could not open rehearsal screen.');
+        }
+      } else {
+        // createRehearsal returned falsy — surface it as a real error rather than silent
+        const storeErr = useScriptStore.getState().error;
+        DebugLog.errorCaught('rehearse-null-response', new Error(storeErr || 'createRehearsal returned null'), {
+          storeError: storeErr,
+        });
+        Alert.alert('Error', storeErr || 'Failed to start rehearsal — please try again.');
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to start rehearsal');
+    } catch (error: any) {
+      DebugLog.errorCaught('rehearse-exception', error, { scriptId: id, character: selectedCharacter });
+      Alert.alert('Error', error?.message || 'Failed to start rehearsal');
     } finally {
+      DebugLog.clearOperation();
       setStarting(false);
     }
   };

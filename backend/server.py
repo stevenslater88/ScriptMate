@@ -1315,16 +1315,24 @@ async def upload_script(
     title: str = Form(...),
     user_id: str = Form(default="default")
 ):
-    """Upload a PDF, Word document, or text file as a script"""
+    """Extract text from a PDF, Word document, or text file.
+
+    ⚠️ CONTRACT: This endpoint is EXTRACTION-ONLY. It does NOT persist a
+    Script row. The frontend is the single owner of persistence and calls
+    POST /api/scripts once the user has reviewed the extracted text and
+    picked their character (via the script-parser screen).
+
+    Returns: { raw_text, filename, title, size_bytes, source: 'multipart' }
+    """
     try:
-        # Check user limits
+        # Check user limits (extraction still counts against tier limits)
         limits_check = await check_user_limits(user_id, "create_script")
         if not limits_check["allowed"]:
             raise HTTPException(status_code=403, detail=limits_check["upgrade_reason"])
-        
+
         content = await file.read()
-        filename_lower = file.filename.lower()
-        
+        filename_lower = (file.filename or "file").lower()
+
         # Check file size for free tier
         file_size_mb = len(content) / (1024 * 1024)
         max_size = limits_check["limits"]["max_file_size_mb"]
@@ -1333,7 +1341,7 @@ async def upload_script(
                 status_code=403,
                 detail=f"File size ({file_size_mb:.1f}MB) exceeds limit ({max_size}MB). Upgrade to Premium for larger files!"
             )
-        
+
         if filename_lower.endswith('.pdf'):
             raw_text = extract_text_from_pdf(content)
         elif filename_lower.endswith(('.docx',)):
@@ -1351,41 +1359,54 @@ async def upload_script(
                     raw_text = content.decode('latin-1')
                 except Exception:
                     raise HTTPException(
-                        status_code=400, 
+                        status_code=400,
                         detail="Unsupported file type. Use PDF, Word (.docx), or text files (.txt)"
                     )
-        
-        script_data = ScriptCreate(title=title, raw_text=raw_text, user_id=user_id)
-        return await create_script(script_data)
+
+        if not raw_text or not raw_text.strip():
+            raise HTTPException(status_code=400, detail="No readable text found in the file.")
+
+        return {
+            "raw_text": raw_text,
+            "filename": file.filename,
+            "title": title,
+            "size_bytes": len(content),
+            "source": "multipart",
+        }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error uploading script: {e}")
-        raise HTTPException(status_code=500, detail="Failed to upload script. Please try again.")
+        logger.error(f"Error extracting script: {e}")
+        raise HTTPException(status_code=500, detail="Failed to extract script. Please try again.")
 
 
 @api_router.post("/scripts/upload-base64")
 async def upload_script_base64(request: Request):
-    """Fallback upload endpoint that accepts base64-encoded file content.
-    Used when multipart/form-data upload fails on Android."""
+    """Base64 extraction endpoint (Android-safe alternative to multipart).
+
+    ⚠️ CONTRACT: Same as /scripts/upload — EXTRACTION-ONLY. Does NOT persist
+    a Script. Frontend is the single owner of persistence.
+
+    Returns: { raw_text, filename, title, size_bytes, source: 'base64' }
+    """
     try:
         body = await request.json()
         title = body.get("title", "Untitled Script")
-        filename = body.get("filename", "file.txt").lower()
+        filename = (body.get("filename", "file.txt") or "file.txt").lower()
         file_base64 = body.get("file_data", "")
         user_id = body.get("user_id", "default")
-        
+
         if not file_base64:
             raise HTTPException(status_code=400, detail="No file data provided")
-        
+
         import base64
         content = base64.b64decode(file_base64)
-        
+
         # Check user limits
         limits_check = await check_user_limits(user_id, "create_script")
         if not limits_check["allowed"]:
             raise HTTPException(status_code=403, detail=limits_check["upgrade_reason"])
-        
+
         file_size_mb = len(content) / (1024 * 1024)
         max_size = limits_check["limits"]["max_file_size_mb"]
         if file_size_mb > max_size:
@@ -1393,7 +1414,7 @@ async def upload_script_base64(request: Request):
                 status_code=403,
                 detail=f"File size ({file_size_mb:.1f}MB) exceeds limit ({max_size}MB). Upgrade to Premium!"
             )
-        
+
         if filename.endswith('.pdf'):
             raw_text = extract_text_from_pdf(content)
         elif filename.endswith(('.docx',)):
@@ -1414,14 +1435,22 @@ async def upload_script_base64(request: Request):
                         status_code=400,
                         detail="Unsupported file type. Use PDF, Word (.docx), or text files (.txt)"
                     )
-        
-        script_data = ScriptCreate(title=title, raw_text=raw_text, user_id=user_id)
-        return await create_script(script_data)
+
+        if not raw_text or not raw_text.strip():
+            raise HTTPException(status_code=400, detail="No readable text found in the file.")
+
+        return {
+            "raw_text": raw_text,
+            "filename": body.get("filename") or "file",
+            "title": title,
+            "size_bytes": len(content),
+            "source": "base64",
+        }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error in base64 upload: {e}")
-        raise HTTPException(status_code=500, detail="Failed to upload script. Please try again.")
+        raise HTTPException(status_code=500, detail="Failed to extract file. Please try again.")
 
 
 @api_router.get("/scripts", response_model=List[Script])
