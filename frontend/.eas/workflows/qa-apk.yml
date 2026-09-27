@@ -1,0 +1,42 @@
+# EAS Workflow — ScriptMate QA APK
+#
+# Purpose:
+#   Automatically build a signed Android QA APK on every push to `main`
+#   using the existing `preview` profile from ../eas.json.
+#
+# Scope guarantees (per Master Prompt / fork job 2026-02):
+#   * This file adds infrastructure ONLY. It does NOT modify application
+#     code, dependencies, RevenueCat, Premium/QA_PREMIUM logic, or any
+#     other build profile.
+#   * The `preview` profile it invokes is unchanged (see ../eas.json:16-35).
+#   * No production AAB is built here.
+#   * No secrets/tokens are referenced — auth flows through the Expo
+#     GitHub App on the connected repository.
+#
+# Location contract (required by EAS Workflows):
+#   Workflow files live in `.eas/workflows/` at the same directory level
+#   as `eas.json`. Our `eas.json` is at `frontend/eas.json`, so this
+#   file sits at `frontend/.eas/workflows/qa-apk.yml`.
+#
+# Prerequisites (one-time, in the browser — user action):
+#   1. Push this repo to GitHub via Emergent's "Save to GitHub".
+#   2. Install the Expo GitHub App on the repo (expo.dev → Account
+#      settings → Integrations → GitHub → Install).
+#   3. On expo.dev → project "scriptmate" → Configuration → link the
+#      GitHub repository.
+#   Once linked, EAS auto-discovers this workflow and runs it on push.
+
+name: qa-apk
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_android_qa_apk:
+    name: Build Android QA APK (preview profile)
+    type: build
+    params:
+      platform: android
+      profile: preview
