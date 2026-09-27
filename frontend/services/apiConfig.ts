@@ -5,8 +5,9 @@
  * BUILD 1106 - DIAGNOSTIC VERSION
  */
 
-// THE ONLY BACKEND URL - DO NOT CHANGE WITHOUT TESTING
-export const API_BASE_URL = 'https://script-recovery-1.preview.emergentagent.com';
+// Backend URL — reads from EXPO_PUBLIC_BACKEND_URL at build/runtime, falls back to production
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_BACKEND_URL || 'https://scriptmate-8.emergent.host';
 
 export const API_TIMEOUT = 15000;
 

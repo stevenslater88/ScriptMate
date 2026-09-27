@@ -6,8 +6,9 @@
  * This file only provides the value for Constants.expoConfig.extra for reference.
  */
 
-// HARDCODED - DO NOT USE process.env FOR BACKEND URL
-const BACKEND_URL = 'https://script-recovery-1.preview.emergentagent.com';
+// Backend URL — reads from EXPO_PUBLIC_BACKEND_URL, falls back to production
+const BACKEND_URL =
+  process.env.EXPO_PUBLIC_BACKEND_URL || 'https://scriptmate-8.emergent.host';
 
 const REVENUECAT_GOOGLE_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY ||
