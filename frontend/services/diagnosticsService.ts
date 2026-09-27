@@ -9,7 +9,7 @@ import { API_BASE_URL, API_CONFIG_SOURCE } from './apiConfig';
 
 // Build fingerprint — imported from _layout.tsx would create a circular dependency,
 // so we duplicate the exact same value here.
-export const BUILD_FINGERPRINT = 'SM8-FIX-0315A';
+export const BUILD_FINGERPRINT = 'SM8-1108-DIAG';
 
 // BUILD SOURCE VERIFICATION - This proves which code was actually built
 // If device shows different values, the build is from different code
@@ -357,6 +357,189 @@ export const copyDiagnosticsToClipboard = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Failed to copy diagnostics:', error);
+    return false;
+  }
+};
+
+/**
+ * Format a compact ChatGPT-friendly diagnostic report.
+ * Structure matches the spec: BUILD / DEVICE / TIME / NAVIGATION / OPERATION /
+ * API / IMPORT / ERROR / RECENT LOG.
+ *
+ * Sensitive data is already redacted at capture time by DebugLog.maskSensitiveData.
+ * We additionally strip any keys matching credential patterns here.
+ */
+const CREDENTIAL_KEY_RE = /(authorization|token|api[_-]?key|secret|password|passwd|cookie|session|bearer|purchase_?token|credential|private)/i;
+function stripSensitiveDeep(value: any, depth = 0): any {
+  if (depth > 4) return '[DEPTH]';
+  if (value == null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(v => stripSensitiveDeep(v, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (CREDENTIAL_KEY_RE.test(k)) continue;
+    out[k] = stripSensitiveDeep(v, depth + 1);
+  }
+  return out;
+}
+
+export const formatChatGPTDiagnosticReport = async (): Promise<string> => {
+  // Lazy import to avoid a circular reference with debugLogService.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { DebugLog } = require('./debugLogService');
+
+  let diag: any = {};
+  try { diag = await getDiagnostics(); } catch (e: any) {
+    diag = { error: `getDiagnostics failed: ${e?.message}` };
+  }
+  const lastErrorEntry = DebugLog.getLastError ? DebugLog.getLastError() : null;
+  const logs = DebugLog.getLogs ? DebugLog.getLogs() : [];
+
+  // Find the most recent API error (if any) for HTTP status.
+  const lastApi = logs.find((l: any) => l.eventType === 'API_ERROR' || l.eventType === 'API_RESPONSE');
+
+  // Find the most recent import stage.
+  const lastImportStage = logs.find((l: any) => l.source === 'ImportPipeline');
+
+  const lastErrMeta = stripSensitiveDeep(lastErrorEntry?.metadata || {});
+
+  const lines: string[] = [];
+  lines.push('SCRIPT M8 DIAGNOSTIC REPORT');
+  lines.push('===========================');
+  lines.push('');
+  lines.push('BUILD:');
+  lines.push(`Build ID: ${diag.buildProof || 'unknown'}`);
+  lines.push(`Version: ${diag.appVersion || 'unknown'}`);
+  lines.push(`VersionCode: ${diag.versionCode || 'unknown'}`);
+  lines.push(`Fingerprint: ${diag.buildFingerprint || BUILD_FINGERPRINT}`);
+  lines.push('');
+  lines.push('DEVICE:');
+  lines.push(`Model: ${diag.deviceModel || 'unknown'}`);
+  lines.push(`OS: ${diag.osVersion || 'unknown'}`);
+  lines.push(`Runtime: react-native / expo (${diag.platform || 'unknown'})`);
+  lines.push('');
+  lines.push('TIME:');
+  lines.push(`Timestamp: ${new Date().toISOString()}`);
+  lines.push('');
+  lines.push('NAVIGATION:');
+  lines.push(`Current Screen: ${DebugLog.getCurrentScreen ? DebugLog.getCurrentScreen() : 'unknown'}`);
+  lines.push(`Previous Screen: ${DebugLog.getPreviousScreen ? DebugLog.getPreviousScreen() : 'unknown'}`);
+  lines.push('');
+  lines.push('OPERATION:');
+  lines.push(`Operation: ${DebugLog.getCurrentOperation ? DebugLog.getCurrentOperation() : 'idle'}`);
+  lines.push(`Last Operation: ${DebugLog.getLastOperation ? DebugLog.getLastOperation() : 'idle'}`);
+  lines.push('');
+  lines.push('API:');
+  lines.push(`Base URL: ${API_BASE_URL}`);
+  if (lastApi) {
+    const m = stripSensitiveDeep(lastApi.metadata || {});
+    lines.push(`Endpoint: ${m.endpoint || m.url || '(none)'}`);
+    lines.push(`HTTP Status: ${m.status ?? '(none)'}`);
+    if (m.errorMessage) lines.push(`Last API Error: ${m.errorMessage}`);
+  } else {
+    lines.push('Endpoint: (no recent API call)');
+    lines.push('HTTP Status: (none)');
+  }
+  lines.push('');
+  lines.push('IMPORT:');
+  if (lastImportStage) {
+    const m = stripSensitiveDeep(lastImportStage.metadata || {});
+    lines.push(`File Type: ${m.fileType || 'unknown'}`);
+    lines.push(`File Name: ${m.fileName || 'unknown'}`);
+    lines.push(`File Size: ${m.fileSize ?? 'unknown'}`);
+    lines.push(`Parser: ${m.parser || 'unknown'}`);
+    lines.push(`Parser Stage: ${lastImportStage.message || 'unknown'}`);
+  } else {
+    lines.push('File Type: (no recent import)');
+    lines.push('File Name: -');
+    lines.push('File Size: -');
+    lines.push('Parser: -');
+    lines.push('Parser Stage: -');
+  }
+  lines.push('');
+  lines.push('ERROR:');
+  if (lastErrorEntry) {
+    lines.push(`Message: ${(lastErrMeta.errorMessage || lastErrorEntry.message || '').toString().substring(0, 400)}`);
+    lines.push(`Stack: ${(lastErrMeta.stack || '').toString().substring(0, 1500)}`);
+    lines.push(`Unhandled Promise: ${lastErrorEntry.source === 'UNHANDLED_PROMISE_REJECTION' ? 'yes' : 'no'}`);
+  } else {
+    lines.push('Message: (no error captured)');
+    lines.push('Stack: -');
+    lines.push('Unhandled Promise: no');
+  }
+  lines.push('');
+  lines.push('RECENT LOG:');
+  // Take the last ~150 entries (newest first — buffer is already ordered newest-first).
+  const recent = logs.slice(0, 150);
+  recent.forEach((entry: any, idx: number) => {
+    const meta = stripSensitiveDeep(entry.metadata || {});
+    const metaStr = Object.keys(meta).length > 0
+      ? ` ${JSON.stringify(meta).substring(0, 300)}`
+      : '';
+    lines.push(`${idx + 1}. [${entry.timestamp}] [${entry.eventType}] [${entry.screen}] ${entry.source}: ${entry.message}${metaStr}`);
+  });
+  if (recent.length === 0) lines.push('(no log entries)');
+
+  lines.push('');
+  lines.push('NATIVE CRASH:');
+  lines.push('If Android showed "ScriptMate Pro closed because this app has a bug",');
+  lines.push('the native-side crash details require adb logcat and are NOT visible to this JS report.');
+  lines.push('The entries above capture everything the app knew immediately before the crash.');
+  lines.push('');
+  lines.push('=== end of report ===');
+
+  return lines.join('\n');
+};
+
+/**
+ * Copy the ChatGPT-friendly diagnostic report to the clipboard.
+ */
+export const copyChatGPTDiagnosticReport = async (): Promise<boolean> => {
+  try {
+    const text = await formatChatGPTDiagnosticReport();
+    await Clipboard.setStringAsync(text);
+    return true;
+  } catch (error) {
+    console.error('Failed to copy diagnostic report:', error);
+    return false;
+  }
+};
+
+/**
+ * Copy just the last error + immediately preceding context.
+ */
+export const copyLastErrorToClipboard = async (): Promise<boolean> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { DebugLog } = require('./debugLogService');
+    const last = DebugLog.getLastError ? DebugLog.getLastError() : null;
+    const logs = DebugLog.getLogs ? DebugLog.getLogs() : [];
+
+    const lines: string[] = [];
+    lines.push('SCRIPT M8 — LAST ERROR');
+    lines.push('======================');
+    lines.push(`Timestamp: ${new Date().toISOString()}`);
+    lines.push(`Screen: ${DebugLog.getCurrentScreen ? DebugLog.getCurrentScreen() : 'unknown'}`);
+    lines.push(`Operation: ${DebugLog.getCurrentOperation ? DebugLog.getCurrentOperation() : 'idle'}`);
+    lines.push('');
+    if (last) {
+      const meta = stripSensitiveDeep(last.metadata || {});
+      lines.push(`Time: ${last.timestamp}`);
+      lines.push(`Source: ${last.source}`);
+      lines.push(`Message: ${last.message}`);
+      lines.push(`Metadata: ${JSON.stringify(meta, null, 2)}`);
+    } else {
+      lines.push('(no error captured yet)');
+    }
+    lines.push('');
+    lines.push('--- Preceding context (20 entries) ---');
+    const preceding = logs.slice(0, 20);
+    preceding.forEach((e: any, idx: number) => {
+      lines.push(`${idx + 1}. [${e.timestamp}] [${e.eventType}] ${e.source}: ${e.message}`);
+    });
+    await Clipboard.setStringAsync(lines.join('\n'));
+    return true;
+  } catch (error) {
+    console.error('Failed to copy last error:', error);
     return false;
   }
 };

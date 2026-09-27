@@ -971,27 +971,71 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
     }
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """Extract text from PDF file"""
+    """Extract text from PDF file. Returns extracted text or raises HTTPException with a specific reason."""
     try:
         pdf_file = io.BytesIO(pdf_bytes)
         pdf_reader = PyPDF2.PdfReader(pdf_file)
-        text = ""
+        # Detect encrypted PDFs — they extract to empty strings which the user
+        # would perceive as an "empty script".
+        if getattr(pdf_reader, "is_encrypted", False):
+            try:
+                pdf_reader.decrypt("")
+            except Exception:
+                pass
+            if getattr(pdf_reader, "is_encrypted", False):
+                raise HTTPException(
+                    status_code=400,
+                    detail="This PDF is password-protected. Please remove the password and try again.",
+                )
+        text_parts = []
         for page in pdf_reader.pages:
-            text += page.extract_text() + "\n"
+            try:
+                t = page.extract_text() or ""
+            except Exception as page_err:
+                logger.warning(f"PDF page extract failed: {page_err}")
+                t = ""
+            if t:
+                text_parts.append(t)
+        text = "\n".join(text_parts)
+        if not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="No readable text found in this PDF. It may be a scanned image — try a text-based PDF or export from a word processor.",
+            )
         return text
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error extracting PDF text: {e}")
         raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
 
 def extract_text_from_docx(docx_bytes: bytes) -> str:
-    """Extract text from Word document (.docx)"""
+    """Extract text from Word document (.docx). Raises HTTPException with a specific reason on failure."""
     try:
         docx_file = io.BytesIO(docx_bytes)
         doc = Document(docx_file)
-        text = ""
+        parts = []
         for paragraph in doc.paragraphs:
-            text += paragraph.text + "\n"
+            if paragraph.text:
+                parts.append(paragraph.text)
+        # Also pull text from tables (common in scripts formatted as tables)
+        try:
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        if cell.text:
+                            parts.append(cell.text)
+        except Exception as tbl_err:
+            logger.warning(f"DOCX table extract failed: {tbl_err}")
+        text = "\n".join(parts)
+        if not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="No readable text found in this Word document.",
+            )
         return text
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error extracting DOCX text: {e}")
         raise HTTPException(status_code=400, detail=f"Failed to parse Word document: {str(e)}")

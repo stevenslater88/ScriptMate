@@ -81,6 +81,10 @@ function generateRequestId(): string {
 
 let logBuffer: DebugLogEntry[] = [];
 let currentScreen = 'unknown';
+let previousScreen = 'unknown';
+let currentOperation = 'idle';
+let lastOperation = 'idle';
+let lastError: DebugLogEntry | null = null;
 let isInitialized = false;
 
 // ─── MASKING HELPERS ───────────────────────────────────────────────────────
@@ -154,6 +158,8 @@ function addLog(entry: DebugLogEntry): void {
 
 // ─── PERSISTENCE ───────────────────────────────────────────────────────────
 
+const LAST_ERROR_KEY = 'SM8_LAST_ERROR';
+
 async function persistLogs(): Promise<void> {
   try {
     // Only persist last 100 for storage efficiency
@@ -161,6 +167,18 @@ async function persistLogs(): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
   } catch (e) {
     // Silent fail - don't break app for logging
+  }
+}
+
+async function persistLastError(entry: DebugLogEntry | null): Promise<void> {
+  try {
+    if (entry) {
+      await AsyncStorage.setItem(LAST_ERROR_KEY, JSON.stringify(entry));
+    } else {
+      await AsyncStorage.removeItem(LAST_ERROR_KEY);
+    }
+  } catch (e) {
+    // Silent fail
   }
 }
 
@@ -176,6 +194,14 @@ async function loadPersistedLogs(): Promise<void> {
       }));
       logBuffer = [...logBuffer, ...marked].slice(0, MAX_LOG_ENTRIES);
     }
+    // Restore last error too — survives app restart/crash so the diagnostic
+    // report still contains the error that caused the crash.
+    try {
+      const lastErrStr = await AsyncStorage.getItem(LAST_ERROR_KEY);
+      if (lastErrStr) {
+        lastError = JSON.parse(lastErrStr) as DebugLogEntry;
+      }
+    } catch { /* ignore */ }
     isInitialized = true;
   } catch (e) {
     isInitialized = true;
@@ -202,11 +228,100 @@ export const DebugLog = {
    */
   setScreen(screenName: string): void {
     const prev = currentScreen;
-    currentScreen = screenName;
     if (prev !== screenName) {
+      previousScreen = prev;
+      currentScreen = screenName;
       this.log('SCREEN_VIEW', 'Navigation', `Screen: ${screenName}`, { from: prev });
     }
   },
+
+  /**
+   * Set current operation label — used by the diagnostic report to show
+   * exactly what the app was doing when a failure occurred.
+   */
+  setOperation(op: string, details?: Record<string, unknown>): void {
+    lastOperation = currentOperation;
+    currentOperation = op;
+    this.log('FUNCTION_START', 'Operation', `op: ${op}`, details);
+  },
+
+  clearOperation(): void {
+    lastOperation = currentOperation;
+    currentOperation = 'idle';
+  },
+
+  /**
+   * Structured error capture — used by global error handler and try/catch sites.
+   * Adds the entry to the ring buffer AND stores it as the "last error" for
+   * quick copy-to-clipboard.
+   */
+  errorCaught(context: string, err: unknown, extra?: Record<string, unknown>): void {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    const errorStack = err instanceof Error ? (err.stack || '').substring(0, 2000) : undefined;
+    const errorName = err instanceof Error ? err.name : typeof err;
+    const meta: Record<string, unknown> = {
+      context,
+      errorName,
+      errorMessage: errorMsg,
+      stack: errorStack,
+      currentScreen,
+      previousScreen,
+      currentOperation,
+      lastOperation,
+      ...(extra || {}),
+    };
+    const entry = createLogEntry('FUNCTION_ERROR', context, `ERROR in ${context}: ${errorMsg}`, meta);
+    lastError = entry;
+    persistLastError(entry);
+    addLog(entry);
+    console.log(`[DebugLog] [ERROR_CAUGHT] [${context}] ${errorMsg}`);
+  },
+
+  /**
+   * Log a stage of a file-import / parser pipeline.
+   * Every TXT/PDF/DOCX import step should log a stage so the diagnostic
+   * report shows exactly where the pipeline stopped.
+   */
+  importStage(
+    stage: string,
+    details?: Record<string, unknown>
+  ): void {
+    this.log('DIAGNOSTIC', 'ImportPipeline', `stage: ${stage}`, details);
+  },
+
+  /**
+   * Log an HTTP error with full response snapshot (status, body preview).
+   */
+  httpErrorSnapshot(
+    method: string,
+    url: string,
+    status: number | string,
+    responseBody: unknown,
+    errorMessage: string,
+  ): void {
+    let bodyPreview = '';
+    try {
+      bodyPreview = typeof responseBody === 'string'
+        ? responseBody.substring(0, 500)
+        : JSON.stringify(responseBody).substring(0, 500);
+    } catch { bodyPreview = '[unserializable]'; }
+    const entry = createLogEntry('API_ERROR', 'HttpErrorSnapshot',
+      `${method} ${url} -> ${status}`,
+      { method, url, status, errorMessage, responseBody: bodyPreview, currentScreen, currentOperation }
+    );
+    lastError = entry;
+    persistLastError(entry);
+    addLog(entry);
+  },
+
+  /**
+   * Getters for the diagnostic report.
+   */
+  getCurrentScreen(): string { return currentScreen; },
+  getPreviousScreen(): string { return previousScreen; },
+  getCurrentOperation(): string { return currentOperation; },
+  getLastOperation(): string { return lastOperation; },
+  getLastError(): DebugLogEntry | null { return lastError; },
 
   /**
    * Core log function
@@ -251,10 +366,17 @@ export const DebugLog = {
   functionError(funcName: string, error: unknown): void {
     const errorMsg = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack?.substring(0, 300) : undefined;
-    this.log('FUNCTION_ERROR', funcName, `${funcName} failed: ${errorMsg}`, {
+    const entry = createLogEntry('FUNCTION_ERROR', funcName, `${funcName} failed: ${errorMsg}`, {
       error: errorMsg,
       stack: errorStack,
+      currentScreen,
+      previousScreen,
+      currentOperation,
     });
+    lastError = entry;
+    persistLastError(entry);
+    addLog(entry);
+    console.log(`[DebugLog] [FUNCTION_ERROR] [${funcName}] ${errorMsg}`);
   },
 
   /**
@@ -364,7 +486,9 @@ export const DebugLog = {
    */
   async clearLogs(): Promise<void> {
     logBuffer = [];
+    lastError = null;
     await AsyncStorage.removeItem(STORAGE_KEY);
+    await AsyncStorage.removeItem(LAST_ERROR_KEY);
     this.log('DIAGNOSTIC', 'DebugLogService', 'Logs cleared');
   },
 

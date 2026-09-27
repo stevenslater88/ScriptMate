@@ -73,7 +73,9 @@ export default function UploadScreen() {
 
   const handleFilePick = async () => {
     DebugLog.buttonPress('file-pick-btn', 'UploadScreen');
+    DebugLog.setOperation('file-pick', {});
     try {
+      DebugLog.importStage('picker-open', {});
       console.log('[Upload] Opening document picker...');
       const result = await DocumentPicker.getDocumentAsync({
         type: [
@@ -87,222 +89,327 @@ export default function UploadScreen() {
       });
 
       console.log('[Upload] Picker result type:', result.canceled ? 'canceled' : 'success');
+      DebugLog.importStage('picker-result', { canceled: !!result.canceled });
 
       if (result.canceled) {
         console.log('[Upload] Picker cancelled by user');
+        DebugLog.clearOperation();
         return;
       }
 
       // Validate assets array exists and has items
       if (!result.assets || result.assets.length === 0) {
         console.error('[Upload] No assets in picker result');
+        DebugLog.errorCaught('picker-no-assets', new Error('No assets returned from picker'));
         Alert.alert('Error', 'No file was returned from the file picker. Please try again.');
+        DebugLog.clearOperation();
         return;
       }
 
       const file = result.assets[0];
       console.log('[Upload] File object keys:', Object.keys(file || {}).join(', '));
-      
+
       if (!file) {
-        console.error('[Upload] File object is null/undefined');
+        DebugLog.errorCaught('picker-file-null', new Error('File object is null'));
         Alert.alert('Error', 'File selection failed. Please try again.');
+        DebugLog.clearOperation();
         return;
       }
-      
+
       if (!file.uri) {
-        console.error('[Upload] File URI is missing. File object:', JSON.stringify(file));
+        DebugLog.errorCaught('picker-uri-missing', new Error('File URI missing'), { file: JSON.stringify(file).substring(0, 300) });
         Alert.alert('Error', 'File URI is missing. Please try selecting the file again.');
+        DebugLog.clearOperation();
         return;
       }
 
       const filename = (file.name || 'unknown').toLowerCase();
+      const fileType = filename.endsWith('.pdf') ? 'pdf'
+        : filename.endsWith('.docx') ? 'docx'
+        : filename.endsWith('.doc') ? 'doc'
+        : (filename.endsWith('.txt') || filename.endsWith('.text')) ? 'txt'
+        : 'unknown';
       console.log(`[Upload] File picked: name=${file.name}, mime=${file.mimeType}, size=${file.size}, uri=${file.uri.substring(0, 100)}`);
+      DebugLog.importStage('file-picked', {
+        fileName: file.name,
+        fileType,
+        fileSize: file.size,
+        mimeType: file.mimeType,
+        uriScheme: (file.uri || '').substring(0, 12),
+      });
       setLoading(true);
 
-      // Text files can be read directly
-      if (filename.endsWith('.txt') || filename.endsWith('.text')) {
-        console.log('[Upload] Processing as text file...');
+      // ── TEXT FILE PATH ───────────────────────────────────────────────
+      if (fileType === 'txt') {
+        DebugLog.setOperation('txt-import', { fileName: file.name, fileSize: file.size });
         try {
-          // Copy to cache first to ensure we have a readable URI
+          // Always copy to cache first — content:// URIs are not readable directly on Android 13+
           let readableUri = file.uri;
           if (Platform.OS === 'android') {
-            console.log('[Upload] Android: copying text file to cache...');
-            const cacheUri = `${FileSystem.cacheDirectory}text_${Date.now()}_${file.name || 'file.txt'}`;
+            DebugLog.importStage('txt-copy-to-cache-start', { parser: 'FileSystem.copyAsync' });
+            const cacheUri = `${FileSystem.cacheDirectory}text_${Date.now()}_${(file.name || 'file.txt').replace(/[^A-Za-z0-9._-]/g, '_')}`;
             try {
               await withTimeout(
                 FileSystem.copyAsync({ from: file.uri, to: cacheUri }),
                 FILE_OP_TIMEOUT,
                 'Text file copy to cache'
               );
-              readableUri = cacheUri;
-              console.log('[Upload] Copied to:', readableUri);
+              // Verify copy actually produced a non-empty file
+              const info = await FileSystem.getInfoAsync(cacheUri);
+              if (info.exists && info.size && info.size > 0) {
+                readableUri = cacheUri;
+                DebugLog.importStage('txt-copy-to-cache-ok', { cachedBytes: info.size });
+              } else {
+                DebugLog.importStage('txt-copy-empty-fallback-to-original', { info: JSON.stringify(info).substring(0, 200) });
+              }
             } catch (copyErr: any) {
-              console.log('[Upload] Copy failed, using original URI:', copyErr?.message);
+              DebugLog.errorCaught('txt-copy-to-cache', copyErr, { parser: 'FileSystem.copyAsync' });
+              // Fall back to original URI, will likely fail but try anyway
             }
           }
-          
-          console.log('[Upload] Reading text content from:', readableUri.substring(0, 80));
+
+          DebugLog.importStage('txt-read-start', { parser: 'FileSystem.readAsStringAsync', uriScheme: readableUri.substring(0, 12) });
           const content = await withTimeout(
             FileSystem.readAsStringAsync(readableUri),
             FILE_OP_TIMEOUT,
             'Text file read'
           );
-          console.log(`[Upload] Read ${content?.length || 0} characters`);
-          
+          const contentLen = content?.length || 0;
+          console.log(`[Upload] Read ${contentLen} characters`);
+          DebugLog.importStage('txt-read-done', { bytesRead: contentLen });
+
           if (!content || content.trim().length === 0) {
-            Alert.alert('Empty File', 'The selected file appears to be empty.');
+            DebugLog.importStage('txt-empty-file', { bytesRead: contentLen });
+            Alert.alert(
+              'Empty File',
+              `The selected file appears to be empty (${contentLen} bytes read). Please check the file and try again.`,
+            );
             setLoading(false);
+            DebugLog.clearOperation();
             return;
           }
+
+          // ► KEY UX FIX: switch back to Paste Text tab so the user SEES the loaded content
+          //   and has access to the Save/Parse buttons. Previously the content vanished
+          //   because the File tab has no preview and no save button.
           setScriptText(content);
           if (!title) {
             setTitle((file.name || 'Untitled').replace(/\.[^/.]+$/, ''));
           }
+          setUploadMethod('paste');
           setLoading(false);
-          Alert.alert('File Loaded', `"${file.name}" loaded. Review the text below and tap Save Script.`);
+          DebugLog.importStage('txt-import-success-switched-to-paste', { chars: contentLen });
+          DebugLog.clearOperation();
+          Alert.alert(
+            'File Loaded',
+            `"${file.name}" loaded (${contentLen} characters). Review the text below and tap Parse with AI or Smart Parse V2 to save.`,
+          );
         } catch (readErr: any) {
-          console.error(`[Upload] Failed to read text file: ${readErr?.message}`, readErr);
-          Alert.alert('Error', `Could not read file: ${readErr?.message || 'Unknown error'}`);
+          DebugLog.errorCaught('txt-read', readErr, { fileName: file.name, fileSize: file.size });
+          Alert.alert(
+            'Could Not Read File',
+            `Failed to read "${file.name}".\n\n${readErr?.message || 'Unknown error'}\n\nTry saving the file to your device's local storage and retrying.`,
+          );
           setLoading(false);
+          DebugLog.clearOperation();
         }
-      } else {
-        // PDF, Word docs, and other files - upload to backend for parsing
-        console.log('[Upload] Processing as binary file (PDF/DOCX)...');
-        const formData = new FormData();
-        
-        // Determine MIME type
-        let mimeType = file.mimeType || 'application/octet-stream';
-        if (filename.endsWith('.pdf')) {
-          mimeType = 'application/pdf';
-        } else if (filename.endsWith('.docx')) {
-          mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        } else if (filename.endsWith('.doc')) {
-          mimeType = 'application/msword';
-        }
+        return;
+      }
 
-        // Ensure URI is properly formatted for Android
-        let fileUri = file.uri;
-        if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
-          // If URI is not file://, read to cache first
-          console.log('[Upload] Android: copying binary file to cache...');
-          const cacheUri = `${FileSystem.cacheDirectory}upload_${Date.now()}_${file.name || 'file'}`;
-          try {
-            await withTimeout(
-              FileSystem.copyAsync({ from: file.uri, to: cacheUri }),
-              FILE_OP_TIMEOUT,
-              'File copy to cache'
-            );
+      // ── BINARY (PDF / DOCX / other) PATH ─────────────────────────────
+      // Android crash mitigation: on Android we ALWAYS use base64 upload.
+      // FormData with a content:// URI is the source of the native SIGSEGV
+      // in the multipart encoder on RN new architecture. Base64 goes via
+      // JSON which is safe.
+      DebugLog.setOperation(`${fileType}-import`, { fileName: file.name, fileSize: file.size });
+
+      // Determine MIME type
+      let mimeType = file.mimeType || 'application/octet-stream';
+      if (fileType === 'pdf') mimeType = 'application/pdf';
+      else if (fileType === 'docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      else if (fileType === 'doc') mimeType = 'application/msword';
+
+      // Copy to cache first to ensure a stable file:// URI we can read.
+      let fileUri = file.uri;
+      if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
+        DebugLog.importStage(`${fileType}-copy-to-cache-start`, { parser: 'FileSystem.copyAsync' });
+        const cacheUri = `${FileSystem.cacheDirectory}upload_${Date.now()}_${(file.name || 'file').replace(/[^A-Za-z0-9._-]/g, '_')}`;
+        try {
+          await withTimeout(
+            FileSystem.copyAsync({ from: file.uri, to: cacheUri }),
+            FILE_OP_TIMEOUT,
+            'Binary file copy to cache'
+          );
+          const info = await FileSystem.getInfoAsync(cacheUri);
+          if (info.exists && info.size && info.size > 0) {
             fileUri = cacheUri;
-            console.log('[Upload] Copied to:', fileUri);
-          } catch (copyErr: any) {
-            console.error('[Upload] Copy failed:', copyErr?.message);
-            // If copy fails, try using the original URI anyway
-            console.log('[Upload] Attempting upload with original URI...');
+            DebugLog.importStage(`${fileType}-copy-to-cache-ok`, { cachedBytes: info.size });
+          } else {
+            DebugLog.importStage(`${fileType}-copy-empty-abort`, { info: JSON.stringify(info).substring(0, 200) });
+            Alert.alert(
+              'Could Not Read File',
+              `The system did not return usable content for "${file.name}". Try saving the file to internal storage first and re-selecting.`,
+            );
+            setLoading(false);
+            DebugLog.clearOperation();
+            return;
           }
+        } catch (copyErr: any) {
+          DebugLog.errorCaught(`${fileType}-copy-to-cache`, copyErr, { parser: 'FileSystem.copyAsync' });
+          Alert.alert(
+            'Could Not Read File',
+            `Failed to prepare "${file.name}" for upload.\n\n${copyErr?.message || 'Unknown error'}`,
+          );
+          setLoading(false);
+          DebugLog.clearOperation();
+          return;
         }
+      }
 
-        console.log(`[Upload] Uploading file: name=${file.name}, mime=${mimeType}, uri=${fileUri.substring(0, 80)}`);
-        
-        // Get device ID for user association
-        const userId = await getDeviceId();
-        console.log('[Upload] User ID:', userId.substring(0, 20) + '...');
-        
-        formData.append('file', {
-          uri: fileUri,
-          type: mimeType,
-          name: file.name || 'uploaded_file',
-        } as any);
+      // Get device ID for user association
+      const userId = await getDeviceId();
+      console.log('[Upload] User ID:', userId.substring(0, 20) + '...');
+
+      const uploadUrl = `${API_BASE_URL}/api/scripts/upload`;
+      const base64Url = `${API_BASE_URL}/api/scripts/upload-base64`;
+
+      // Prefer base64 on Android (crash-safe). Non-Android uses FormData.
+      let response: any;
+      const useBase64First = Platform.OS === 'android';
+
+      const runBase64 = async () => {
+        DebugLog.importStage(`${fileType}-base64-read-start`, { parser: 'FileSystem.readAsStringAsync base64' });
+        const base64Data = await withTimeout(
+          FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 }),
+          FILE_OP_TIMEOUT,
+          'Base64 file read'
+        );
+        DebugLog.importStage(`${fileType}-base64-read-done`, { base64Chars: base64Data?.length || 0 });
+        DebugLog.importStage(`${fileType}-base64-post`, { url: base64Url });
+        const t0 = Date.now();
+        try {
+          const resp = await axios.post(
+            base64Url,
+            {
+              title: title || (file.name || 'Untitled').replace(/\.[^/.]+$/, ''),
+              filename: file.name || 'uploaded_file',
+              file_data: base64Data,
+              user_id: userId,
+            },
+            { headers: { 'Content-Type': 'application/json' }, timeout: UPLOAD_TIMEOUT }
+          );
+          DebugLog.importStage(`${fileType}-base64-ok`, { status: resp?.status, durationMs: Date.now() - t0, scriptId: resp?.data?.id });
+          return resp;
+        } catch (err: any) {
+          const status = err?.response?.status ?? 'no status';
+          DebugLog.httpErrorSnapshot('POST', base64Url, status, err?.response?.data, err?.message || 'unknown');
+          throw err;
+        }
+      };
+
+      const runFormData = async () => {
+        DebugLog.importStage(`${fileType}-formdata-prepare`, { mimeType });
+        const formData = new FormData();
+        formData.append('file', { uri: fileUri, type: mimeType, name: file.name || 'uploaded_file' } as any);
         formData.append('title', title || (file.name || 'Untitled').replace(/\.[^/.]+$/, ''));
         formData.append('user_id', userId);
-
-        console.log('[Upload] Sending FormData to server...');
-        const uploadUrl = `${API_BASE_URL}/api/scripts/upload`;
-        const base64Url = `${API_BASE_URL}/api/scripts/upload-base64`;
-        console.log(`[Upload] Target URL: ${uploadUrl}`);
-        
-        let response;
+        const t0 = Date.now();
+        DebugLog.importStage(`${fileType}-formdata-post`, { url: uploadUrl });
         try {
-          response = await axios.post(
-            uploadUrl,
-            formData,
-            {
-              timeout: UPLOAD_TIMEOUT,
-              // Do NOT set Content-Type manually — axios/RN must set it with the correct multipart boundary
+          const resp = await axios.post(uploadUrl, formData, { timeout: UPLOAD_TIMEOUT });
+          DebugLog.importStage(`${fileType}-formdata-ok`, { status: resp?.status, durationMs: Date.now() - t0, scriptId: resp?.data?.id });
+          return resp;
+        } catch (err: any) {
+          const status = err?.response?.status ?? 'no status';
+          DebugLog.httpErrorSnapshot('POST', uploadUrl, status, err?.response?.data, err?.message || 'unknown');
+          throw err;
+        }
+      };
+
+      try {
+        if (useBase64First) {
+          try {
+            response = await runBase64();
+          } catch (b64Err: any) {
+            DebugLog.errorCaught(`${fileType}-base64-primary`, b64Err);
+            // Only try FormData if backend reachable (avoid double native-crash risk)
+            if (b64Err?.response?.status) {
+              // Server-side error, don't retry with FormData (would hit same backend)
+              throw b64Err;
             }
-          );
-          console.log('[Upload] FormData upload succeeded');
-        } catch (formDataError: any) {
-          console.log(`[Upload] FormData failed: ${formDataError?.response?.status || 'no status'} - ${formDataError?.message}`);
-          // Fallback: if FormData upload fails on Android, try base64 upload
-          if (Platform.OS === 'android') {
-            console.log(`[Upload] Trying base64 fallback to: ${base64Url}`);
-            try {
-              const base64Data = await withTimeout(
-                FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 }),
-                FILE_OP_TIMEOUT,
-                'Base64 file read'
-              );
-              console.log(`[Upload] Read ${base64Data?.length || 0} base64 chars, posting to upload-base64...`);
-              response = await axios.post(
-                base64Url,
-                {
-                  title: title || (file.name || 'Untitled').replace(/\.[^/.]+$/, ''),
-                  filename: file.name || 'uploaded_file',
-                  file_data: base64Data,
-                  user_id: userId,
-                },
-                {
-                  headers: { 'Content-Type': 'application/json' },
-                  timeout: UPLOAD_TIMEOUT,
-                }
-              );
-              console.log('[Upload] Base64 upload succeeded');
-            } catch (base64Err: any) {
-              console.error('[Upload] Base64 fallback also failed:', base64Err?.message);
-              throw base64Err;
-            }
-          } else {
-            throw formDataError;
+            // Network failure — do NOT fall through to FormData on Android (native crash risk).
+            throw b64Err;
+          }
+        } else {
+          try {
+            response = await runFormData();
+          } catch (fdErr: any) {
+            DebugLog.errorCaught(`${fileType}-formdata-primary`, fdErr);
+            response = await runBase64();
           }
         }
+      } catch (uploadErr: any) {
+        // Both paths failed — bubble to outer catch with clear diagnostics
+        throw uploadErr;
+      }
 
-        console.log('[Upload] Server response received, id:', response?.data?.id);
+      console.log('[Upload] Server response received, id:', response?.data?.id);
+      const scriptId = response?.data?.id;
+      if (!scriptId) {
+        DebugLog.errorCaught(`${fileType}-no-script-id`, new Error('Server response missing id'));
+        Alert.alert('Upload Failed', 'Server did not return a script id.');
         setLoading(false);
-        Alert.alert('Success', 'Script uploaded and parsed successfully!', [
-          {
-            text: 'View Script',
-            onPress: () => router.replace(`/script/${response.data.id}`),
-          },
-        ]);
+        DebugLog.clearOperation();
+        return;
       }
-    } catch (error: any) {
+      DebugLog.importStage(`${fileType}-import-success`, { scriptId });
+      DebugLog.clearOperation();
       setLoading(false);
-      const status = error?.response?.status;
-      const serverMsg = error?.response?.data?.detail;
-      const errMsg = error?.message || 'Unknown error';
-      const requestUrl = error?.config?.url || `${API_BASE_URL}/api/scripts/upload`;
-      console.error(`[Upload] Failed: status=${status}, msg=${errMsg}, server=${serverMsg}, requestUrl=${requestUrl}`);
-      console.error('[Upload] Full error:', error);
+      Alert.alert('Success', 'Script uploaded and parsed successfully!', [
+        {
+          text: 'View Script',
+          onPress: () => {
+            try { router.replace(`/script/${scriptId}`); }
+            catch (navErr: any) { DebugLog.errorCaught('post-upload-nav', navErr); }
+          },
+        },
+      ]);
+    } catch (error: any) {
+      // Outer guard: no exception from here on may crash the app.
+      try {
+        setLoading(false);
+        const status = error?.response?.status;
+        const serverMsg = error?.response?.data?.detail;
+        const errMsg = error?.message || 'Unknown error';
+        const requestUrl = error?.config?.url || `${API_BASE_URL}/api/scripts/upload`;
+        console.error(`[Upload] Failed: status=${status}, msg=${errMsg}, server=${serverMsg}, requestUrl=${requestUrl}`);
+        DebugLog.errorCaught('upload-outer', error, { status, requestUrl, serverMsg });
 
-      let msg = 'Failed to upload file';
-      if (error?.code === 'ECONNABORTED' || errMsg.includes('timeout')) {
-        msg = 'Upload timed out. Please check your connection and try again.';
-      } else if (errMsg === 'Network Error' || !error?.response) {
-        msg = `Unable to reach server.\n\nEndpoint: ${requestUrl}\nError: ${errMsg}\n\nCheck your internet connection.`;
-      } else if (status === 404) {
-        msg = `Endpoint not found (404).\n\nURL: ${requestUrl}\n\nBackend may not have this route.`;
-      } else if (status === 413) {
-        msg = 'File is too large. Please try a smaller file.';
-      } else if (status === 415) {
-        msg = 'Unsupported file type. Please use PDF, DOCX, or TXT files.';
-      } else if (status === 400 && serverMsg) {
-        msg = serverMsg;
-      } else if (serverMsg) {
-        msg = serverMsg;
-      } else {
-        msg = `Upload failed (${status || 'no status'}): ${errMsg}\n\nEndpoint: ${requestUrl}`;
+        let msg = 'Failed to upload file';
+        if (error?.code === 'ECONNABORTED' || (typeof errMsg === 'string' && errMsg.includes('timeout'))) {
+          msg = 'Upload timed out. Please check your connection and try again.';
+        } else if (errMsg === 'Network Error' || !error?.response) {
+          msg = `Unable to reach server.\n\nEndpoint: ${requestUrl}\nError: ${errMsg}\n\nCheck your internet connection.`;
+        } else if (status === 404) {
+          msg = `Endpoint not found (404).\n\nURL: ${requestUrl}`;
+        } else if (status === 413) {
+          msg = 'File is too large. Please try a smaller file.';
+        } else if (status === 415) {
+          msg = 'Unsupported file type. Please use PDF, DOCX, or TXT files.';
+        } else if (status === 400 && serverMsg) {
+          msg = `Import failed: ${serverMsg}`;
+        } else if (serverMsg) {
+          msg = serverMsg;
+        } else {
+          msg = `Upload failed (${status || 'no status'}): ${errMsg}`;
+        }
+        Alert.alert('Import Failed', `${msg}\n\nOpen Support → Bug Report and tap "Copy Diagnostic Report" to send us the details.`);
+        DebugLog.clearOperation();
+      } catch (fatal: any) {
+        // Absolute last resort
+        console.error('[Upload] FATAL guard tripped:', fatal?.message);
+        try { setLoading(false); } catch { /* ignore */ }
       }
-      Alert.alert('Upload Failed', msg);
     }
   };
 

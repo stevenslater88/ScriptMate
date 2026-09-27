@@ -16,7 +16,7 @@ import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { API_BASE_URL, API_TIMEOUT, BUILD_ID } from '../services/apiConfig';
-import { getDiagnostics, BUILD_FINGERPRINT } from '../services/diagnosticsService';
+import { getDiagnostics, BUILD_FINGERPRINT, copyChatGPTDiagnosticReport, copyLastErrorToClipboard } from '../services/diagnosticsService';
 import { DebugLog } from '../services/debugLogService';
 
 // AsyncStorage key to preserve unsent report if submission fails.
@@ -297,6 +297,69 @@ export default function SupportScreen() {
         Describe what happened. We automatically attach non-sensitive device and app diagnostics to help us fix it.
       </Text>
 
+      {/* Diagnostic quick actions — always available, even without submitting */}
+      <View style={styles.diagButtonGrid} testID="diag-quick-actions">
+        <TouchableOpacity
+          style={styles.diagButton}
+          onPress={async () => {
+            const ok = await copyChatGPTDiagnosticReport();
+            Alert.alert(
+              ok ? 'Copied' : 'Copy Failed',
+              ok
+                ? 'Diagnostic report copied to clipboard. Paste it into ChatGPT or your message to support.'
+                : 'Could not copy the diagnostic report.',
+            );
+          }}
+          testID="copy-diagnostic-report-btn"
+        >
+          <Text style={styles.diagButtonText}>Copy Diagnostic Report</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.diagButton}
+          onPress={async () => {
+            const ok = await copyLastErrorToClipboard();
+            Alert.alert(
+              ok ? 'Copied' : 'Copy Failed',
+              ok
+                ? 'Last error and surrounding context copied to clipboard.'
+                : 'Could not copy the last error.',
+            );
+          }}
+          testID="copy-last-error-btn"
+        >
+          <Text style={styles.diagButtonText}>Copy Last Error</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.diagButton}
+          onPress={() => {
+            Alert.alert(
+              'Clear Diagnostic Log',
+              'Clear the on-device debug log? This does not delete any scripts.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Clear',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await DebugLog.clearLogs();
+                      Alert.alert('Cleared', 'Diagnostic log has been cleared.');
+                    } catch (e: any) {
+                      Alert.alert('Error', e?.message || 'Could not clear diagnostic log.');
+                    }
+                  },
+                },
+              ],
+            );
+          }}
+          testID="clear-diagnostic-log-btn"
+        >
+          <Text style={styles.diagButtonText}>Clear Diagnostic Log</Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.fieldLabel}>What happened *</Text>
       <TextInput
         placeholder="Describe the issue..."
@@ -340,7 +403,7 @@ export default function SupportScreen() {
           {submitting ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.primaryButtonText}>Submit Report</Text>
+            <Text style={styles.primaryButtonText}>Report Issue</Text>
           )}
         </TouchableOpacity>
 
@@ -550,5 +613,32 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 40,
     lineHeight: 16,
+  },
+
+  diagButtonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  diagButton: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    minHeight: 44,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#374151',
+    backgroundColor: '#0f172a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  diagButtonText: {
+    color: '#e5e7eb',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

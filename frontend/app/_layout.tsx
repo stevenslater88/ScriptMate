@@ -16,10 +16,64 @@ import {
 import { initSentry, setSentryUserId, captureRevenueCatError } from '../services/sentryService';
 import { AppConfig } from '../services/appConfig';
 import { API_BASE_URL, BUILD_ID, getApiDiagnostics } from '../services/apiConfig';
+import { DebugLog } from '../services/debugLogService';
 
 // BUILD FINGERPRINT — unique string to prove this code is in the compiled build.
 // If you see this on the debug screen, the code is present. If not, the build is stale.
-export const BUILD_FINGERPRINT = 'SM8-1106-DIAG';
+export const BUILD_FINGERPRINT = 'SM8-1108-DIAG';
+
+// ─── GLOBAL ERROR HANDLERS ───────────────────────────────────────────────
+// Install once at module load. Captures uncaught JS errors and unhandled
+// promise rejections so they appear in the diagnostic report BEFORE the
+// app crashes. If the app does crash natively, the last error is still
+// persisted via DebugLog.addLog -> AsyncStorage.
+let globalHandlersInstalled = false;
+function installGlobalHandlers() {
+  if (globalHandlersInstalled) return;
+  globalHandlersInstalled = true;
+
+  // 1. JS engine uncaught errors
+  try {
+    // @ts-ignore - ErrorUtils exists on RN globals
+    const errorUtils = (global as any).ErrorUtils;
+    if (errorUtils?.setGlobalHandler) {
+      const prev = errorUtils.getGlobalHandler ? errorUtils.getGlobalHandler() : null;
+      errorUtils.setGlobalHandler((err: any, isFatal: boolean) => {
+        try {
+          DebugLog.errorCaught('GLOBAL_JS_ERROR', err, { isFatal: !!isFatal });
+        } catch { /* never let logging crash */ }
+        // Delegate to original handler so RedBox / crash reporting still fires
+        if (typeof prev === 'function') {
+          try { prev(err, isFatal); } catch { /* ignore */ }
+        }
+      });
+    }
+  } catch { /* ignore */ }
+
+  // 2. Unhandled promise rejections
+  try {
+    // @ts-ignore - HermesInternal exists on Hermes engine
+    if (typeof (global as any).HermesInternal !== 'undefined') {
+      // Hermes: react-native ships promise/setimmediate/rejection-tracking
+      // We hook via the global "unhandledrejection" event when available.
+      // Fallback: just log via ErrorUtils above.
+    }
+    // Best-effort: hook the Promise.prototype for tracking
+    // (React Native's rejection tracker will call our handler.)
+    // @ts-ignore
+    if (typeof (global as any).addEventListener === 'function') {
+      // @ts-ignore
+      (global as any).addEventListener('unhandledrejection', (event: any) => {
+        try {
+          const reason = event?.reason || event;
+          DebugLog.errorCaught('UNHANDLED_PROMISE_REJECTION', reason);
+        } catch { /* ignore */ }
+      });
+    }
+  } catch { /* ignore */ }
+}
+
+installGlobalHandlers();
 
 export default function RootLayout() {
   // Initialize Sentry for crash reporting
