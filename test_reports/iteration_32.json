@@ -1,0 +1,43 @@
+{
+  "summary": "Phase 2 Rehearsal Foundation validation complete — GREEN across backend contract + frontend Playwright drive-through. Backend: created /app/backend/tests/test_phase2_rehearsal_contract.py (8 tests, all passing) covering (a) total_lines correctly counts only the user_character's lines, (b) switching user_character across two rehearsals of same script does NOT mutate the script, (c) POST /api/rehearsals returns 403 with 'Premium' message for invalid mode ('performance') and premium voice ('onyx') on free tier, (d) QA_UNLIMITED_REHEARSALS=true bypasses the 5/day limit (verified with 6 back-to-back POSTs), (e) PUT /api/rehearsals/{id} persists progress (completed_lines + current_line_index verified with GET). Also re-ran Phase 1 regression: test_scripts_create_timeout.py 4/4 PASS and test_iteration31_rehearsal_crash_regression.py 4/4 PASS. Frontend Playwright drive-through: seeded 6-line/3-char (SARAH/MIKE/ANNA) script + rehearsal via API with user_character=SARAH, stubbed speechSynthesis.speak to capture TTS utterances, navigated to /rehearsal/{id}, clicked Start Scene → 2× Done (for the two SARAH turns) → Scene Complete rendered with Accuracy: 100% • Avg. Response: 1.2s. Captured exactly 4 spoken utterances (MIKE ×2 + ANNA ×2), ZERO SARAH lines leaked into TTS, no stage-direction speech, no speech overlapping into user turn. All 11 diagnostic markers emitted in required order (final-line-complete → rehearsal-finish-start → audio-cleanup-start → audio-cleanup-success → speech-cleanup-start → speech-cleanup-success → stats-calculation-start → stats-calculation-success → stats-navigation-start → stats-navigation-success → rehearsal-finish-complete). Zero page errors, zero unhandled promise rejections. Wait-for-actor transitions verified: on SARAH turn TTS was silent and 'Done' button advanced correctly. Scene selection reported as NOT IMPLEMENTED (rehearsal engine plays entire script sequentially per code inspection of startRehearsal/advanceToNextLine — no scene splitting logic exists) — reporting per Master Prompt rule #7 rather than as a failure. Finalize idempotency verified by code inspection (finalizeGuardRef at rehearsal/[id].tsx:646-653) — cannot exercise re-entry via driven UI because guard short-circuits on second invocation; the fire-and-forget dispatch pattern in advanceToNextLine (lines 733 & 755) makes double-invocation unreachable from UI. Permission recovery (item E) verified statically: ensureAudioPermission at rehearsal/[id].tsx:904 handles all 3 states (already-granted short-circuit via audioPermissionGrantedRef, canAskAgain=false → Settings-hint Alert, undetermined → prompt); no unguarded Audio.requestPermissionsAsync calls elsewhere in the file. Ready for physical APK testing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/rehearsals/{id}", "issue": "Accepts arbitrary Dict[str, Any] with no validation — sending completed_lines=[string,string] instead of int[] persists strings then throws 500 on re-serialize via RehearsalSession (pydantic validation error). Root cause: update body is not validated against a typed pydantic model before $set. Not user-facing (frontend sends ints) but worth hardening."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Rehearsal screen header/debug band", "issues": ["Diagnostic banner still visible on every rehearsal page ('[DEBUG] SR current state', 'SR:Y | Auto:Y | Listen:N | State:idle') — noisy for QA/prod screenshots; gate behind __DEV__ or a debug toggle (already flagged in iter31, still present)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase2_rehearsal_contract.py",
+    "/app/test_reports/pytest/phase2_full.xml",
+    "/app/test_reports/pytest/phase2_rehearsal.xml"
+  ],
+  "action_items": [
+    "(Optional/low-priority) Add a typed Pydantic model for PUT /api/rehearsals/{id} update body so string-typed completed_lines returns 422 instead of a downstream 500.",
+    "(Optional) Add data-testid to Start Scene / Done / Line Complete / Run Again / View Stats buttons on frontend/app/rehearsal/[id].tsx (also flagged in iter31).",
+    "(Optional) Gate the on-screen '[DEBUG] SR current state' / 'SR:Y | Auto:Y | ...' band behind __DEV__ or a debug flag."
+  ],
+  "critical_code_review_comments": [
+    "PUT /api/rehearsals/{id} (server.py:1619) accepts untyped Dict[str,Any] — any client-side field-name typo or wrong type reaches Mongo unchecked and can 500 the subsequent GET. Recommend a RehearsalUpdate pydantic model with optional typed fields.",
+    "Scene selection is not implemented: startRehearsal() at rehearsal/[id].tsx:814 iterates ALL script.lines sequentially with no scene grouping; there is no scene model on the backend either. If Phase 2 needs scene splitting, this is net-new work — do not attempt speculatively per Master Prompt rule #7.",
+    "Rehearsal screen has zero data-testid attributes on interactive controls — automation must fall back to text selectors (works today but is language/label-fragile).",
+    "getStats() correctly returns Number.isFinite-guarded values (verified in-run: Accuracy=100%, Avg.Response=1.2s rendered), but a shared helper for formatting would DRY up finish-screen rendering.",
+    "'[DEBUG] SR current state' band and repeated 'SCRIPTM8 APP STARTED - DIAGNOSTIC INFO' console spam should be __DEV__-gated for prod builds."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase2_rehearsal_contract.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8 new + 4/4 iter31 + 4/4 scripts-create-timeout)", "frontend": "100% (E2E rehearsal completes, only non-user characters spoken, all 11 diagnostic markers, Scene Complete UI valid, cleanup OK)"},
+  "test_credentials": "Device-ID based; per-test uuids like phase2-test-<uuid> / phase2-pw-<uuid>. QA_UNLIMITED_REHEARSALS=true retained in backend/.env.",
+  "seed_data_creation": "Per-test scripts + rehearsals seeded via API and torn down in-test; frontend Playwright test cleans up its own script/rehearsal after the run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Phase 2 rehearsal foundation is GREEN. QA_UNLIMITED_REHEARSALS=true is intentionally set. Scene selection is NOT implemented in codebase (report as 'not implemented', not a bug). If next phase adds scene splitting, extend test_phase2_rehearsal_contract.py::TestSceneRehearsalSanity. For TTS assertions on web, stub window.speechSynthesis.speak in an add_init_script to record utterances (pattern used in this iteration works). View Stats opens an in-screen modal (setShowStatsModal(true) at rehearsal/[id].tsx:1186), not a route change — do NOT assert URL change after tapping it.",
+  "rca of the issue": "N/A — no new bugs surfaced. One minor server hardening opportunity documented (PUT /api/rehearsals/{id} untyped body → 500 on invalid types). Per Master Prompt rules #5 and #8, this is NOT being fixed in Phase 2 unless main agent explicitly requests it."
+}
