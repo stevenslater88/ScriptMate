@@ -533,7 +533,7 @@ Then I guess this is goodbye.`;
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.smartParseButton, (!title.trim() || !scriptText.trim()) && styles.submitButtonDisabled]}
-                  onPress={() => {
+                  onPress={async () => {
                     if (!title.trim() || !scriptText.trim()) {
                       DebugLog.alertShown('Error', 'Enter a title and paste script text first');
                       Alert.alert('Error', 'Enter a title and paste script text first');
@@ -541,13 +541,24 @@ Then I guess this is goodbye.`;
                     }
                     // FORENSIC: Log Smart Parse V2 navigation
                     DebugLog.buttonPress('parse-smart-btn', 'UploadScreen');
-                    DebugLog.navigation('UploadScreen', 'script-parser', { 
-                      titleLength: title.trim().length, 
-                      rawTextLength: scriptText.trim().length 
+                    DebugLog.navigation('UploadScreen', 'script-parser', {
+                      titleLength: title.trim().length,
+                      rawTextLength: scriptText.trim().length,
                     });
+                    // ANDROID FIX: Persist rawText in AsyncStorage instead of URL params
+                    // (URL params get corrupted/truncated on Android for large file-imported text).
+                    try {
+                      await AsyncStorage.setItem('pending_script_rawtext', scriptText.trim());
+                      await AsyncStorage.setItem('pending_script_title', title.trim());
+                      console.log(`[Upload] Stashed rawText (${scriptText.trim().length} chars) in AsyncStorage for parser`);
+                    } catch (storageErr: any) {
+                      console.error('[Upload] AsyncStorage stash failed:', storageErr?.message);
+                      Alert.alert('Error', 'Could not stage script for parsing. Please retry.');
+                      return;
+                    }
                     router.push({
                       pathname: '/script-parser',
-                      params: { title: title.trim(), rawText: scriptText.trim() },
+                      params: { title: title.trim(), fromStorage: '1' },
                     });
                   }}
                   disabled={!title.trim() || !scriptText.trim()}

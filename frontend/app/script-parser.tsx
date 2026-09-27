@@ -29,10 +29,51 @@ const TYPE_COLORS: Record<LineType, string> = {
 };
 
 export default function ScriptParserScreen() {
-  const params = useLocalSearchParams<{ title: string; rawText: string }>();
-  const title = params.title || 'Untitled';
-  const rawText = params.rawText || '';
+  const params = useLocalSearchParams<{ title: string; rawText: string; fromStorage: string }>();
+  const titleParam = params.title || 'Untitled';
+  const rawTextParam = typeof params.rawText === 'string' ? params.rawText : '';
+  const fromStorage = params.fromStorage === '1';
   const { createScript } = useScriptStore();
+
+  // Loaded rawText: prefer AsyncStorage (Android URL-param corruption fix), fall back to param
+  const [rawText, setRawText] = useState<string>(fromStorage ? '' : rawTextParam);
+  const [title, setTitle] = useState<string>(titleParam);
+  const [rawTextLoading, setRawTextLoading] = useState<boolean>(fromStorage);
+
+  // Sanitize helper: strip BOM, normalize CRLF -> LF, remove NULs and other control bytes
+  // that break JSON serialization / Android HTTP payloads.
+  const sanitizeRawText = (raw: string): string => {
+    if (!raw) return '';
+    let out = raw;
+    // strip UTF-8 BOM
+    if (out.charCodeAt(0) === 0xFEFF) out = out.slice(1);
+    // normalize line endings
+    out = out.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    // strip NUL and non-tab/newline C0 controls
+    out = out.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+    return out;
+  };
+
+  // Load rawText from AsyncStorage on mount if fromStorage flag set
+  useEffect(() => {
+    if (!fromStorage) return;
+    (async () => {
+      try {
+        const [storedRaw, storedTitle] = await Promise.all([
+          AsyncStorage.getItem('pending_script_rawtext'),
+          AsyncStorage.getItem('pending_script_title'),
+        ]);
+        const clean = sanitizeRawText(storedRaw || '');
+        console.log(`[ScriptParser] Loaded rawText from AsyncStorage: ${clean.length} chars (raw: ${storedRaw?.length || 0})`);
+        setRawText(clean);
+        if (storedTitle) setTitle(storedTitle);
+      } catch (err: any) {
+        console.error('[ScriptParser] Failed to load rawText from AsyncStorage:', err?.message);
+      } finally {
+        setRawTextLoading(false);
+      }
+    })();
+  }, [fromStorage]);
 
   // FORENSIC: Track screen view
   useEffect(() => {
@@ -40,31 +81,21 @@ export default function ScriptParserScreen() {
     DebugLog.log('SCREEN_VIEW', 'ScriptParserScreen', 'Entered script parser', {
       titleLength: title.length,
       rawTextLength: rawText.length,
+      fromStorage,
     });
   }, []);
 
-  // Guard: If no rawText provided, redirect to upload screen
-  // This happens when user taps "New Script" directly
+  // Guard: If no rawText provided AND not loading from storage, redirect to upload screen
   React.useEffect(() => {
+    if (rawTextLoading) return;
     if (!rawText || rawText.trim().length === 0) {
-      console.log('[ScriptParser] No rawText provided, redirecting to upload');
+      console.log('[ScriptParser] No rawText available, redirecting to upload');
       DebugLog.navigation('ScriptParserScreen', 'upload', { reason: 'no rawText' });
       router.replace('/upload');
     }
-  }, []);
+  }, [rawText, rawTextLoading]);
 
-  // If no rawText, show loading while redirect happens
-  if (!rawText || rawText.trim().length === 0) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#a78bfa" />
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
+  // NOTE: ALL hooks must run on every render (Rules of Hooks). Do NOT early-return above.
   const [step, setStep] = useState<Step>('characters');
   const [myCharacter, setMyCharacter] = useState<string | null>(null);
   const [includeHeadings, setIncludeHeadings] = useState(false);
@@ -74,9 +105,9 @@ export default function ScriptParserScreen() {
   // Editable parsed lines
   const [editedLines, setEditedLines] = useState<ParsedLine[] | null>(null);
 
-  // Parse on mount (memoized)
+  // Parse on mount (memoized). Safe against empty rawText — parseScript handles empty input.
   const parseResult: ParseResult = useMemo(
-    () => parseScript(rawText, { includeHeadings }),
+    () => parseScript(rawText || '', { includeHeadings }),
     [rawText, includeHeadings]
   );
 
@@ -102,64 +133,116 @@ export default function ScriptParserScreen() {
 
   // Save to backend
   const handleSave = async () => {
-    // FORENSIC: Log Save & Start button press
-    DebugLog.buttonPress('save-script-btn', 'ScriptParserScreen');
-    DebugLog.functionStart('handleSave', { 
-      title: title?.substring(0, 30), 
-      character: myCharacter,
-      rawTextLength: rawText?.length || 0 
-    });
-    
-    if (!myCharacter) {
-      DebugLog.alertShown('Select Character', 'Please choose your character first.');
-      Alert.alert('Select Character', 'Please choose your character first.');
-      return;
-    }
-
-    console.log(`[ScriptParser] handleSave: title="${title?.substring(0, 30)}", char="${myCharacter}", textLen=${rawText?.length || 0}`);
-    setSaving(true);
+    // Outer guard: absolutely nothing here may throw to the RN root and crash the app.
     try {
-      // Save parser preferences
-      await AsyncStorage.setItem('parser_prefs', JSON.stringify({
-        includeHeadings,
-        showActions,
-        lastMyCharacter: myCharacter,
-      }));
+      // FORENSIC: Log Save & Start button press
+      DebugLog.buttonPress('save-script-btn', 'ScriptParserScreen');
+      DebugLog.functionStart('handleSave', {
+        title: title?.substring(0, 30),
+        character: myCharacter,
+        rawTextLength: rawText?.length || 0,
+      });
 
-      // Convert parsed lines to the backend format and create script
-      console.log('[ScriptParser] Calling createScript...');
-      const script = await createScript(title, rawText);
-      console.log(`[ScriptParser] createScript returned: ${script ? `id=${script.id}` : 'null'}`);
-
-      if (script) {
-        // Update with the user character selection
-        const { updateScript } = useScriptStore.getState();
-        console.log(`[ScriptParser] Calling updateScript for id=${script.id} with character=${myCharacter}`);
-        await updateScript(script.id, { user_character: myCharacter });
-        console.log(`[ScriptParser] updateScript completed`);
-
-        DebugLog.functionSuccess('handleSave', { scriptId: script.id, character: myCharacter });
-        DebugLog.alertShown('Script Ready!', `"${title}" saved with ${myCharacter} as your character.`);
-        Alert.alert('Script Ready!', `"${title}" saved with ${myCharacter} as your character.`, [
-          { text: 'Start Rehearsal', onPress: () => {
-            DebugLog.navigation('ScriptParserScreen', `script/${script.id}`);
-            router.replace(`/script/${script.id}`);
-          }},
-        ]);
-      } else {
-        const storeError = useScriptStore.getState().error;
-        console.error(`[ScriptParser] createScript returned null. Store error: ${storeError}`);
-        DebugLog.functionError('handleSave', new Error(storeError || 'createScript returned null'));
-        DebugLog.alertShown('Save Failed', storeError || 'Could not save script');
-        Alert.alert('Save Failed', storeError || 'Could not save script. Please check your connection and try again.');
+      if (!myCharacter) {
+        DebugLog.alertShown('Select Character', 'Please choose your character first.');
+        Alert.alert('Select Character', 'Please choose your character first.');
+        return;
       }
-    } catch (err: any) {
-      console.error(`[ScriptParser] handleSave error: ${err?.message || err}`);
-      DebugLog.functionError('handleSave', err);
-      DebugLog.alertShown('Error', err.message || 'Failed to save script');
-      Alert.alert('Error', err.message || 'Failed to save script');
-    } finally {
-      setSaving(false);
+
+      console.log(`[ScriptParser] handleSave: title="${title?.substring(0, 30)}", char="${myCharacter}", textLen=${rawText?.length || 0}`);
+      setSaving(true);
+      try {
+        // Save parser preferences (best-effort, must not block save)
+        try {
+          await AsyncStorage.setItem('parser_prefs', JSON.stringify({
+            includeHeadings,
+            showActions,
+            lastMyCharacter: myCharacter,
+          }));
+        } catch (prefErr: any) {
+          console.warn('[ScriptParser] parser_prefs save failed:', prefErr?.message);
+        }
+
+        // Sanitize once more right before the network call to guarantee a clean payload
+        const cleanText = (() => {
+          let out = rawText || '';
+          if (out.charCodeAt(0) === 0xFEFF) out = out.slice(1);
+          out = out.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+          out = out.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+          return out;
+        })();
+
+        // Convert parsed lines to the backend format and create script
+        console.log(`[ScriptParser] Calling createScript with ${cleanText.length} clean chars...`);
+        const script = await createScript(title, cleanText);
+        console.log(`[ScriptParser] createScript returned: ${script ? `id=${script.id}` : 'null'}`);
+
+        if (script) {
+          // Clear the stashed rawText — save succeeded, no longer needed
+          try {
+            await AsyncStorage.multiRemove(['pending_script_rawtext', 'pending_script_title']);
+          } catch (clrErr: any) {
+            console.warn('[ScriptParser] Failed to clear pending rawText:', clrErr?.message);
+          }
+
+          // Update with the user character selection (best-effort — do not crash on failure)
+          try {
+            const { updateScript } = useScriptStore.getState();
+            console.log(`[ScriptParser] Calling updateScript for id=${script.id} with character=${myCharacter}`);
+            await updateScript(script.id, { user_character: myCharacter });
+            console.log(`[ScriptParser] updateScript completed`);
+          } catch (updateErr: any) {
+            console.warn('[ScriptParser] updateScript failed (non-fatal):', updateErr?.message);
+          }
+
+          DebugLog.functionSuccess('handleSave', { scriptId: script.id, character: myCharacter });
+          DebugLog.alertShown('Script Ready!', `"${title}" saved with ${myCharacter} as your character.`);
+          Alert.alert(
+            'Script Ready!',
+            `"${title}" saved with ${myCharacter} as your character.`,
+            [{
+              text: 'Start Rehearsal',
+              onPress: () => {
+                try {
+                  DebugLog.navigation('ScriptParserScreen', `script/${script.id}`);
+                  router.replace(`/script/${script.id}`);
+                } catch (navErr: any) {
+                  console.error('[ScriptParser] Nav after save failed:', navErr?.message);
+                }
+              },
+            }]
+          );
+        } else {
+          const storeError = useScriptStore.getState().error;
+          console.error(`[ScriptParser] createScript returned null. Store error: ${storeError}`);
+          DebugLog.functionError('handleSave', new Error(storeError || 'createScript returned null'));
+          DebugLog.alertShown('Save Failed', storeError || 'Could not save script');
+          Alert.alert(
+            'Save Failed',
+            storeError || 'Could not save script. Please check your connection and try again. Your parsed script is preserved — tap Save & Start to retry.'
+          );
+        }
+      } catch (err: any) {
+        // Inner catch: network / axios / serialization failures
+        console.error(`[ScriptParser] handleSave inner error: ${err?.message || err}`);
+        DebugLog.functionError('handleSave', err);
+        DebugLog.alertShown('Save Failed', err?.message || 'Failed to save script');
+        Alert.alert(
+          'Save Failed',
+          `${err?.message || 'Failed to save script'}\n\nYour parsed script is preserved — you can retry.`
+        );
+      } finally {
+        setSaving(false);
+      }
+    } catch (fatalErr: any) {
+      // Outer catch: swallow anything else to prevent native crash. Log for Sentry only.
+      console.error('[ScriptParser] handleSave FATAL guard tripped:', fatalErr?.message || fatalErr);
+      try {
+        DebugLog.functionError('handleSave.fatal', fatalErr);
+      } catch { /* ignore */ }
+      try {
+        setSaving(false);
+      } catch { /* ignore */ }
     }
   };
 
@@ -386,6 +469,18 @@ export default function ScriptParserScreen() {
   const steps: Step[] = ['characters', 'preview', 'assign'];
   const stepIdx = steps.indexOf(step);
   const canProceed = step === 'characters' ? !!myCharacter : true;
+
+  // Loading state (after all hooks) while AsyncStorage load in progress OR before redirect
+  if (rawTextLoading || !rawText || rawText.trim().length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#a78bfa" />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
