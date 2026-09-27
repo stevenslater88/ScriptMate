@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 26: Verified free-tier voice-picker gating fix in /app/frontend/app/script/[id].tsx. Static code checks all pass; backend rehearsal creation gate still enforces correct behavior (200 for alloy+full_read/cue_only, 403 for premium modes/voices). Metro bundles still build for ios/android/web. No regressions.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "script/[id].tsx styles", "issues": ["Duplicate `sectionSubtitle` StyleSheet key (defined twice at lines ~738 and ~758) — the second definition overrides the first. Minor cleanup, not user-facing."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration26_free_voice_gating.py",
+    "/app/test_reports/pytest/iteration26_results.xml"
+  ],
+  "action_items": [
+    "Optional cleanup: remove duplicate `sectionSubtitle` style key in script/[id].tsx.",
+    "Consider deduping (voice.premium && !isPremium) into a helper (isPremiumVoice) for consistency with mode gating — cosmetic only."
+  ],
+  "critical_code_review_comments": [
+    "VOICE_OPTIONS correctly flags echo/fable/onyx/nova/shimmer as premium:true and alloy as premium:false.",
+    "loadSavedSettings correctly downgrades a persisted premium voice to 'alloy' when !isPremium via savedVoiceEntry?.premium && !isPremium guard; useEffect deps include isPremium so it re-evaluates on premium status change.",
+    "AI Voice picker in settings modal correctly computes isLocked = voice.premium && !isPremium; locked tap calls trackUpgradeTriggered('script_detail_voice_'+id), closes modal, and router.push('/premium'). Locked rows show lock icon and 'Premium' label — matches existing mode-picker UX.",
+    "All 6 voices remain listed; none removed.",
+    "Backend gate on POST /api/rehearsals still enforces free-tier restrictions (verified via 4 pytest cases)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration26_free_voice_gating.py"],
+  "success_rate": { "backend": "100% (4/4)", "frontend": "100% static verification" },
+  "seed_data_creation": "Created 1 script (TEST_FreeVoiceGate) + up to 2 rehearsals under device_id 'test-free-user-voice-fix'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Free-tier voice picker gating verified end-to-end (backend + static UI). Only trivial nit: duplicate `sectionSubtitle` StyleSheet key in script/[id].tsx. No functional regressions."
+}
