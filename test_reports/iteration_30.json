@@ -1,0 +1,25 @@
+{
+  "summary": "Iter30 support dark-theme verification: static + integration all green. support.tsx StyleSheet updated to dark theme (container #0a0a0f, sectionTitle #f9fafb, question #e5e7eb, answer #9ca3af, input bg #111827 / color #f9fafb / border #374151, tab border #1f2937, tabText #9ca3af); both TextInputs have placeholderTextColor='#6b7280'. Structural preservation confirmed: FAQ + Report Issue tabs, useState title/description, handleSubmit Alert('Report Sent', ...), and all 5 testIDs (support-tab-faq, support-tab-report, support-report-title, support-report-description, support-report-submit) intact. Bundles compile — web/ios/android all HTTP 200. Playwright: dark bg rendered, FAQ text readable, dark input fields with visible placeholder text, tab switching functional; Submit clears inputs (proving handleSubmit ran to completion) — RN-Web Alert dialog is not window.alert-based so Playwright dialog event doesn't capture it, but state clearing after Alert call is evidence the handler executed (same behavior as iter29). Regression baseline: 4/4 backend pytest passing (POST/GET/list scripts, rehearsal free-tier alloy+full_read). All invariants verified via grep: sentryService.ts tracesSampleRate:0 + enableAutoPerformanceTracing:false; upload.tsx uses API_BASE_URL from '../services/apiConfig' and no 'script-recovery-1' literal; script/[id].tsx VOICE_OPTIONS has alloy premium:false and echo/fable/onyx/nova/shimmer premium:true; app.json updates.enabled:false; eas.json has no channel entries; 34 .tsx route files under frontend/app/. rehearsal/[id].tsx contains expo-speech import, Speech.speak, line.character, line.text. git diff HEAD~1 shows ONLY frontend/app/support.tsx changed (16 lines, 11+/5-).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_support_regression.py",
+    "/app/test_reports/pytest/iter30_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Diagnostic console noise (SCRIPTM8 API CONFIG banners, 'CORRECT_DOMAIN: NO', diagnostic build fingerprint) still prints on every page load — cosmetic but noisy for prod; consider gating behind __DEV__.",
+    "RN-Web Alert.alert is not observable by Playwright's dialog event; if E2E asserting on the confirmation message is desired, use a state-driven Toast/inline success message instead of Alert."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (dark-theme render + tab switch + submit clears fields)"},
+  "test_credentials": "device_id=test-support-dark-iter30",
+  "seed_data_creation": "One TEST_ script + rehearsal created by test_support_regression.py fixtures (transient).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Support screen dark-theme fix is complete. Contrast issue flagged in iter29 is resolved. Only support.tsx changed this pass. All regression invariants (Sentry, upload URL, voice-gating, config, 34 routes, rehearsal code paths) verified intact."
+}
