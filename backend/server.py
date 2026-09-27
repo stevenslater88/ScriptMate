@@ -3181,6 +3181,68 @@ async def delete_take_metadata(take_id: str):
     return {"message": "Take deleted"}
 
 
+# ==================== SUPPORT / BUG REPORT ====================
+
+class BugReportCreate(BaseModel):
+    description: str = Field(..., min_length=1, max_length=5000)
+    steps_to_reproduce: Optional[str] = Field(None, max_length=5000)
+    notes: Optional[str] = Field(None, max_length=5000)
+    diagnostics: Optional[Dict[str, Any]] = None
+    debug_log: Optional[str] = Field(None, max_length=200000)
+    user_id: Optional[str] = Field(None, max_length=200)
+    app_version: Optional[str] = Field(None, max_length=100)
+    build_id: Optional[str] = Field(None, max_length=100)
+    platform: Optional[str] = Field(None, max_length=50)
+
+
+# Keys that must never be persisted even if the client sends them (defense-in-depth).
+_BUG_REPORT_SENSITIVE_KEYS = {
+    "authorization", "auth", "token", "access_token", "id_token", "refresh_token",
+    "api_key", "apikey", "secret", "password", "passwd", "cookie", "session",
+    "x-api-key", "bearer",
+}
+
+
+def _sanitize_bug_report_dict(value):
+    """Recursively drop any key that looks like a credential. Values kept as-is (already redacted client-side)."""
+    if isinstance(value, dict):
+        return {
+            k: _sanitize_bug_report_dict(v)
+            for k, v in value.items()
+            if k.lower() not in _BUG_REPORT_SENSITIVE_KEYS
+        }
+    if isinstance(value, list):
+        return [_sanitize_bug_report_dict(v) for v in value]
+    return value
+
+
+@api_router.post("/support/bug-report")
+async def create_bug_report(report: BugReportCreate):
+    """Store a user-submitted bug report + non-sensitive diagnostics.
+
+    Returns {id, created_at} on success. No PII/secrets are stored:
+    the client is expected to pre-redact, and this endpoint additionally
+    strips any keys that look like credentials.
+    """
+    now = datetime.now(datetime.now().astimezone().tzinfo).astimezone().replace(microsecond=0)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "description": report.description.strip(),
+        "steps_to_reproduce": (report.steps_to_reproduce or "").strip() or None,
+        "notes": (report.notes or "").strip() or None,
+        "diagnostics": _sanitize_bug_report_dict(report.diagnostics or {}),
+        "debug_log": report.debug_log or None,
+        "user_id": report.user_id,
+        "app_version": report.app_version,
+        "build_id": report.build_id,
+        "platform": report.platform,
+        "created_at": now.isoformat(),
+        "status": "open",
+    }
+    await db.bug_reports.insert_one(doc)
+    return {"id": doc["id"], "created_at": doc["created_at"], "status": "received"}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
