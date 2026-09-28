@@ -9,10 +9,11 @@
  * No AI, no speech recognition, no microphone, no typing. All work is
  * pure JS + AsyncStorage.
  *
- * Difficulty mask is rendered per-line by the pure `tokenizeForMode`
+ * Difficulty mask is rendered per-line by the pure `renderMaskedLine`
  * helper — no Animated.multiply, no native driver animations, no
- * community slider. Matches the Fabric-safe conventions established by
- * Phase 3.
+ * community slider. Rendered as a FLAT single string inside a single
+ * <Text> child to avoid Fabric re-parenting on Android 16 (the previous
+ * nested <Text>-inside-<Text> pattern crashed on rapid difficulty taps).
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -37,10 +38,10 @@ import {
   extractLearnItems,
   goToNext,
   goToPrevious,
+  maskProportionFor,
   pauseSession,
   restartSession,
   resumeSession,
-  tokenizeForMode,
   type DifficultyLevel,
   type LearnItem,
   type LearningSession,
@@ -247,7 +248,6 @@ export default function LearnSessionScreen() {
     );
   }
 
-  const tokens = tokenizeForMode(currentItem.line.text, difficulty);
   const cueWords = deriveCueWords(currentItem.line.text, 3);
 
   return (
@@ -311,17 +311,23 @@ export default function LearnSessionScreen() {
               {currentItem.line.text}
             </Text>
           ) : (
-            <Text style={styles.lineText} testID="learn-session-masked-text">
-              {tokens.map((t, i) =>
-                t.kind === 'space' ? t.text : (
-                  <Text
-                    key={i}
-                    style={t.isMasked ? styles.maskedWord : undefined}
-                  >
-                    {t.masked}
-                  </Text>
-                ),
-              )}
+            // 2026-02 Fabric-safety refactor: render the masked line as a
+            // FLAT SINGLE-STRING inside one <Text>. The previous
+            // implementation mapped tokens to a mix of bare strings and
+            // nested <Text> children inside an outer <Text>, which is a
+            // known Fabric re-parenting crash surface on Android 16 when
+            // the child list mutates on every difficulty tap. The visual
+            // effect is preserved: masked words are rendered as a run of
+            // underscores; at difficulty 4 the first letter is kept as a
+            // hint (previously invisible because color+bg were both
+            // #0a0a0f — fixed by rendering the hint character
+            // in-line inside the same Text).
+            <Text
+              style={styles.lineText}
+              testID="learn-session-masked-text"
+              accessibilityLabel="Actor line, currently hidden"
+            >
+              {renderMaskedLine(currentItem.line.text, difficulty)}
             </Text>
           )}
           {!revealed && difficulty >= 3 && cueWords.length > 0 && (
@@ -488,6 +494,47 @@ function difficultyHint(d: DifficultyLevel): string {
   }
 }
 
+/**
+ * Render the actor's line for a given difficulty as a FLAT STRING that
+ * can be dropped into a single <Text> child. Deterministic word masking:
+ * evenly-spaced word indexes are replaced by underscores according to
+ * `maskProportionFor(difficulty)`. At difficulty 4 the first letter of
+ * each masked word is preserved as a hint.
+ *
+ * IMPORTANT: this is a Fabric-safety refactor of the previous mixed
+ * bare-string + nested <Text> rendering that crashed on Android 16 when
+ * the difficulty changed rapidly.
+ */
+function renderMaskedLine(text: string, difficulty: DifficultyLevel): string {
+  if (!text) return '';
+  const proportion = maskProportionFor(difficulty);
+  const showFirstLetter = difficulty === 4;
+  const parts = text.split(/(\s+)/);
+  const wordIndexes: number[] = [];
+  parts.forEach((p, i) => {
+    if (/\S/.test(p)) wordIndexes.push(i);
+  });
+  const total = wordIndexes.length;
+  const target = Math.round(total * proportion);
+  const masked = new Set<number>();
+  if (target > 0 && total > 0) {
+    const step = total / target;
+    for (let n = 0; n < target; n++) {
+      const w = Math.min(total - 1, Math.floor(n * step + step / 2));
+      masked.add(wordIndexes[w]);
+    }
+  }
+  return parts
+    .map((p, i) => {
+      if (!masked.has(i)) return p;
+      if (showFirstLetter && p.length > 1) {
+        return p[0] + '_'.repeat(Math.max(1, p.length - 1));
+      }
+      return '_'.repeat(Math.max(1, p.length));
+    })
+    .join('');
+}
+
 function masteryLabel(it: LearnItem): string {
   const m = it.record.masteryLevel;
   return m.charAt(0).toUpperCase() + m.slice(1);
@@ -536,7 +583,6 @@ const styles = StyleSheet.create({
   },
   lineCharacter: { color: '#22d3ee', fontSize: 12, fontWeight: '700', letterSpacing: 0.6 },
   lineText: { color: '#f3f4f6', fontSize: 22, lineHeight: 32, marginTop: 8, fontWeight: '500' },
-  maskedWord: { backgroundColor: '#0a0a0f', color: '#0a0a0f', letterSpacing: 1 },
   cueWordsHint: { color: '#9ca3af', fontSize: 12, marginTop: 10, fontStyle: 'italic' },
   metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   masteryChip: {

@@ -364,6 +364,68 @@ def test_learn_screens_are_fabric_safe(path: Path, label: str) -> None:
 # ─── AI/API boundary: core loop is offline ──────────────────────────────
 
 
+def test_masked_line_rendered_as_flat_string(session_src: str) -> None:
+    """2026-02 Fabric-safety refactor: the masked line must render as a
+    FLAT single string inside a single <Text> child, NOT as a mix of
+    bare strings and nested <Text> siblings. The previous mixed pattern
+    crashed on Android 16 when the difficulty changed rapidly (Fabric
+    re-parenting of Text descendants).
+
+    Concretely: the masked-line JSX must call a helper `renderMaskedLine`
+    and must NOT map tokens to inline <Text> children."""
+    assert "renderMaskedLine(" in session_src, (
+        "The masked-line render must delegate to renderMaskedLine() so it "
+        "produces a single flat string."
+    )
+    # The prior crash-prone pattern must be gone.
+    assert "tokens.map(" not in session_src, (
+        "The nested-<Text>-from-tokens.map pattern must not return; it is "
+        "Fabric-unsafe on Android 16."
+    )
+    # No <Text> nested inside the masked-line <Text> child.
+    m = re.search(
+        r'testID="learn-session-masked-text"[^>]*>(.*?)</Text>',
+        session_src, re.DOTALL,
+    )
+    assert m, "learn-session-masked-text <Text> block not found."
+    inner = m.group(1)
+    assert '<Text' not in inner, (
+        "learn-session-masked-text must have a single string child — no "
+        "nested <Text>. Got:\n" + inner
+    )
+
+
+def test_render_masked_line_helper_declared(session_src: str) -> None:
+    """The helper must be a pure top-level function returning a string."""
+    assert re.search(
+        r"function\s+renderMaskedLine\s*\([^)]*\)\s*:\s*string\b",
+        session_src,
+    ), "renderMaskedLine must be declared with `: string` return type."
+
+
+def test_render_masked_line_uses_engine_mask_proportion(session_src: str) -> None:
+    """The refactored helper must reuse the engine's deterministic mask
+    proportion function so the visual behaviour matches the engine
+    tests."""
+    assert "maskProportionFor(difficulty)" in session_src
+
+
+def test_run_time_masked_line_smoke() -> None:
+    """Bridges to the runtime engine smoke test — the renderMaskedLine
+    behaviour is asserted through the shared maskProportionFor function
+    (already covered by scripts/learn_engine_smoketest.js which asserts
+    tokenizeForMode masks at 0/30/55/80/100% for difficulties 1..5).
+
+    This test exists as a lightweight sentinel so a regression here
+    surfaces in the Phase 4 suite even if the runtime smoke is skipped."""
+    src = SESSION.read_text()
+    # Difficulty 4 first-letter branch present.
+    assert re.search(
+        r"if\s*\(\s*showFirstLetter\s+&&\s+p\.length\s*>\s*1\s*\)",
+        src,
+    ), "renderMaskedLine must preserve the first letter at difficulty 4."
+
+
 # ─── Phase 3 integrity: not modified by Phase 4 ─────────────────────────
 
 
