@@ -24,7 +24,18 @@ import { Platform } from 'react-native';
 // ─── Hardcoded production values ───────────────────────────────────────────
 // These are ALWAYS compiled into the JS bundle by Metro. No env var needed.
 const DEFAULTS = {
-  BACKEND_URL: 'https://script-recovery-1.preview.emergentagent.com',
+  // Post-Phase-3 deployment-readiness fix (2026-02): the previous literal
+  // pointed at `https://script-recovery-1.preview.emergentagent.com`, a
+  // stale preview host from an old fork that no longer resolves to this
+  // instance. Aligned with the other two hardcoded fallbacks in
+  // frontend/services/apiConfig.ts and frontend/app.config.js
+  // (`https://scriptmate-8.emergent.host` — the currently deployed
+  // production backend). The RevenueCat / Sentry / ElevenLabs fallbacks
+  // below are intentionally retained per the documented SDK 54 Metro
+  // inlining regression (see file header). Future architecture: move
+  // ElevenLabs credentials backend-side, consolidate RevenueCat / Sentry
+  // config, adopt a single source of truth for env resolution.
+  BACKEND_URL: 'https://scriptmate-8.emergent.host',
   REVENUECAT_GOOGLE_API_KEY: 'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT',
   REVENUECAT_APPLE_API_KEY: 'appl_YOUR_IOS_KEY_HERE',
   SENTRY_DSN: 'https://141660e463cc23c1c29fef7403bcb3d6@o4510914410840064.ingest.de.sentry.io/4510914414116944',
