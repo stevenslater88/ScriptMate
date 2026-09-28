@@ -272,6 +272,127 @@ def test_useMemo_dependency_array_is_empty_for_teleprompter_translateY() -> None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# FAILURE 4 — Toggling "Enable Teleprompter" crashes the app (Slider mount)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_record_screen_does_not_import_community_slider() -> None:
+    """`@react-native-community/slider` v4.5.x supports OLD architecture only.
+    Expo SDK 54 runs on Fabric (new arch), which causes a silent native
+    crash the moment the Slider component mounts. Enabling teleprompter on
+    Samsung SM-S918B triggered this because the teleprompter controls
+    subtree contained a <Slider>. record.tsx must NOT import Slider from
+    that package."""
+    src = _read("app/selftape/record.tsx")
+    forbidden = re.compile(
+        r"^\s*import\s+.*Slider.*from\s+['\"]@react-native-community/slider['\"]",
+        re.MULTILINE,
+    )
+    assert not forbidden.search(src), (
+        "record.tsx must not import Slider from '@react-native-community/"
+        "slider'. That package's v4.5.x is old-arch-only and crashes on the "
+        "Fabric renderer used by SDK 54. Use a Fabric-safe control (segmented "
+        "TouchableOpacity buttons, PanGestureHandler, etc.)."
+    )
+
+
+def test_record_screen_uses_segmented_speed_control() -> None:
+    """The Fabric-safe replacement must be present: a segmented speed
+    control rendered via TouchableOpacity for values 1..5."""
+    src = _read("app/selftape/record.tsx")
+    # The 1..5 mapping via TouchableOpacity indicates the segmented control.
+    pattern = re.compile(
+        r"\[1,\s*2,\s*3,\s*4,\s*5\]\.map\(\s*\(speed\)\s*=>\s*\(\s*"
+        r"<TouchableOpacity",
+        re.DOTALL,
+    )
+    assert pattern.search(src), (
+        "Expected a segmented speed control [1,2,3,4,5].map(...) rendering "
+        "<TouchableOpacity> per value. This replaces the crashing Slider."
+    )
+
+
+def test_toggle_teleprompter_still_toggles_state_only() -> None:
+    """toggleTeleprompter must ONLY flip teleprompterActive + call
+    pauseTeleprompter when disabling. It MUST NOT start any animation or
+    inject any native native-driver interpolation as a side effect."""
+    src = _read("app/selftape/record.tsx")
+    m = re.search(
+        r"const\s+toggleTeleprompter\s*=\s*\(\)\s*=>\s*\{(.*?)\n\s{2}\};",
+        src, re.DOTALL,
+    )
+    assert m, "toggleTeleprompter function not found — refactor detected"
+    body = m.group(1)
+    assert "setTeleprompterActive(newState)" in body
+    # Disabling MUST call pauseTeleprompter to stop any running animation.
+    assert "pauseTeleprompter()" in body
+    # Enabling MUST NOT auto-start an animation (that only happens when
+    # startTeleprompter() is called by startRecording).
+    assert "startTeleprompter()" not in body, (
+        "toggleTeleprompter must not auto-start the animation on enable — "
+        "only startRecording() drives the animation lifecycle."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FAILURE 4 (secondary) — Teleprompter scroll was 4+ minutes for a short scene
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_teleprompter_uses_pxPerSecond_not_broken_speedMultiplier_60() -> None:
+    """The old formula `(totalScrollHeight / speedMultiplier) * 60` yielded
+    2–12 minute scrolls even at max speed for typical scripts (Samsung
+    physical repro: 4 minutes at speed 3 for a 32-line script). The new
+    formula must express speed as pixels-per-second and use *1000 for ms."""
+    src = _read("app/selftape/record.tsx")
+
+    # Old broken formula must be gone from all three occurrences.
+    forbidden = re.compile(
+        r"speedMultiplier\s*=\s*\[0\.2,\s*0\.4,\s*0\.6,\s*0\.8,\s*1\.0\]"
+    )
+    assert not forbidden.search(src), (
+        "The old speedMultiplier [0.2, 0.4, 0.6, 0.8, 1.0] pattern must be "
+        "removed — it produced unusably slow teleprompter durations."
+    )
+    assert "* 60" not in src or "duration = " not in src.split("* 60")[0].rsplit("\n", 3)[-1], (
+        "Confirm the `* 60` multiplier is no longer applied to duration; "
+        "use pxPerSecond * 1000 instead."
+    )
+
+    # New formula must appear (px/s array).
+    px_pattern = re.compile(
+        r"pxPerSecond\s*=\s*\[30,\s*60,\s*90,\s*120,\s*150\]"
+    )
+    matches = px_pattern.findall(src)
+    assert len(matches) >= 3, (
+        f"Expected pxPerSecond=[30,60,90,120,150] in all three teleprompter "
+        f"duration sites (startTeleprompter, resumeTeleprompter, "
+        f"handleSpeedChange). Found {len(matches)}."
+    )
+
+
+def test_teleprompter_duration_produces_sane_wall_clock_time() -> None:
+    """Pure-math check: for a typical 32-line 18pt script (2432 px scroll)
+    at speed 3 (90 px/s), the duration must be < 60s. Previously it was
+    ~4 minutes, which is why the actor reported extremely slow scrolling."""
+    lines = 32
+    font_size = 18
+    speed = 3
+    total_scroll_height = lines * (font_size + 20) * 2
+    px_per_second = [30, 60, 90, 120, 150][speed - 1]
+    duration_ms = (total_scroll_height / px_per_second) * 1000
+    duration_s = duration_ms / 1000
+    assert duration_s < 60, (
+        f"duration for a 32-line 18pt scene at speed 3 = {duration_s:.1f}s — "
+        f"expected <60s for actor-usable teleprompter pacing."
+    )
+    # Also sanity-check speed 1 is not absurdly slow (>3 min for 32 lines).
+    slowest_ms = (total_scroll_height / 30) * 1000
+    assert slowest_ms / 1000 < 180, (
+        f"even at slowest speed 1, a 32-line scene must not exceed 3 minutes; "
+        f"got {slowest_ms/1000:.1f}s"
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Shared: neither fix touched the working camera / recording path
 # ─────────────────────────────────────────────────────────────────────────────
 

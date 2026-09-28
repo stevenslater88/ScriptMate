@@ -18,7 +18,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Sharing from 'expo-sharing';
-import Slider from '@react-native-community/slider';
+// NOTE: @react-native-community/slider v4.5.x supports OLD arch only.
+// Expo SDK 54 runs on the new architecture (Fabric), which causes a silent
+// native crash the moment the Slider component mounts on Android 16 (Samsung
+// SM-S918B physical repro). The teleprompter controls now use a Fabric-safe
+// segmented speed control built with core RN components — no Slider import
+// on this screen. The dependency itself is intentionally left in place for
+// other screens that haven't been exercised yet (do-not-touch-unrelated
+// scope). Regression: backend/tests/test_phase3_selftape_regression.py
 import { useScriptStore } from '../../store/scriptStore';
 import { 
   trackRecordingStarted, 
@@ -244,9 +251,14 @@ export default function RecordScreen() {
     
     const lines = currentScene?.lines || [];
     const totalScrollHeight = lines.length * (currentFontSize + 20) * 2;
-    const speedMultiplier = [0.2, 0.4, 0.6, 0.8, 1.0][currentSpeed - 1];
+    // Fabric-safe teleprompter pacing: map speed 1..5 → pixels-per-second.
+    // The previous `speedMultiplier * 60` formula produced 2–12 minute
+    // durations even for short scripts (Samsung SM-S918B physical repro:
+    // ~4 minutes at speed 3 for a 32-line script). Now: 30/60/90/120/150 px/s
+    // → ~81/40/27/20/16s for a 2432px scroll — actor-usable pacing.
+    const pxPerSecond = [30, 60, 90, 120, 150][currentSpeed - 1];
     const remainingHeight = totalScrollHeight - currentScrollPosition.current;
-    const duration = (remainingHeight / speedMultiplier) * 60;
+    const duration = (remainingHeight / pxPerSecond) * 1000;
     
     teleprompterAnimation.current = Animated.timing(teleprompterAnim, {
       toValue: totalScrollHeight,
@@ -266,8 +278,9 @@ export default function RecordScreen() {
     
     const lines = currentScene?.lines || [];
     const totalScrollHeight = lines.length * (currentFontSize + 20) * 2;
-    const speedMultiplier = [0.2, 0.4, 0.6, 0.8, 1.0][currentSpeed - 1];
-    const duration = (totalScrollHeight / speedMultiplier) * 60;
+    // See resumeTeleprompter for the pxPerSecond rationale.
+    const pxPerSecond = [30, 60, 90, 120, 150][currentSpeed - 1];
+    const duration = (totalScrollHeight / pxPerSecond) * 1000;
     
     currentScrollPosition.current = 0;
     teleprompterAnim.setValue(0);
@@ -295,9 +308,10 @@ export default function RecordScreen() {
         
         const lines = currentScene?.lines || [];
         const totalScrollHeight = lines.length * (currentFontSize + 20) * 2;
-        const speedMultiplier = [0.2, 0.4, 0.6, 0.8, 1.0][newSpeed - 1];
+        // See resumeTeleprompter for the pxPerSecond rationale.
+        const pxPerSecond = [30, 60, 90, 120, 150][newSpeed - 1];
         const remainingHeight = totalScrollHeight - currentValue;
-        const duration = (remainingHeight / speedMultiplier) * 60;
+        const duration = (remainingHeight / pxPerSecond) * 1000;
         
         teleprompterAnimation.current = Animated.timing(teleprompterAnim, {
           toValue: totalScrollHeight,
@@ -644,20 +658,28 @@ export default function RecordScreen() {
               />
             </TouchableOpacity>
 
-            {/* Speed Slider */}
+            {/* Speed Segmented Control (Fabric-safe replacement for Slider) */}
             <View style={styles.speedControlContainer}>
               <Ionicons name="speedometer-outline" size={16} color="#9ca3af" />
-              <Slider
-                style={styles.speedSlider}
-                minimumValue={1}
-                maximumValue={5}
-                step={1}
-                value={currentSpeed}
-                onValueChange={handleSpeedChange}
-                minimumTrackTintColor="#6366f1"
-                maximumTrackTintColor="#374151"
-                thumbTintColor="#6366f1"
-              />
+              {[1, 2, 3, 4, 5].map((speed) => (
+                <TouchableOpacity
+                  key={speed}
+                  onPress={() => handleSpeedChange(speed)}
+                  style={[
+                    styles.speedSegment,
+                    currentSpeed === speed && styles.speedSegmentActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.speedSegmentText,
+                      currentSpeed === speed && styles.speedSegmentTextActive,
+                    ]}
+                  >
+                    {speed}
+                  </Text>
+                </TouchableOpacity>
+              ))}
               <Text style={styles.speedLabel}>{currentSpeed}x</Text>
             </View>
 
@@ -1196,6 +1218,25 @@ const styles = StyleSheet.create({
   speedSlider: {
     flex: 1,
     height: 40,
+  },
+  speedSegment: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    minWidth: 24,
+    alignItems: 'center',
+    backgroundColor: '#374151',
+  },
+  speedSegmentActive: {
+    backgroundColor: '#6366f1',
+  },
+  speedSegmentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9ca3af',
+  },
+  speedSegmentTextActive: {
+    color: '#ffffff',
   },
   speedLabel: {
     fontSize: 12,
