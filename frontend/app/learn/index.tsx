@@ -33,9 +33,12 @@ import {
   createSession,
   extractLearnItems,
   type LearnItem,
+  type LearningSession,
   type SessionType,
 } from '../../services/learnEngine';
 import {
+  clearActiveSession,
+  loadActiveSession,
   loadAllRecords,
   saveActiveSession,
 } from '../../services/learnStorage';
@@ -60,9 +63,49 @@ export default function LearnHubScreen() {
   const [mode, setMode] = useState<SessionType>('full');
   const [sceneNumber, setSceneNumber] = useState<number | null>(null);
 
+  /**
+   * 2026-02 Resume UX (Phase 4 physical gate fix).
+   *
+   * The Hub loads the persisted active LearningSession on mount so we
+   * can offer Resume vs Start again instead of silently overwriting the
+   * user's in-flight session with a fresh one at line 1. The active
+   * session is only considered restorable when ALL of the following
+   * hold:
+   *   * a valid session was loaded (not null / not corrupted)
+   *   * session.scriptId === current script.id
+   *   * session.characterId === currently selected characterId
+   *   * session.state !== 'completed'
+   *   * session.itemIds.length > 0
+   *
+   * A different script or different character in the active slot means
+   * the actor moved on to another study target — do NOT restore it
+   * into the current selection; keep the Start Learning path clean.
+   * Malformed data (bad JSON, missing fields) is treated as "no
+   * resumable session" by `loadActiveSession()`'s defensive parse.
+   *
+   * When the user taps Start again we explicitly `clearActiveSession()`
+   * then `createSession()` — no overwrite race.
+   */
+  const [activeSession, setActiveSession] = useState<LearningSession | null>(null);
+  const [activeSessionLoaded, setActiveSessionLoaded] = useState(false);
+
   useEffect(() => {
     setCharacterId(initialCharacterId);
   }, [initialCharacterId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadActive() {
+      const s = await loadActiveSession();
+      if (cancelled) return;
+      setActiveSession(s);
+      setActiveSessionLoaded(true);
+    }
+    loadActive();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +140,55 @@ export default function LearnHubScreen() {
 
   const progress = useMemo(() => aggregateProgress(items), [items]);
 
+  /**
+   * Is the persisted active session valid AND resumable for the current
+   * script + character? See the block comment on the state above for the
+   * full contract. Deliberately narrow — any mismatch drops us back to
+   * the plain Start Learning path.
+   */
+  const resumableSession = useMemo<LearningSession | null>(() => {
+    const s = activeSession;
+    if (!s) return null;
+    if (!script || !characterId) return null;
+    if (s.scriptId !== script.id) return null;
+    if (s.characterId !== characterId) return null;
+    if (s.state === 'completed') return null;
+    if (!Array.isArray(s.itemIds) || s.itemIds.length === 0) return null;
+    // currentIndex must be within [0, itemIds.length) — otherwise the
+    // stored session is malformed for the current items and we treat it
+    // as non-resumable rather than trusting a bad index.
+    if (
+      typeof s.currentIndex !== 'number' ||
+      s.currentIndex < 0 ||
+      s.currentIndex >= s.itemIds.length
+    ) {
+      return null;
+    }
+    return s;
+  }, [activeSession, script?.id, characterId]);
+
+  const resumeCharacterName = useMemo(() => {
+    if (!resumableSession) return '';
+    return (
+      characters.find((c) => c.id === resumableSession.characterId)?.name ?? ''
+    );
+  }, [resumableSession, characters]);
+
+  async function handleResume() {
+    if (!resumableSession) return;
+    router.push(
+      `/learn/session?sessionId=${encodeURIComponent(resumableSession.id)}`,
+    );
+  }
+
+  async function handleStartAgain() {
+    // Explicit user opt-in: discard the in-flight session and create a
+    // fresh one at line 1. LearningRecord history is untouched.
+    await clearActiveSession();
+    setActiveSession(null);
+    await handleStart();
+  }
+
   async function handleStart() {
     if (!script || !characterId || filteredItems.length === 0) return;
     const session = createSession({
@@ -108,6 +200,7 @@ export default function LearnHubScreen() {
       nowIso: new Date().toISOString(),
     });
     await saveActiveSession(session);
+    setActiveSession(session);
     router.push(`/learn/session?sessionId=${encodeURIComponent(session.id)}`);
   }
 
@@ -304,18 +397,54 @@ export default function LearnHubScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[
-            styles.primaryButton,
-            filteredItems.length === 0 && styles.primaryButtonDisabled,
-          ]}
-          onPress={handleStart}
-          disabled={filteredItems.length === 0}
-          testID="learn-hub-start"
-        >
-          <Ionicons name="play" size={20} color="#0a0a0f" />
-          <Text style={styles.primaryButtonText}>Start learning</Text>
-        </TouchableOpacity>
+        {resumableSession ? (
+          <View
+            style={styles.resumeBanner}
+            testID="learn-hub-resume-banner"
+          >
+            <View style={styles.resumeHeader}>
+              <Ionicons name="bookmark" size={16} color="#22d3ee" />
+              <Text style={styles.resumeTitle}>Resume your session?</Text>
+            </View>
+            <Text style={styles.resumeSubtitle} testID="learn-hub-resume-subtitle">
+              You have an active learning session
+              {resumeCharacterName ? ` for ${resumeCharacterName.toUpperCase()}` : ''}.
+              {' '}Line {resumableSession.currentIndex + 1} of{' '}
+              {resumableSession.itemIds.length}.
+            </Text>
+            <View style={styles.resumeRow}>
+              <TouchableOpacity
+                style={[styles.primaryButton, styles.resumeStartAgain]}
+                onPress={handleStartAgain}
+                testID="learn-hub-start-again"
+              >
+                <Ionicons name="refresh" size={18} color="#e5e7eb" />
+                <Text style={styles.resumeStartAgainText}>Start again</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryButton, styles.resumeButton]}
+                onPress={handleResume}
+                testID="learn-hub-resume"
+              >
+                <Ionicons name="play" size={18} color="#0a0a0f" />
+                <Text style={styles.primaryButtonText}>Resume</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              filteredItems.length === 0 && styles.primaryButtonDisabled,
+            ]}
+            onPress={handleStart}
+            disabled={filteredItems.length === 0 || !activeSessionLoaded}
+            testID="learn-hub-start"
+          >
+            <Ionicons name="play" size={20} color="#0a0a0f" />
+            <Text style={styles.primaryButtonText}>Start learning</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -416,4 +545,48 @@ const styles = StyleSheet.create({
   primaryButtonDisabled: { opacity: 0.4 },
   primaryButtonText: { color: '#0a0a0f', fontSize: 16, fontWeight: '700' },
   emptyTitle: { color: '#e5e7eb', fontSize: 18, fontWeight: '700' },
+  // Resume UX (2026-02) — offered when a valid in-flight session exists
+  // for the same script + character. Otherwise the plain Start Learning
+  // button is rendered.
+  resumeBanner: {
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#22d3ee',
+    gap: 10,
+  },
+  resumeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  resumeTitle: {
+    color: '#e5e7eb',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  resumeSubtitle: {
+    color: '#9ca3af',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  resumeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  resumeButton: {
+    flex: 1,
+  },
+  resumeStartAgain: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  resumeStartAgainText: {
+    color: '#e5e7eb',
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });
