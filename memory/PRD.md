@@ -339,3 +339,11 @@ Expo SDK 54 / New Architecture / Fabric.
 - Do not create production AABs.
 - Do not push to GitHub (user does via "Save to GitHub" UI).
 - Preserve `expo-file-system/legacy` imports, JS-driven teleprompter scroll, `useNativeDriver: false` on `controlsOpacity`, patch-package pipeline, and all camera/permissions/save/retake flows.
+
+
+## 2026-02 — Deployment fix: patch-package hook must run in EAS OTA lane
+
+### EAS OTA deploy failure at `build_image` (RESOLVED — source fix)
+- **Cause:** Deployer's EAS OTA lane runs `yarn install` with `NODE_ENV=production`, which skips `devDependencies`. Because `patch-package` and `postinstall-postinstall` sat in `devDependencies`, the `postinstall: patch-package` hook failed with exit 127 (`patch-package: not found`). The physically proven `expo-camera+17.0.10.patch` (Android SIGSEGV fix on S23 Ultra) never applied in deploy builds.
+- **Fix:** Moved `patch-package` (8.0.1) and `postinstall-postinstall` (2.1.0) from `devDependencies` → `dependencies` in `frontend/package.json`. Ran `yarn install --force` to refresh `yarn.lock`. Verified `patch-package` runs postinstall and applies `expo-camera@17.0.10 ✔` cleanly. `postinstall` script unchanged. Nothing else touched. 18 pre-existing lint issues untouched per user directive.
+- **Next action:** User re-triggers redeploy via Emergent UI. EAS OTA lane will now install `patch-package` under production install and apply the camera patch during the build.
