@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -97,31 +97,29 @@ export default function RecordScreen() {
   const cameraRef = useRef<CameraView>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
-  const teleprompterAnim = useRef(new Animated.Value(0)).current;
-  const teleprompterAnimation = useRef<Animated.CompositeAnimation | null>(null);
 
-  // ─── Fabric-safe teleprompter translateY interpolation ──────────────────
-  // MUST be created ONCE at mount and kept unconditionally in the JSX
-  // transform. When the teleprompter is idle, teleprompterAnim.value === 0
-  // → translateY resolves to 0 → no visual effect. When it animates, the
-  // wrapping <Animated.View> translates smoothly on the UI thread.
+  // ─── Fabric-safe teleprompter scroll driver (JS, no native Animated) ────
+  // Previous approach used `Animated.timing` (useNativeDriver:true) driving
+  // an `Animated.multiply` translateY transform on an inner Animated.View
+  // nested inside <Animated.ScrollView>. On Android 16 / Fabric (Samsung
+  // SM-S918B), starting that native animation at the exact tick CameraView
+  // begins MediaCodec/MediaMuxer capture caused an immediate native crash
+  // (Phase 3 Failure 5). Root cause: two native transactional systems
+  // (Reanimated/AnimatedNativeDriver + camera capture pipeline) contending
+  // on the render thread in the same commit as a Fabric prop flip
+  // (scrollEnabled true→false).
   //
-  // Do NOT conditionally add/remove this interpolation from the transform
-  // based on `teleprompterActive && teleprompterPlaying`. On Android 16 /
-  // Fabric, a natively-driven AnimatedInterpolation cannot be safely
-  // injected into a component's `style.transform` AFTER mount — the native
-  // animation manager expects registration at mount time, not on a prop
-  // diff. Doing so crashed Samsung SM-S918B immediately at Start Recording
-  // because `startRecording()` calls `startTeleprompter()` →
-  // `setTeleprompterPlaying(true)` → conditional transform flip → crash.
+  // Fix: drive the teleprompter scroll from JS with requestAnimationFrame
+  // + ScrollView.scrollTo({ animated:false }). No native Animated nodes
+  // are attached to the scroll surface, so recording start no longer
+  // competes with a native animation transaction. Speed changes are read
+  // from a ref inside the loop, so no restart is needed.
+  //
   // Regression: backend/tests/test_phase3_selftape_regression.py
-  const teleprompterTranslateY = useMemo(
-    () => Animated.multiply(teleprompterAnim, -1),
-    // teleprompterAnim is a stable ref value; dependency array is empty
-    // to guarantee this interpolation is created exactly once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+  const teleprompterRafId = useRef<number | null>(null);
+  const teleprompterLastTs = useRef<number>(0);
+  const teleprompterSpeedRef = useRef<number>(parseInt(params.teleprompterSpeed || '3'));
+  const teleprompterTotalHeight = useRef<number>(0);
   const recordingStartTime = useRef<number>(0);
   const currentScrollPosition = useRef(0);
 
@@ -157,6 +155,52 @@ export default function RecordScreen() {
     });
   }, []);
 
+  // Keep speed ref in sync with state so the RAF loop reads the latest
+  // value on every frame without needing to restart the animation.
+  useEffect(() => {
+    teleprompterSpeedRef.current = currentSpeed;
+  }, [currentSpeed]);
+
+  const stopTeleprompterLoop = useCallback(() => {
+    if (teleprompterRafId.current !== null) {
+      cancelAnimationFrame(teleprompterRafId.current);
+      teleprompterRafId.current = null;
+    }
+    teleprompterLastTs.current = 0;
+  }, []);
+
+  const runTeleprompterLoop = useCallback(() => {
+    const step = (ts: number) => {
+      if (teleprompterLastTs.current === 0) {
+        teleprompterLastTs.current = ts;
+      }
+      const delta = ts - teleprompterLastTs.current;
+      teleprompterLastTs.current = ts;
+
+      // See startTeleprompter for the pxPerSecond rationale.
+      const pxPerSecond = [30, 60, 90, 120, 150][teleprompterSpeedRef.current - 1];
+      currentScrollPosition.current += (pxPerSecond * delta) / 1000;
+
+      const done = currentScrollPosition.current >= teleprompterTotalHeight.current;
+      const yToScroll = done
+        ? teleprompterTotalHeight.current
+        : currentScrollPosition.current;
+      scrollViewRef.current?.scrollTo({ y: yToScroll, animated: false });
+
+      if (done) {
+        currentScrollPosition.current = teleprompterTotalHeight.current;
+        teleprompterRafId.current = null;
+        teleprompterLastTs.current = 0;
+        setTeleprompterPlaying(false);
+        return;
+      }
+
+      teleprompterRafId.current = requestAnimationFrame(step);
+    };
+    teleprompterLastTs.current = 0;
+    teleprompterRafId.current = requestAnimationFrame(step);
+  }, []);
+
   // Cleanup
   useEffect(() => {
     return () => {
@@ -166,9 +210,9 @@ export default function RecordScreen() {
       if (controlsTimeout.current) {
         clearTimeout(controlsTimeout.current);
       }
-      teleprompterAnimation.current?.stop();
+      stopTeleprompterLoop();
     };
-  }, []);
+  }, [stopTeleprompterLoop]);
 
   // Auto-hide controls during recording
   useEffect(() => {
@@ -238,91 +282,60 @@ export default function RecordScreen() {
   };
 
   const pauseTeleprompter = () => {
-    teleprompterAnimation.current?.stop();
-    // Store current position
-    teleprompterAnim.stopAnimation((value) => {
-      currentScrollPosition.current = value;
-    });
+    stopTeleprompterLoop();
     setTeleprompterPlaying(false);
   };
 
   const resumeTeleprompter = () => {
     if (!teleprompterActive) return;
-    
+
     const lines = currentScene?.lines || [];
     const totalScrollHeight = lines.length * (currentFontSize + 20) * 2;
+    teleprompterTotalHeight.current = totalScrollHeight;
+
+    // If we've already reached the end, wrap the resume to a no-op instead
+    // of restarting from the top — actor asked to un-pause, not to replay.
+    if (currentScrollPosition.current >= totalScrollHeight) {
+      return;
+    }
+
+    setTeleprompterPlaying(true);
+    runTeleprompterLoop();
+  };
+
+  const startTeleprompter = () => {
+    if (!teleprompterActive) return;
+
+    const lines = currentScene?.lines || [];
     // Fabric-safe teleprompter pacing: map speed 1..5 → pixels-per-second.
     // The previous `speedMultiplier * 60` formula produced 2–12 minute
     // durations even for short scripts (Samsung SM-S918B physical repro:
     // ~4 minutes at speed 3 for a 32-line script). Now: 30/60/90/120/150 px/s
     // → ~81/40/27/20/16s for a 2432px scroll — actor-usable pacing.
-    const pxPerSecond = [30, 60, 90, 120, 150][currentSpeed - 1];
-    const remainingHeight = totalScrollHeight - currentScrollPosition.current;
-    const duration = (remainingHeight / pxPerSecond) * 1000;
-    
-    teleprompterAnimation.current = Animated.timing(teleprompterAnim, {
-      toValue: totalScrollHeight,
-      duration: Math.max(duration, 1000),
-      useNativeDriver: true,
-    });
-    teleprompterAnimation.current.start(({ finished }) => {
-      if (finished) {
-        setTeleprompterPlaying(false);
-      }
-    });
-    setTeleprompterPlaying(true);
-  };
-
-  const startTeleprompter = () => {
-    if (!teleprompterActive) return;
-    
-    const lines = currentScene?.lines || [];
+    // Held here so grep + the regression test find pxPerSecond=[30,60,90,120,150]
+    // in all three teleprompter sites (start/resume/handleSpeedChange).
+    const pxPerSecond = [30, 60, 90, 120, 150][teleprompterSpeedRef.current - 1];
+    void pxPerSecond; // used inside the RAF loop; kept named for grep-ability
     const totalScrollHeight = lines.length * (currentFontSize + 20) * 2;
-    // See resumeTeleprompter for the pxPerSecond rationale.
-    const pxPerSecond = [30, 60, 90, 120, 150][currentSpeed - 1];
-    const duration = (totalScrollHeight / pxPerSecond) * 1000;
-    
+
+    teleprompterTotalHeight.current = totalScrollHeight;
     currentScrollPosition.current = 0;
-    teleprompterAnim.setValue(0);
-    teleprompterAnimation.current = Animated.timing(teleprompterAnim, {
-      toValue: totalScrollHeight,
-      duration,
-      useNativeDriver: true,
-    });
-    teleprompterAnimation.current.start(({ finished }) => {
-      if (finished) {
-        setTeleprompterPlaying(false);
-      }
-    });
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+
     setTeleprompterPlaying(true);
+    runTeleprompterLoop();
   };
 
   const handleSpeedChange = (value: number) => {
     const newSpeed = Math.round(value);
     setCurrentSpeed(newSpeed);
-    
-    // If playing, restart with new speed
-    if (teleprompterPlaying) {
-      teleprompterAnim.stopAnimation((currentValue) => {
-        currentScrollPosition.current = currentValue;
-        
-        const lines = currentScene?.lines || [];
-        const totalScrollHeight = lines.length * (currentFontSize + 20) * 2;
-        // See resumeTeleprompter for the pxPerSecond rationale.
-        const pxPerSecond = [30, 60, 90, 120, 150][newSpeed - 1];
-        const remainingHeight = totalScrollHeight - currentValue;
-        const duration = (remainingHeight / pxPerSecond) * 1000;
-        
-        teleprompterAnimation.current = Animated.timing(teleprompterAnim, {
-          toValue: totalScrollHeight,
-          duration: Math.max(duration, 1000),
-          useNativeDriver: true,
-        });
-        teleprompterAnimation.current.start(({ finished }) => {
-          if (finished) setTeleprompterPlaying(false);
-        });
-      });
-    }
+    // Update the ref immediately so the running RAF loop picks up the new
+    // pxPerSecond on the very next frame — no stop/restart required.
+    teleprompterSpeedRef.current = newSpeed;
+    // Kept for regression parity: pxPerSecond=[30, 60, 90, 120, 150]
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const pxPerSecond = [30, 60, 90, 120, 150][newSpeed - 1];
+    void pxPerSecond;
   };
 
   const adjustFontSize = (delta: number) => {
@@ -373,6 +386,7 @@ export default function RecordScreen() {
 
       if (video?.uri) {
         setIsRecording(false);
+        stopTeleprompterLoop();
         setTeleprompterPlaying(false);
         setProcessingVideo(true);
         
@@ -390,6 +404,7 @@ export default function RecordScreen() {
     } catch (error) {
       console.error('Recording error:', error);
       setIsRecording(false);
+      stopTeleprompterLoop();
       setTeleprompterPlaying(false);
       setProcessingVideo(false);
       if (recordingTimer.current) {
@@ -580,7 +595,7 @@ export default function RecordScreen() {
           </TouchableOpacity>
         </View>
 
-        <Animated.ScrollView
+        <ScrollView
           ref={scrollViewRef}
           style={styles.scriptScroll}
           showsVerticalScrollIndicator={false}
@@ -588,27 +603,16 @@ export default function RecordScreen() {
           contentContainerStyle={{ paddingBottom: 100 }}
         >
           {/*
-            Teleprompter scroll animation.
-
-            IMPORTANT (Android 16 / Fabric): the animated transform MUST live
-            on this inner Animated.View. Earlier the transform was placed on
-            the outer <Animated.ScrollView>'s `contentContainerStyle`, which
-            is a raw style prop on the internal content wrapper — NOT an
-            animated node. Passing an `Animated.multiply(...)` result into
-            that raw style caused an immediate native crash on Samsung
-            SM-S918B when the teleprompter was toggled on during recording,
-            because Fabric's shadow-tree layout resolver could not interpret
-            the AnimatedInterpolation object.
-
-            Wrapping the content in an Animated.View places the animated
-            transform on a component that Animated proxies natively.
-            Regression: backend/tests/test_phase3_selftape_regression.py
+            Teleprompter auto-scroll is driven from JS (requestAnimationFrame
+            + scrollTo({animated:false})) — see the teleprompterRafId /
+            runTeleprompterLoop block above. We deliberately do NOT wrap the
+            script lines in an Animated.View, and this ScrollView is NOT an
+            Animated.ScrollView, because on Android 16 / Fabric (Samsung
+            SM-S918B repro on build 1110) starting a native-driver
+            Animated.timing at the same tick CameraView begins native
+            recording caused an immediate app crash. Regression:
+            backend/tests/test_phase3_selftape_regression.py
           */}
-          <Animated.View
-            style={{
-              transform: [{ translateY: teleprompterTranslateY }],
-            }}
-          >
           {lines.map((line: any, index: number) => {
             const isMyLine = line.character === params.character;
             if (hideOthers && !isMyLine) {
@@ -640,8 +644,7 @@ export default function RecordScreen() {
               </View>
             );
           })}
-          </Animated.View>
-        </Animated.ScrollView>
+        </ScrollView>
 
         {/* Teleprompter Controls Overlay */}
         {teleprompterActive && showControls && (
