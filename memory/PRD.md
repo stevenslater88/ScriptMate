@@ -506,3 +506,43 @@ Refactor the masked-line render to a FLAT SINGLE STRING inside a SINGLE `<Text>`
 ### Commit
 - `41389b6` — fix(learn): Fabric-safe masked-line render — eliminates difficulty-tap crash on Android 16
 
+
+## 2026-02 — Phase 4 Learn Resume UX (physical gate fix)
+
+### Bug
+Physical Samsung SM-S918B / Android 16 QA: tapping 'Start learning' after backgrounding an in-flight session silently overwrote it with a fresh `createSession()` at line 1. The actor was sent back to the start every time.
+
+### Root cause
+UX-flow gap in the Hub, not a persistence bug. `saveActiveSession()` on state transitions was working; the Session screen already restores `currentIndex` on mount. But the Hub always called `createSession()` on Start, overwriting the saved session.
+
+### Fix (Hub only — smallest safe change)
+`frontend/app/learn/index.tsx`:
+- `loadActiveSession()` on mount; stored in local state.
+- Pure predicate `resumableSession` gating on: valid session + `scriptId` match + `characterId` match + `state !== 'completed'` + `itemIds.length > 0` + `currentIndex ∈ [0, itemIds.length)`.
+- Resume banner (testID `learn-hub-resume-banner`) with two buttons:
+  - **Resume** (`learn-hub-resume`) — navigates to the existing session id. NO `createSession()` call. Session screen's boot effect restores position from persistence.
+  - **Start again** (`learn-hub-start-again`) — awaits `clearActiveSession()` BEFORE `createSession()`. No overwrite race.
+- When not resumable → the plain `learn-hub-start` button renders unchanged.
+
+### Not changed
+Storage architecture, Learn engine, Session screen, Summary screen, Script Library storage, scriptStore, Phase 3 self-tape files, expo-camera patch, self-tape storage. No new dependency. 18 pre-existing backend lint issues untouched.
+
+### Edge cases
+- Corrupted session JSON: loadActiveSession returns null → banner hidden → plain Start path. No crash.
+- Different script / different character: predicate rejects → banner hidden. In-flight session preserved for later.
+- Completed session: predicate rejects.
+- Out-of-range `currentIndex`: predicate rejects.
+
+### Tests
+- **NEW:** `backend/tests/test_learn_resume_ux.py` — 15 guards.
+- Full accumulated: **201/201 pass in 1.73s**.
+- Runtime engine smoke: **22/22 pass**.
+- Parser regression: **10/10 pass**.
+- TypeScript: 3 pre-existing, 0 new. Lint: 18 pre-existing untouched.
+
+### Native crash: HOLD
+Not addressed here. Awaiting adb logcat / Sentry payload / bugreport. Resume UX verified to not touch any native surface (`test_phase3_files_untouched_by_resume_ux` + `test_expo_camera_patch_intact`).
+
+### Commit
+- `238273a` — feat(learn): Resume vs Start again in Learn Hub
+
