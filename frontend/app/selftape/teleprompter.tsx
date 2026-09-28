@@ -82,10 +82,17 @@ export default function TeleprompterScreen() {
   
   // Teleprompter state
   const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState(3);
+  // Phase 3 UX polish (2026-02): fresh sessions default to speed 2. The
+  // five speed segments [1..5] and their pxPerSecond mapping [30, 60, 90,
+  // 120, 150] are unchanged; only the initial selection changes.
+  const [speed, setSpeed] = useState(2);
   const [fontSize, setFontSize] = useState(24);
   const [opacity, setOpacity] = useState(0.85);
-  const [position, setPosition] = useState<'top' | 'middle' | 'bottom'>('bottom');
+  // Phase 3 UX polish (2026-02): fresh sessions place the teleprompter
+  // window at the top of the screen so the script's first line is visible
+  // from the top. 'top' | 'middle' | 'bottom' all still selectable at
+  // runtime; only the initial default changes.
+  const [position, setPosition] = useState<'top' | 'middle' | 'bottom'>('top');
   const [showSettings, setShowSettings] = useState(false);
   const [highlightMyLines, setHighlightMyLines] = useState(true);
   // ─── Framing Guides (Post-Phase-3 polish) ─────────────────────────────
