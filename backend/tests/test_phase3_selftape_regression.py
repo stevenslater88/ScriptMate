@@ -537,6 +537,259 @@ def test_selftape_teleprompter_does_not_import_deprecated_top_level_fs() -> None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ROUTE B CONVERGENCE — teleprompter.tsx aligned with the proven Route A
+# architecture. Route B is the "Teleprompter Mode NEW" card path
+# (selftape/index.tsx:151 → /selftape/teleprompter). Before convergence,
+# Route B still contained all pre-Failure-4/5 anti-patterns:
+#     - Animated.timing(scrollAnim, useNativeDriver:true)
+#     - Animated.multiply(scrollAnim, -1) translateY on an Animated.View
+#     - @react-native-community/slider (deprecated old-arch-only import)
+#     - speedMultiplier=[0.15,0.25,0.4,0.6,0.8] with duration=(H/m)*50
+#     - heuristic totalContentHeight = lines.length * (fontSize + 16)
+# All of those are now replaced by the proven Route A model.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_route_b_teleprompter_uses_js_driven_scroll() -> None:
+    """teleprompter.tsx MUST drive the scroll via a JS requestAnimationFrame
+    loop + ScrollView.scrollTo({animated:false}) — same pattern as
+    record.tsx (Failure 5 anti-pattern avoidance)."""
+    src = _read("app/selftape/teleprompter.tsx")
+    assert "requestAnimationFrame(step)" in src, (
+        "teleprompter.tsx must run its teleprompter scroll from a JS "
+        "requestAnimationFrame loop (runTeleprompterLoop). No native "
+        "Animated node may drive the scroll on Fabric/Android 16."
+    )
+    scrollto = re.compile(
+        r"scrollViewRef\.current\?\.scrollTo\(\s*\{\s*y:\s*[^,]+,\s*"
+        r"animated:\s*false\s*\}\s*\)",
+        re.DOTALL,
+    )
+    assert scrollto.search(src), (
+        "teleprompter.tsx must call scrollViewRef.current?.scrollTo("
+        "{ y: ..., animated: false }) inside the teleprompter loop."
+    )
+    assert "teleprompterRafId" in src, (
+        "teleprompter.tsx must hold the RAF handle in teleprompterRafId "
+        "so pauseTeleprompter can cancelAnimationFrame it."
+    )
+    assert "cancelAnimationFrame(teleprompterRafId.current)" in src, (
+        "stopTeleprompterLoop must cancelAnimationFrame the RAF handle."
+    )
+
+
+def test_route_b_teleprompter_removes_native_animated_scrolling() -> None:
+    """Forbid the pre-Failure-5 anti-patterns from re-appearing on Route B."""
+    src = _read("app/selftape/teleprompter.tsx")
+    # Code-only scan (comments may still reference these names historically).
+    code_lines = [ln for ln in src.splitlines() if not ln.lstrip().startswith("//")]
+    code = "\n".join(code_lines)
+    forbidden = [
+        (r"Animated\.timing\(\s*scrollAnim",
+         "Animated.timing on scrollAnim (native-driver scroll)"),
+        (r"Animated\.multiply\(\s*scrollAnim",
+         "Animated.multiply on scrollAnim"),
+        (r"Animated\.CompositeAnimation",
+         "Animated.CompositeAnimation ref (native scroll animation handle)"),
+        (r"useNativeDriver:\s*true",
+         "any useNativeDriver:true — Route B must be fully JS-driven"),
+    ]
+    for pattern, desc in forbidden:
+        assert not re.search(pattern, code), (
+            f"Forbidden anti-pattern re-introduced in teleprompter.tsx: "
+            f"{desc}. This is the shape of the Failure 5 native crash."
+        )
+
+
+def test_route_b_teleprompter_does_not_import_community_slider() -> None:
+    """Route B must not re-import the deprecated old-arch Slider that was
+    purged from Route A during the Failure 4 investigation."""
+    src = _read("app/selftape/teleprompter.tsx")
+    forbidden = re.search(
+        r"^\s*import\s+.*Slider.*from\s+['\"]@react-native-community/slider['\"]",
+        src, re.MULTILINE,
+    )
+    assert forbidden is None, (
+        "teleprompter.tsx must not import Slider from "
+        "'@react-native-community/slider'. Use the segmented [1..5] "
+        "TouchableOpacity speed control instead (mirrors Route A)."
+    )
+
+
+def test_route_b_teleprompter_uses_segmented_speed_control() -> None:
+    """Fabric-safe replacement for the community Slider: segmented [1..5]
+    TouchableOpacity control."""
+    src = _read("app/selftape/teleprompter.tsx")
+    pattern = re.compile(
+        r"\[1,\s*2,\s*3,\s*4,\s*5\]\.map\(\s*\(s\)\s*=>\s*\(\s*"
+        r"<TouchableOpacity",
+        re.DOTALL,
+    )
+    assert pattern.search(src), (
+        "Expected a segmented speed control [1,2,3,4,5].map(...) "
+        "rendering <TouchableOpacity> per value on Route B."
+    )
+
+
+def test_route_b_teleprompter_uses_pxPerSecond_pacing() -> None:
+    """Route B must use the proven Route A pacing model
+    pxPerSecond=[30,60,90,120,150], not the slow speedMultiplier formula."""
+    src = _read("app/selftape/teleprompter.tsx")
+    code_lines = [ln for ln in src.splitlines() if not ln.lstrip().startswith("//")]
+    code = "\n".join(code_lines)
+    # Forbid the old slow formula.
+    assert not re.search(
+        r"speedMultiplier\s*=\s*\[0\.15,\s*0\.25,\s*0\.4,\s*0\.6,\s*0\.8\]",
+        code,
+    ), (
+        "The old speedMultiplier=[0.15,0.25,0.4,0.6,0.8] pattern must "
+        "be removed — it produced unusably slow teleprompter durations."
+    )
+    # Require the proven px/s array.
+    assert re.search(
+        r"\[30,\s*60,\s*90,\s*120,\s*150\]",
+        code,
+    ), (
+        "teleprompter.tsx must use pxPerSecond=[30,60,90,120,150] in "
+        "its RAF loop for parity with record.tsx."
+    )
+
+
+def test_route_b_teleprompter_measures_content_height_at_runtime() -> None:
+    """The scroll driver must use ScrollView.onContentSizeChange to know
+    the true content height — the old pre-render heuristic
+    (lines.length * (fontSize+16)) under-counted wrapped dialogue and
+    caused the teleprompter to stop early."""
+    src = _read("app/selftape/teleprompter.tsx")
+    assert "onContentSizeChange" in src, (
+        "teleprompter.tsx must attach onContentSizeChange to the "
+        "teleprompter ScrollView to capture the real content height."
+    )
+    assert "teleprompterTotalHeight.current" in src, (
+        "onContentSizeChange must write to teleprompterTotalHeight.current "
+        "so runTeleprompterLoop uses the measured height as its budget."
+    )
+    # And the old heuristic assignment must be gone.
+    code_lines = [ln for ln in src.splitlines() if not ln.lstrip().startswith("//")]
+    code = "\n".join(code_lines)
+    assert not re.search(
+        r"const\s+totalContentHeight\s*=\s*lines\.length\s*\*",
+        code,
+    ), (
+        "The pre-render heuristic `totalContentHeight = lines.length * "
+        "...` must be removed on Route B."
+    )
+
+
+def test_route_b_teleprompter_has_exactly_one_active_raf_loop() -> None:
+    """runTeleprompterLoop must cancel any pre-existing RAF before it
+    schedules a new one — guarantees exactly one loop is ever alive."""
+    src = _read("app/selftape/teleprompter.tsx")
+    # The runTeleprompterLoop function must contain both a pre-schedule
+    # cancel AND the requestAnimationFrame(step) call. Extract its body.
+    m = re.search(
+        r"const\s+runTeleprompterLoop\s*=\s*useCallback\(\(\)\s*=>\s*\{"
+        r"(.*?)\}\s*,\s*\[\s*\]\s*\);",
+        src, re.DOTALL,
+    )
+    assert m, "runTeleprompterLoop function not found on Route B"
+    body = m.group(1)
+    assert "cancelAnimationFrame(teleprompterRafId.current)" in body, (
+        "runTeleprompterLoop must cancelAnimationFrame any pre-existing "
+        "handle BEFORE scheduling a new frame — this is how we guarantee "
+        "exactly one active teleprompter loop."
+    )
+    assert "requestAnimationFrame(step)" in body
+
+
+def test_route_b_teleprompter_cleanup_cancels_raf_on_unmount() -> None:
+    """The unmount cleanup effect must cancel the RAF loop and clear
+    the recording timer."""
+    src = _read("app/selftape/teleprompter.tsx")
+    # Find the cleanup useEffect (has stopTeleprompterLoop() in its return).
+    m = re.search(
+        r"useEffect\(\s*\(\)\s*=>\s*\{\s*return\s*\(\)\s*=>\s*\{"
+        r"(.*?)\};\s*\}\s*,\s*\[stopTeleprompterLoop\]\s*\);",
+        src, re.DOTALL,
+    )
+    assert m, (
+        "teleprompter.tsx must have an unmount cleanup useEffect keyed "
+        "on [stopTeleprompterLoop] that cancels the RAF loop and the "
+        "recording timer."
+    )
+    body = m.group(1)
+    assert "stopTeleprompterLoop()" in body
+    assert "clearInterval(recordingTimer.current)" in body
+
+
+def test_route_b_teleprompter_pause_and_reset_cancel_the_loop() -> None:
+    """pauseTeleprompter and resetTeleprompter must both cancel the RAF
+    handle so no zombie scroll runs after user stops/resets."""
+    src = _read("app/selftape/teleprompter.tsx")
+
+    for fn_name in ("pauseTeleprompter", "resetTeleprompter"):
+        m = re.search(
+            rf"const\s+{fn_name}\s*=\s*\(\)\s*=>\s*\{{(.*?)\n\s{{2}}\}};",
+            src, re.DOTALL,
+        )
+        assert m, f"{fn_name} function not found on Route B"
+        assert "stopTeleprompterLoop()" in m.group(1), (
+            f"{fn_name} must call stopTeleprompterLoop() to cancel the "
+            f"requestAnimationFrame handle."
+        )
+
+
+def test_route_b_speed_change_does_not_restart_the_loop() -> None:
+    """handleSpeedChange must update the speed ref (so the running RAF
+    loop reads it on the next frame) rather than stopping and restarting
+    the animation. Stop-and-restart re-mounts the loop and risks a
+    duplicate."""
+    src = _read("app/selftape/teleprompter.tsx")
+    m = re.search(
+        r"const\s+handleSpeedChange\s*=\s*\(value:\s*number\)\s*=>\s*"
+        r"\{(.*?)\n\s{2}\};",
+        src, re.DOTALL,
+    )
+    assert m, "handleSpeedChange function not found on Route B"
+    body = m.group(1)
+    assert "teleprompterSpeedRef.current = newSpeed" in body, (
+        "handleSpeedChange must update teleprompterSpeedRef.current so "
+        "the running RAF loop picks up the new pxPerSecond on the "
+        "next frame — no restart, no duplicate loop."
+    )
+    # No native-driver restart pattern allowed.
+    assert "Animated.timing" not in body
+
+
+def test_route_b_teleprompter_retains_legacy_filesystem_import() -> None:
+    """The save-path fix (adf52e5) must be preserved."""
+    src = _read("app/selftape/teleprompter.tsx")
+    assert "from 'expo-file-system/legacy'" in src, (
+        "teleprompter.tsx must retain the expo-file-system/legacy import "
+        "(commit adf52e5). Do not regress the save path."
+    )
+
+
+def test_route_b_teleprompter_camera_and_recording_intact() -> None:
+    """The camera + recording contract (recordAsync + stopRecording +
+    permissions + action-sheet) must remain untouched by this convergence."""
+    src = _read("app/selftape/teleprompter.tsx")
+    required = [
+        "useCameraPermissions",
+        "useMicrophonePermissions",
+        "cameraRef.current.recordAsync({",
+        "cameraRef.current.stopRecording()",
+        "setShowActionSheet(true)",
+        "setRecordedVideoUri",
+        "setRecordingDuration",
+    ]
+    for s in required:
+        assert s in src, (
+            f"teleprompter.tsx must still contain `{s}` — the Route B "
+            f"convergence must not touch the camera/recording flow."
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Shared: neither fix touched the working camera / recording path
 # ─────────────────────────────────────────────────────────────────────────────
 

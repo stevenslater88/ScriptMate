@@ -6,18 +6,17 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
-  Animated,
   Dimensions,
   Modal,
   ActivityIndicator,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import Slider from '@react-native-community/slider';
 import { useScriptStore } from '../../store/scriptStore';
 import { 
   trackRecordingStarted, 
@@ -99,10 +98,31 @@ export default function TeleprompterScreen() {
   
   const cameraRef = useRef<CameraView>(null);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
-  const scrollAnim = useRef(new Animated.Value(0)).current;
-  const scrollAnimation = useRef<Animated.CompositeAnimation | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const recordingStartTime = useRef<number>(0);
   const currentScrollPosition = useRef(0);
+
+  // ─── Fabric-safe JS-driven teleprompter scroll driver ───────────────────
+  // Route B is now aligned with Route A (record.tsx). We do NOT use
+  // Animated.timing/multiply on the New Architecture: on SDK 54 / Fabric /
+  // Android 16, native-driver teleprompter animations that start in the
+  // same commit as CameraView.recordAsync() are exactly the shape of the
+  // Failure 5 crash that record.tsx already resolved. The scroll here is
+  // driven purely from JS via requestAnimationFrame + ScrollView.scrollTo.
+  //
+  // Guarantees enforced by refs + a single loop function:
+  //   * exactly ONE active loop at a time
+  //   * cancelled on pause / stop / retake / unmount
+  //   * speed changes read from a ref → no restart, no duplicate loop
+  //   * content height is the LATEST value from ScrollView
+  //     onContentSizeChange (not the pre-render heuristic)
+  //
+  // Regression: backend/tests/test_phase3_selftape_regression.py
+  const teleprompterRafId = useRef<number | null>(null);
+  const teleprompterLastTs = useRef<number>(0);
+  const teleprompterSpeedRef = useRef<number>(3);
+  const teleprompterTotalHeight = useRef<number>(0);
+  const teleprompterViewportHeight = useRef<number>(0);
 
   const lines = currentScene?.lines || [];
 
@@ -161,9 +181,11 @@ export default function TeleprompterScreen() {
     );
   }
 
-  // Calculate total scroll height based on lines
-  const lineHeight = fontSize + 16;
-  const totalContentHeight = lines.length * lineHeight;
+  // Content height is measured via ScrollView.onContentSizeChange into
+  // teleprompterTotalHeight, so the previous
+  //   totalContentHeight = lines.length * (fontSize + 16)
+  // heuristic is no longer needed (was under-counting wrapped/multi-line
+  // dialogue and caused early stops).
   const visibleHeight = 200; // Height of the teleprompter window
 
   // Request permissions
@@ -185,70 +207,114 @@ export default function TeleprompterScreen() {
     requestPermissions();
   }, []);
 
-  // Cleanup
+  // Keep speed ref in sync with state so the RAF loop always reads the
+  // latest value without stop-and-restart.
+  useEffect(() => {
+    teleprompterSpeedRef.current = speed;
+  }, [speed]);
+
+  const stopTeleprompterLoop = useCallback(() => {
+    if (teleprompterRafId.current !== null) {
+      cancelAnimationFrame(teleprompterRafId.current);
+      teleprompterRafId.current = null;
+    }
+    teleprompterLastTs.current = 0;
+  }, []);
+
+  const runTeleprompterLoop = useCallback(() => {
+    // Cancel any pre-existing frame first — guarantees exactly one loop.
+    if (teleprompterRafId.current !== null) {
+      cancelAnimationFrame(teleprompterRafId.current);
+      teleprompterRafId.current = null;
+    }
+    const step = (ts: number) => {
+      if (teleprompterLastTs.current === 0) {
+        teleprompterLastTs.current = ts;
+      }
+      const delta = ts - teleprompterLastTs.current;
+      teleprompterLastTs.current = ts;
+
+      // Proven Route-A pacing model.
+      const pxPerSecond =
+        [30, 60, 90, 120, 150][teleprompterSpeedRef.current - 1] ?? 90;
+      currentScrollPosition.current += (pxPerSecond * delta) / 1000;
+
+      // Effective travel budget: full content minus one viewport, so the
+      // last line rests above the fold. Fall back gracefully if the
+      // viewport size hasn't been measured yet (e.g. first frame).
+      const budget = Math.max(
+        0,
+        teleprompterTotalHeight.current -
+          Math.max(teleprompterViewportHeight.current, 0),
+      );
+      const done =
+        budget > 0 && currentScrollPosition.current >= budget;
+      const yToScroll = done ? budget : currentScrollPosition.current;
+      scrollViewRef.current?.scrollTo({ y: yToScroll, animated: false });
+
+      if (done) {
+        currentScrollPosition.current = budget;
+        teleprompterRafId.current = null;
+        teleprompterLastTs.current = 0;
+        setIsPlaying(false);
+        return;
+      }
+
+      teleprompterRafId.current = requestAnimationFrame(step);
+    };
+    teleprompterLastTs.current = 0;
+    teleprompterRafId.current = requestAnimationFrame(step);
+  }, []);
+
+  // Cleanup — cancel timers and the RAF loop on unmount.
   useEffect(() => {
     return () => {
       if (recordingTimer.current) {
         clearInterval(recordingTimer.current);
       }
-      scrollAnimation.current?.stop();
+      stopTeleprompterLoop();
     };
-  }, []);
+  }, [stopTeleprompterLoop]);
 
   const toggleCamera = () => {
     setFacing(current => (current === 'front' ? 'back' : 'front'));
   };
 
   const startTeleprompter = () => {
-    const speedMultiplier = [0.15, 0.25, 0.4, 0.6, 0.8][speed - 1];
-    const duration = (totalContentHeight / speedMultiplier) * 50;
-    
+    // Reset to top and start the JS RAF loop. No native driver, no
+    // Animated.timing, no Animated.multiply — see the runTeleprompterLoop
+    // block above for the rationale (Failure 5 anti-pattern avoidance).
+    // pxPerSecond = [30, 60, 90, 120, 150] via teleprompterSpeedRef.current.
     currentScrollPosition.current = 0;
-    scrollAnim.setValue(0);
-    
-    scrollAnimation.current = Animated.timing(scrollAnim, {
-      toValue: totalContentHeight,
-      duration,
-      useNativeDriver: true,
-    });
-    scrollAnimation.current.start(({ finished }) => {
-      if (finished) {
-        setIsPlaying(false);
-      }
-    });
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     setIsPlaying(true);
+    runTeleprompterLoop();
   };
 
   const pauseTeleprompter = () => {
-    scrollAnimation.current?.stop();
-    scrollAnim.stopAnimation((value) => {
-      currentScrollPosition.current = value;
-    });
+    stopTeleprompterLoop();
     setIsPlaying(false);
   };
 
   const resumeTeleprompter = () => {
-    const speedMultiplier = [0.15, 0.25, 0.4, 0.6, 0.8][speed - 1];
-    const remainingHeight = totalContentHeight - currentScrollPosition.current;
-    const duration = (remainingHeight / speedMultiplier) * 50;
-    
-    scrollAnimation.current = Animated.timing(scrollAnim, {
-      toValue: totalContentHeight,
-      duration: Math.max(duration, 1000),
-      useNativeDriver: true,
-    });
-    scrollAnimation.current.start(({ finished }) => {
-      if (finished) {
-        setIsPlaying(false);
-      }
-    });
+    // Resume from wherever the scroll currently rests. If we've already
+    // reached the bottom, do nothing.
+    const budget = Math.max(
+      0,
+      teleprompterTotalHeight.current -
+        Math.max(teleprompterViewportHeight.current, 0),
+    );
+    if (budget > 0 && currentScrollPosition.current >= budget) {
+      return;
+    }
     setIsPlaying(true);
+    runTeleprompterLoop();
   };
 
   const resetTeleprompter = () => {
-    scrollAnimation.current?.stop();
-    scrollAnim.setValue(0);
+    stopTeleprompterLoop();
     currentScrollPosition.current = 0;
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     setIsPlaying(false);
   };
 
@@ -265,25 +331,11 @@ export default function TeleprompterScreen() {
   const handleSpeedChange = (value: number) => {
     const newSpeed = Math.round(value);
     setSpeed(newSpeed);
-    
-    if (isPlaying) {
-      scrollAnim.stopAnimation((currentValue) => {
-        currentScrollPosition.current = currentValue;
-        
-        const speedMultiplier = [0.15, 0.25, 0.4, 0.6, 0.8][newSpeed - 1];
-        const remainingHeight = totalContentHeight - currentValue;
-        const duration = (remainingHeight / speedMultiplier) * 50;
-        
-        scrollAnimation.current = Animated.timing(scrollAnim, {
-          toValue: totalContentHeight,
-          duration: Math.max(duration, 1000),
-          useNativeDriver: true,
-        });
-        scrollAnimation.current.start(({ finished }) => {
-          if (finished) setIsPlaying(false);
-        });
-      });
-    }
+    // Update the ref immediately so the running RAF loop picks up the new
+    // pxPerSecond on the very next frame — no stop/restart required, and
+    // therefore no way to accidentally double-mount the loop.
+    // pxPerSecond = [30, 60, 90, 120, 150]
+    teleprompterSpeedRef.current = newSpeed;
   };
 
   const startRecording = async () => {
@@ -538,29 +590,42 @@ export default function TeleprompterScreen() {
 
         {/* Teleprompter Overlay */}
         <View style={[styles.teleprompterContainer, getPositionStyle()]}>
-          <View style={[styles.teleprompterWindow, { opacity }]}>
-            <Animated.View
-              style={{
-                transform: [{ translateY: Animated.multiply(scrollAnim, -1) }],
+          <View
+            style={[styles.teleprompterWindow, { opacity }]}
+            onLayout={(e) => {
+              // Track viewport for the RAF driver's travel budget.
+              teleprompterViewportHeight.current = e.nativeEvent.layout.height;
+            }}
+          >
+            <ScrollView
+              ref={scrollViewRef}
+              showsVerticalScrollIndicator={false}
+              scrollEnabled={!isPlaying}
+              onContentSizeChange={(_w, h) => {
+                // Use the REAL measured content height for the RAF budget,
+                // not the pre-render heuristic that under-counted wrapped
+                // dialogue and caused the teleprompter to stop early.
+                teleprompterTotalHeight.current = h;
               }}
             >
               {lines.map((line: any, index: number) => {
-                const isMyLine = line.character?.toLowerCase() === userCharacter?.toLowerCase();
+                const isMyLine =
+                  line.character?.toLowerCase() === userCharacter?.toLowerCase();
                 return (
                   <View key={index} style={styles.lineContainer}>
-                    <Text 
+                    <Text
                       style={[
                         styles.characterLabel,
-                        isMyLine && highlightMyLines && styles.myCharacterLabel
+                        isMyLine && highlightMyLines && styles.myCharacterLabel,
                       ]}
                     >
                       {line.character}
                     </Text>
-                    <Text 
+                    <Text
                       style={[
                         styles.lineText,
                         { fontSize },
-                        isMyLine && highlightMyLines && styles.myLineText
+                        isMyLine && highlightMyLines && styles.myLineText,
                       ]}
                     >
                       {line.text}
@@ -570,9 +635,9 @@ export default function TeleprompterScreen() {
               })}
               {/* Extra padding at end */}
               <View style={{ height: visibleHeight }} />
-            </Animated.View>
+            </ScrollView>
           </View>
-          
+
           {/* Gradient overlays */}
           <View style={styles.gradientTop} pointerEvents="none" />
           <View style={styles.gradientBottom} pointerEvents="none" />
@@ -592,17 +657,36 @@ export default function TeleprompterScreen() {
             
             <View style={styles.speedControl}>
               <Text style={styles.speedLabel}>{speed}x</Text>
-              <Slider
-                style={styles.speedSlider}
-                minimumValue={1}
-                maximumValue={5}
-                step={1}
-                value={speed}
-                onValueChange={handleSpeedChange}
-                minimumTrackTintColor="#6366f1"
-                maximumTrackTintColor="#374151"
-                thumbTintColor="#6366f1"
-              />
+              {/*
+                Segmented [1..5] speed control — mirrors Route A
+                (record.tsx) and replaces @react-native-community/slider,
+                which was removed as part of the Failure 4 anti-pattern
+                purge. pxPerSecond = [30, 60, 90, 120, 150] is mapped
+                inside runTeleprompterLoop.
+              */}
+              <View style={styles.speedSegments}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[
+                      styles.speedSegment,
+                      speed === s && styles.speedSegmentActive,
+                    ]}
+                    onPress={() => handleSpeedChange(s)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Teleprompter speed ${s} of 5`}
+                  >
+                    <Text
+                      style={[
+                        styles.speedSegmentText,
+                        speed === s && styles.speedSegmentTextActive,
+                      ]}
+                    >
+                      {s}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
           
@@ -661,16 +745,35 @@ export default function TeleprompterScreen() {
             {/* Opacity */}
             <View style={styles.settingRow}>
               <Text style={styles.settingLabel}>Background Opacity</Text>
-              <Slider
-                style={styles.settingSlider}
-                minimumValue={0.5}
-                maximumValue={1}
-                value={opacity}
-                onValueChange={setOpacity}
-                minimumTrackTintColor="#6366f1"
-                maximumTrackTintColor="#374151"
-                thumbTintColor="#6366f1"
-              />
+              {/*
+                Segmented opacity presets — replaces
+                @react-native-community/slider (Fabric SDK 54 anti-pattern
+                purge). Discrete steps are sufficient for a teleprompter
+                background and remove all native-slider surface.
+              */}
+              <View style={styles.opacitySegments}>
+                {[0.5, 0.65, 0.8, 0.9, 1].map((v) => (
+                  <TouchableOpacity
+                    key={v}
+                    style={[
+                      styles.opacitySegment,
+                      Math.abs(opacity - v) < 0.01 && styles.opacitySegmentActive,
+                    ]}
+                    onPress={() => setOpacity(v)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Background opacity ${Math.round(v * 100)} percent`}
+                  >
+                    <Text
+                      style={[
+                        styles.opacitySegmentText,
+                        Math.abs(opacity - v) < 0.01 && styles.opacitySegmentTextActive,
+                      ]}
+                    >
+                      {Math.round(v * 100)}%
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
             
             {/* Position */}
@@ -958,6 +1061,52 @@ const styles = StyleSheet.create({
   speedSlider: {
     width: 100,
     height: 40,
+  },
+  // Route B convergence — segmented [1..5] speed control (mirrors Route A).
+  speedSegments: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  speedSegment: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(107, 114, 128, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  speedSegmentActive: {
+    backgroundColor: '#6366f1',
+  },
+  speedSegmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#9ca3af',
+  },
+  speedSegmentTextActive: {
+    color: '#fff',
+  },
+  // Settings-modal opacity presets — segmented replacement for Slider.
+  opacitySegments: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  opacitySegment: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(107, 114, 128, 0.2)',
+  },
+  opacitySegmentActive: {
+    backgroundColor: '#6366f1',
+  },
+  opacitySegmentText: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  opacitySegmentTextActive: {
+    color: '#fff',
+    fontWeight: '600',
   },
   cameraControls: {
     flexDirection: 'row',
