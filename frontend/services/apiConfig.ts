@@ -38,14 +38,36 @@ console.log(`║ TIMESTAMP:    ${new Date().toISOString()}`);
 console.log('╚═══════════════════════════════════════════════════════════════╝');
 
 // DIAGNOSTIC: Validate URL on load
+//
+// The previous check hard-coded the substring 'script-recovery-1' (an
+// obsolete preview subdomain). ScriptMate's live backend now runs on the
+// Emergent production host (e.g. https://scriptmate-8.emergent.host)
+// and Emergent preview hosts (*.preview.emergentagent.com). Both are
+// legitimate. Accept either; still flag genuinely wrong values (empty,
+// or the retired android-upload-test host).
+const LEGITIMATE_BACKEND_HOST_SUFFIXES = [
+  '.emergent.host',           // production Emergent hosts
+  '.preview.emergentagent.com', // Emergent preview environments
+];
+
+function isLegitimateBackendUrl(url: string): boolean {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname;
+    return LEGITIMATE_BACKEND_HOST_SUFFIXES.some((s) => host.endsWith(s));
+  } catch {
+    return false;
+  }
+}
+
 if (!API_BASE_URL) {
   console.error('FATAL: API_BASE_URL is empty or undefined!');
 }
 if (API_BASE_URL.includes('android-upload-test')) {
   console.error('WARNING: API_BASE_URL contains OLD android-upload-test domain!');
 }
-if (!API_BASE_URL.includes('script-recovery-1')) {
-  console.error('WARNING: API_BASE_URL does not contain expected script-recovery-1 domain!');
+if (!isLegitimateBackendUrl(API_BASE_URL)) {
+  console.error('WARNING: API_BASE_URL is not a recognised Emergent backend host!');
   console.error('ACTUAL URL:', API_BASE_URL);
 }
 
@@ -72,7 +94,7 @@ export function getApiDiagnostics(): {
     baseUrl: API_BASE_URL,
     configSource: API_CONFIG_SOURCE,
     buildId: BUILD_ID,
-    isCorrectDomain: API_BASE_URL.includes('script-recovery-1'),
+    isCorrectDomain: isLegitimateBackendUrl(API_BASE_URL),
     timestamp: new Date().toISOString(),
   };
 }
