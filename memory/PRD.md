@@ -399,3 +399,30 @@ Two hunks, both preserved verbatim in a single patch file:
 ### Commit
 - `183cf18` — fix(camera): guard ProcessCameraProvider.awaitInstance + wire Route B mount handlers
 
+
+## 2026-02 — Phase 3 final UX polish: teleprompter defaults (top + speed 2)
+
+### What changed
+Two single-token literal changes in `frontend/app/selftape/teleprompter.tsx` only:
+- **Default window position**: `useState<'top' | 'middle' | 'bottom'>('bottom')` → `('top')`. Fresh sessions place the teleprompter window at the top of the screen so the script's first line is visible from the top. All three positions remain runtime-selectable via the Settings modal.
+- **Default selected speed**: `useState(3)` → `useState(2)`. The five speed segments [1..5] and their pxPerSecond mapping [30, 60, 90, 120, 150] are unchanged.
+
+Initial ScrollView y position is the RN default (0). No new scroll override added. Existing `startTeleprompter()` and `resetTeleprompter()` already call `scrollTo({ y: 0, animated: false })`.
+
+### Not modified
+- JS requestAnimationFrame scroll driver.
+- Segmented speed / opacity controls.
+- Framing Guides.
+- Camera bring-up hardening (isCameraReady, cameraMountError, onCameraReady, onMountError, record-button guard, banners).
+- `expo-camera+17.0.10.patch` (awaitInstance guard + stabilization guard).
+- Route A (`record.tsx`), `prep.tsx`, backend, dependencies, EAS config.
+- 18 pre-existing backend lint issues.
+
+### Tests
+- **NEW:** `backend/tests/test_teleprompter_ux_defaults.py` — 13 guards (default speed 2, five speed options remain, pxPerSecond mapping intact, default position 'top', all three positions runtime-selectable, no bottom-anchor patterns, start/reset scroll to y=0, RAF driver intact, manual scroll gated on !isPlaying, camera hardening intact, framing guides intact, patch untouched).
+- **Regression run:** 144/144 pass in 0.67s across UX defaults + route-B camera hardening + Framing Guides + Phase 3 selftape + script import latency + expo-camera stabilization patch + startup API diagnostic + entitlement audit + QA-premium bypass.
+- **TypeScript:** 2 pre-existing errors, 0 new.
+
+### Commit
+- `e8aab71` — polish(teleprompter): default fresh sessions to top position + speed 2
+
