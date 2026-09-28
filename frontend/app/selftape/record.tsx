@@ -228,10 +228,26 @@ export default function RecordScreen() {
       clearTimeout(controlsTimeout.current);
     }
     controlsTimeout.current = setTimeout(() => {
+      // Phase 3 Failure 6 diagnostic experiment (c1f8a2d regression):
+      // controlsOpacity was previously driven with useNativeDriver:true.
+      // In build 8f53b6d (parent c1f8a2d) enabling the teleprompter first
+      // mounts the <Animated.View> at line 651 as the FIRST-EVER
+      // AnimatedProps consumer on this screen. On SDK 54 / Fabric /
+      // Android 16, AnimatedProps.__attach runs inside useInsertionEffect
+      // during the same Fabric commit that mounts the view, and
+      // #connectAnimatedView -> findNodeHandle can throw before the
+      // Fabric shadow view is finalized. Switching this Value to a
+      // JS driver removes native NativeAnimatedNodesManager involvement
+      // for this Value only, so the enable transition no longer performs
+      // a native connect during that first Fabric commit.
+      // Scope: DIAGNOSTIC ONLY. If the physical Enable test passes with
+      // this change, we have strong evidence for the hypothesis. Do not
+      // treat this as a final architecture decision.
+      // Regression: backend/tests/test_phase3_selftape_regression.py
       Animated.timing(controlsOpacity, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start(() => setShowControls(false));
     }, 2000);
   };
@@ -241,10 +257,12 @@ export default function RecordScreen() {
       clearTimeout(controlsTimeout.current);
     }
     setShowControls(true);
+    // See hideControlsWithDelay for the useNativeDriver:false rationale
+    // (Phase 3 Failure 6 diagnostic experiment against c1f8a2d).
     Animated.timing(controlsOpacity, {
       toValue: 1,
       duration: 200,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   };
 

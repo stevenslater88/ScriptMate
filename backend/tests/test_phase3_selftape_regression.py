@@ -1,7 +1,7 @@
 """Phase 3 Self-Tape regression suite.
 
-Locks three independent physical Samsung SM-S918B failures on build 1110-QA
-(SDK 54 / New Architecture / Fabric, Android 16):
+Locks four independent physical Samsung SM-S918B failures on SDK 54 /
+Fabric / Android 16:
 
 FAILURE 1 — recording save
   root cause: `expo-file-system` v19 (SDK 54) turned the top-level legacy
@@ -356,8 +356,101 @@ def test_stop_and_error_paths_cancel_the_raf_loop() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FAILURE 4 (secondary) — Teleprompter scroll pacing sanity
+# FAILURE 6 — Enable Teleprompter still crashes on the c1f8a2d APK
 # ─────────────────────────────────────────────────────────────────────────────
+#
+# Physical evidence (Samsung SM-S918B / Android 16, EAS build source
+# 8f53b6d — same application code as c1f8a2d): tapping "Enable Teleprompter"
+# on the recording screen crashes the app before recording starts.
+#
+# Hypothesis (SUPPORTED, not yet PROVEN): the crash is caused by mounting
+# `<Animated.View style={{ opacity: controlsOpacity }}>` as the FIRST-EVER
+# AnimatedProps consumer on this screen during a user-triggered Fabric
+# commit. AnimatedProps.__attach runs from useInsertionEffect during the
+# same commit that inserts the view, and #connectAnimatedView →
+# findNodeHandle can throw before the Fabric shadow view is finalized on
+# SDK 54 / New Architecture / Android 16.
+#
+# Diagnostic experiment: drive `controlsOpacity` via the JS driver
+# (useNativeDriver:false) so no native NativeAnimatedNodesManager
+# connection is performed for this Value. If the physical Enable test
+# passes, the hypothesis is supported.
+
+def test_controls_opacity_animations_use_js_driver_not_native() -> None:
+    """Phase 3 Failure 6 diagnostic: both `controlsOpacity` animation sites
+    must run on the JS driver (`useNativeDriver: false`) so that mounting
+    the conditionally-rendered controls-overlay <Animated.View> does not
+    trigger a native connect during the enable-transition Fabric commit."""
+    src = _read("app/selftape/record.tsx")
+
+    # 1. Both Animated.timing sites on controlsOpacity must be present and
+    #    set useNativeDriver:false.
+    pattern = re.compile(
+        r"Animated\.timing\(\s*controlsOpacity\s*,\s*\{[^}]*"
+        r"useNativeDriver:\s*false",
+        re.DOTALL,
+    )
+    matches = pattern.findall(src)
+    assert len(matches) == 2, (
+        f"Expected exactly 2 Animated.timing(controlsOpacity, ...) sites "
+        f"with useNativeDriver:false (hideControlsWithDelay + "
+        f"showControlsAnimated). Found {len(matches)}."
+    )
+
+    # 2. No Animated.timing(controlsOpacity, ...) may use useNativeDriver:true.
+    forbidden = re.compile(
+        r"Animated\.timing\(\s*controlsOpacity\s*,\s*\{[^}]*"
+        r"useNativeDriver:\s*true",
+        re.DOTALL,
+    )
+    assert not forbidden.search(src), (
+        "controlsOpacity must NOT use useNativeDriver:true during the "
+        "Failure 6 diagnostic experiment — the whole point is to remove "
+        "native NativeAnimatedNodesManager involvement for this Value."
+    )
+
+
+def test_no_other_useNativeDriver_true_was_introduced_by_experiment() -> None:
+    """Guard: the diagnostic must NOT re-introduce useNativeDriver:true
+    anywhere else in record.tsx. There should be zero uses of
+    `useNativeDriver: true` in this file after the experiment."""
+    src = _read("app/selftape/record.tsx")
+    # Match a real code occurrence (colon + optional space + true, ignoring
+    # any code inside string literals). Comments are stripped from
+    # consideration by matching only lines that don't start with `//`.
+    code_lines = [ln for ln in src.splitlines() if not ln.lstrip().startswith("//")]
+    joined = "\n".join(code_lines)
+    hits = re.findall(r"useNativeDriver:\s*true", joined)
+    assert len(hits) == 0, (
+        f"Found {len(hits)} `useNativeDriver: true` code occurrence(s) in "
+        f"record.tsx. The Failure 6 experiment requires the ONLY Animated "
+        f"values on this screen (controlsOpacity) to be JS-driven."
+    )
+
+
+def test_teleprompter_overlay_structure_unchanged_by_experiment() -> None:
+    """The overlay conditional gate and the Animated.View driving
+    `controlsOpacity` must be intact — the experiment only changes the
+    animation driver, not the JSX shape."""
+    src = _read("app/selftape/record.tsx")
+
+    # Conditional gate must still be exactly this shape.
+    assert "{teleprompterActive && showControls && (" in src, (
+        "Failure 6 experiment must NOT alter the "
+        "`{teleprompterActive && showControls && (...)}` gate."
+    )
+    # Animated.View consumer of controlsOpacity must still exist.
+    consumer = re.search(
+        r"<Animated\.View\s+style=\{\s*\[\s*styles\.teleprompterControls\s*,\s*"
+        r"\{\s*opacity:\s*controlsOpacity\s*\}\s*\]\s*\}",
+        src, re.DOTALL,
+    )
+    assert consumer, (
+        "The <Animated.View> whose `opacity` prop consumes controlsOpacity "
+        "must remain intact — the experiment changes ONLY the driver on "
+        "the Animated.timing calls, not the JSX structure."
+    )
+
 
 def test_teleprompter_uses_pxPerSecond_not_broken_speedMultiplier_60() -> None:
     """The old formula (`speedMultiplier * 60`) was 2–12 minutes for
