@@ -358,3 +358,44 @@ Expo SDK 54 / New Architecture / Fabric.
 - **Regression:** `backend/tests/test_teleprompter_framing_guides.py` — 20 focused guards (feature existence, default-OFF, `pointerEvents="none"`, no face detection / CV / animation, sibling-of-ScrollView placement, style presence, Route B invariants intact, `prep.tsx` / `record.tsx` untouched, patch-package pipeline intact). Also refreshed `test_expo_camera_stabilization_patch.py` to assert `patch-package` + `postinstall-postinstall` in `dependencies` (per 2026-02 EAS-OTA fix).
 - **Result:** 80/80 Phase 3 targeted regression tests pass in 0.16s. Commit `4a2483f`.
 
+
+## 2026-02 — Camera bring-up hardening (awaitInstance guard + Route B mount handlers)
+
+### Symptoms addressed
+- **Intermittent first-record native crash** on Samsung SM-S918B / Android 16: two consecutive taps on Record produced the native "Something went wrong with ScriptMate Pro" dialog, then recording worked. Framing Guides toggled on before/after, script scroll, save, and playback all worked.
+- **Recurring "have to clear the app cache to open the app"** symptom on the same device, persisting across builds. Same underlying failure mode: the OS's PackageManager cache-clear force-kills the app, resetting the platform camera framework state — the user's workaround.
+
+### Evidence
+- No adb / logcat / crash-dump available in the preview container; all evidence is source-level and cross-referenced against upstream Expo issues.
+- Installed `node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt` line 414: `val cameraProvider = ProcessCameraProvider.awaitInstance(context)` sits **outside** the try/catch that starts at line 469 and only wraps `bindToLifecycle`. `awaitInstance` can throw `InitializationException` (root cause: `CameraUnavailableException`) when Samsung's Camera2 HAL / `camera.provider` service is still warming up. Unhandled → coroutine dispatcher bubble → process kill → the exact native dialog. Matches upstream **expo/expo#47696**.
+- Route A (`record.tsx`, proven) already renders 4+ conditional overlay children of `<CameraView>` including a face-guide oval identical in shape to the new Framing Guides — so the guides overlay is not the cause. Framing Guides investigated and cleared.
+
+### Fix 1 — `frontend/patches/expo-camera+17.0.10.patch` (extended)
+Two hunks, both preserved verbatim in a single patch file:
+1. **NEW (2026-02):** `ProcessCameraProvider.awaitInstance(context)` wrapped in `try { … } catch (e: Throwable) { onMountError(CameraMountErrorEvent("Camera provider unavailable: …")); return }`. Failure now routes through the existing `onMountError` surface with a useful message. No process kill.
+2. **Preserved:** the Samsung stabilization capability guard (expo/expo#45896) — `setVideoStabilizationEnabled(isStabilizationSupported)` with null-safe capability probe. Verified applied cleanly after `rm -rf node_modules/expo-camera && yarn install --force` (patch-package reports `expo-camera@17.0.10 ✔`).
+
+### Fix 2 — `frontend/app/selftape/teleprompter.tsx` (Route B)
+- New state `isCameraReady` (default `false`) + `cameraMountError` (default `null`).
+- `<CameraView>` wires `onCameraReady` (flips ready true, clears error) and `onMountError` (records the error string).
+- `startRecording()` early-returns with a controlled Alert if `!isCameraReady` OR `cameraMountError`; `recordAsync()` is never invoked under those conditions. Guards placed before the countdown, so a stuck-init state never enters the record path.
+- Record button (`testID="record-button"`) carries an explicit `disabled` prop referencing both guards + a `recordButtonDisabled` reduced-opacity style. A fast first tap during bring-up can no longer force `recordAsync()`.
+- Two mutually-exclusive user-visible banners:
+  - `testID="camera-mount-error-banner"` — red banner + warning icon, shown on hard mount failures.
+  - `testID="camera-initializing-banner"` — dim pill + spinner + "Camera initializing…", shown during the transient window.
+- Failures are recoverable via Go Back / reopen; no crash. Mirrors Route A's proven mount contract without changing Route B's teleprompter architecture.
+
+### Framing Guides — NOT MODIFIED
+- Investigation cleared Framing Guides of any implication. Structurally identical to Route A's proven face-guide overlay. Rule-of-thirds, face-safe zone, eye-line, toggle, `pointerEvents="none"`, sibling-of-ScrollView placement all preserved. Asserted by `test_framing_guides_still_present`.
+
+### Persisted / transient app state
+- Nothing in Route B or Route A cleanup contradicts the camera-init hypothesis, and no evidence points to AsyncStorage / documentDirectory / recording index as the cache-clear cause. `documentDirectory/selftapes/` (saved recordings), AsyncStorage (auditions, progress, streaks, recordings index), and shared_prefs all survive "Clear Cache" by design — so if clearing cache reliably fixes the symptom, the cause is in `context.cacheDir` (expo-camera temp `.mp4` output) or the OS-level camera framework lockup that force-kill releases. Fix 1 addresses the latter's user-visible manifestation directly: intermittent bring-up failures now surface as controlled errors instead of process crashes, and manual cache clearing should no longer be required to open the app or use Self Tape. **No user data is wiped, and no automatic cache purge is added** — per your directive, we only harden the affected transient state (native bring-up failure surface).
+
+### Test coverage
+- **NEW:** `backend/tests/test_route_b_camera_hardening.py` — 16 guards (state defaults, onCameraReady/onMountError wiring, guard ordering vs recordAsync, record-button disabled prop, both banners present, Framing Guides untouched, Route A / prep untouched, extended patch integrity).
+- **Updated:** `backend/tests/test_expo_camera_stabilization_patch.py` — +2 guards asserting `try { … ProcessCameraProvider.awaitInstance(context)` is present in installed source and the awaitInstance catch block calls `onMountError(...)` with the "Camera provider unavailable" string; the existing stabilization guard tests unchanged and still pass.
+- **Regression run:** 98/98 pass in 0.19s (route-B hardening + Framing Guides + Phase 3 selftape + script import latency + expo-camera stabilization + startup API diagnostic). Entitlement + QA-premium regressions: 34/34 pass. TypeScript: 2 pre-existing errors on `teleprompter.tsx` and `services/revenuecat.ts`, **0 new**.
+
+### Commit
+- `183cf18` — fix(camera): guard ProcessCameraProvider.awaitInstance + wire Route B mount handlers
+
