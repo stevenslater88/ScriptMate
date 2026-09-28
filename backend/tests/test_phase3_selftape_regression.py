@@ -1,6 +1,6 @@
 """Phase 3 Self-Tape regression suite.
 
-Locks four independent physical Samsung SM-S918B failures on SDK 54 /
+Locks five independent physical Samsung SM-S918B failures on SDK 54 /
 Fabric / Android 16:
 
 FAILURE 1 — recording save
@@ -491,6 +491,48 @@ def test_teleprompter_duration_produces_sane_wall_clock_time() -> None:
     assert slowest_s < 180, (
         f"even at speed 1, a 32-line scene must not exceed 3 minutes; "
         f"got {slowest_s:.1f}s"
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FAILURE 6 (Save path) — Teleprompter Mode routed users into
+# app/selftape/teleprompter.tsx (the "Teleprompter Mode NEW" card at
+# app/selftape/index.tsx:151), which imported the deprecated top-level
+# `expo-file-system` and called FileSystem.getInfoAsync directly BEFORE
+# invoking selfTapeStorage.saveRecording(). On SDK 54 this throws the
+# top-level deprecation error and Save fails with the exact user-visible
+# alert at teleprompter.tsx:426:
+#     "Save Failed" / "Could not save: Method getInfoAsync imported
+#      from 'expo-file-system' is deprecated..."
+# Fix: change teleprompter.tsx's import to the /legacy submodule so the
+# same helpers work without triggering the SDK 54 deprecation shim.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_selftape_teleprompter_imports_from_legacy_submodule() -> None:
+    """The active Teleprompter-Mode save path (teleprompter.tsx) MUST import
+    from `expo-file-system/legacy` — the top-level shim throws at runtime
+    on SDK 54+."""
+    src = _read("app/selftape/teleprompter.tsx")
+    assert "from 'expo-file-system/legacy'" in src, (
+        "app/selftape/teleprompter.tsx must import from "
+        "'expo-file-system/legacy'. On SDK 54+, the top-level helpers "
+        "(getInfoAsync, copyAsync, ...) throw the deprecation error that "
+        "was surfaced to users as 'Save Failed: Could not save: Method "
+        "getInfoAsync imported from \"expo-file-system\" is deprecated'."
+    )
+
+
+def test_selftape_teleprompter_does_not_import_deprecated_top_level_fs() -> None:
+    """Guard against regressing back to the deprecated top-level import."""
+    src = _read("app/selftape/teleprompter.tsx")
+    forbidden = re.search(
+        r"^\s*import\s+\*\s+as\s+FileSystem\s+from\s+['\"]expo-file-system['\"]\s*;",
+        src, re.MULTILINE,
+    )
+    assert forbidden is None, (
+        "app/selftape/teleprompter.tsx must not import from the "
+        "deprecated top-level 'expo-file-system'. Use "
+        "'expo-file-system/legacy' instead."
     )
 
 
