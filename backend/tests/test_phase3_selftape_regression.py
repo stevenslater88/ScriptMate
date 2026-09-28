@@ -150,24 +150,51 @@ def test_teleprompter_animated_transform_not_on_contentContainerStyle() -> None:
 
 def test_teleprompter_transform_lives_on_an_inner_animated_view() -> None:
     """The animated transform MUST be applied to an Animated.View whose
-    `style` prop can proxy the animated node natively."""
+    `style` prop can proxy the animated node natively AND the animated
+    interpolation MUST be created once at mount (via useMemo) and kept
+    UNCONDITIONALLY in the transform — never conditionally inserted at
+    runtime, which crashes Fabric on Android 16 during Start Recording."""
     src = _read("app/selftape/record.tsx")
 
-    # Look for the inner Animated.View that carries the teleprompter transform.
-    # We match across lines: `<Animated.View ... style={{ ... transform: ...
-    # teleprompterActive && teleprompterPlaying ... translateY:
-    # Animated.multiply(teleprompterAnim, -1) ... }} >`
-    pattern = re.compile(
-        r"<Animated\.View[^>]*style=\{\{[^}]*"
-        r"teleprompterActive\s*&&\s*teleprompterPlaying[^}]*"
-        r"Animated\.multiply\(teleprompterAnim,\s*-1\)",
+    # 1. Memoized interpolation MUST exist and be created once (empty deps).
+    memo_pattern = re.compile(
+        r"teleprompterTranslateY\s*=\s*useMemo\(\s*"
+        r"\(\)\s*=>\s*Animated\.multiply\(teleprompterAnim,\s*-1\)",
         re.DOTALL,
     )
-    assert pattern.search(src), (
-        "Expected an inner <Animated.View style={{ transform: ... }}> that "
-        "carries the teleprompterAnim -> translateY animation. Fabric only "
-        "safely proxies AnimatedInterpolation values when they sit on an "
-        "Animated component's `style` prop (not on contentContainerStyle)."
+    assert memo_pattern.search(src), (
+        "record.tsx must create the teleprompter translateY interpolation "
+        "ONCE via useMemo(() => Animated.multiply(teleprompterAnim, -1), []) "
+        "— otherwise a fresh AnimatedInterpolation is bound every render, "
+        "which triggers native re-registration and (on Fabric/Android 16) "
+        "an immediate crash at Start Recording."
+    )
+
+    # 2. Inner Animated.View must reference the memoized value in transform.
+    view_pattern = re.compile(
+        r"<Animated\.View[^>]*style=\{\{[^}]*"
+        r"transform:\s*\[\{\s*translateY:\s*teleprompterTranslateY\s*\}\]",
+        re.DOTALL,
+    )
+    assert view_pattern.search(src), (
+        "The inner <Animated.View> must reference the memoized "
+        "teleprompterTranslateY unconditionally in its transform array. "
+        "Do NOT re-introduce a `teleprompterActive && teleprompterPlaying "
+        "? [...] : []` conditional — that crashes Fabric at Start Recording."
+    )
+
+    # 3. Guard: no conditional insertion of Animated.multiply in JSX transform.
+    # The old bug pattern (conditional transform ternary containing
+    # Animated.multiply) must not reappear.
+    forbidden_ternary = re.compile(
+        r"transform:\s*teleprompterActive\s*&&\s*teleprompterPlaying"
+    )
+    assert not forbidden_ternary.search(src), (
+        "record.tsx contains the forbidden conditional transform pattern "
+        "`transform: teleprompterActive && teleprompterPlaying ? [...] : []`. "
+        "This causes an immediate native crash on Fabric/Android 16 at Start "
+        "Recording because a natively-driven AnimatedInterpolation cannot be "
+        "safely injected into a component's style AFTER mount."
     )
 
 
@@ -178,6 +205,70 @@ def test_teleprompter_toggle_still_pauses_on_off() -> None:
     # Very light contract check — do not overspecify the internals.
     assert "pauseTeleprompter()" in src
     assert "startTeleprompter()" in src
+
+
+def test_start_recording_path_intact_and_fabric_safe() -> None:
+    """Guard the exact Start Recording flow that crashed on Samsung SM-S918B
+    Android 16 in QA build after the initial Phase 3 teleprompter fix.
+
+    Contract:
+      * startRecording() still calls recordAsync + starts the duration timer.
+      * When teleprompterActive is true, startTeleprompter() is invoked (this
+        flips teleprompterPlaying → true, which previously triggered the
+        conditional-transform crash).
+      * The Fabric-safe pattern (memoized interpolation + unconditional
+        transform) MUST be in place so setTeleprompterPlaying(true) does not
+        mutate the JSX transform structure.
+    """
+    src = _read("app/selftape/record.tsx")
+
+    # 1. startRecording still calls recordAsync + wires the timer.
+    m = re.search(
+        r"const\s+startRecording\s*=\s*async[^{]+\{(.*?)\n\s{2}\};",
+        src, re.DOTALL,
+    )
+    assert m, "startRecording function not found — refactor detected"
+    body = m.group(1)
+    assert "cameraRef.current.recordAsync(" in body, (
+        "startRecording must still invoke cameraRef.current.recordAsync(...)"
+    )
+    assert "setIsRecording(true)" in body
+    assert "recordingTimer.current = setInterval" in body
+
+    # 2. startRecording still triggers startTeleprompter when active — this
+    #    is the exact path that crashed pre-fix.
+    assert "if (teleprompterActive)" in body
+    assert "startTeleprompter()" in body
+
+    # 3. The Fabric-safe guard-rails must be present (mirror of test above).
+    assert "teleprompterTranslateY" in src, (
+        "The memoized teleprompterTranslateY interpolation is missing — "
+        "Start Recording will crash on Fabric/Android 16 when it flips "
+        "teleprompterPlaying → true."
+    )
+
+
+def test_useMemo_dependency_array_is_empty_for_teleprompter_translateY() -> None:
+    """The memoized interpolation must be stable across renders. If someone
+    later adds `teleprompterAnim` to the useMemo deps, the interpolation
+    would be recreated on every render (since teleprompterAnim is a stable
+    ref, deps would evaluate as unchanged) — but a lint-fix could add
+    `teleprompterActive` or similar, breaking the invariant. Lock the
+    empty-deps contract."""
+    src = _read("app/selftape/record.tsx")
+    # Match the specific useMemo block for teleprompterTranslateY.
+    pattern = re.compile(
+        r"teleprompterTranslateY\s*=\s*useMemo\(\s*"
+        r"\(\)\s*=>\s*Animated\.multiply\(teleprompterAnim,\s*-1\)\s*,\s*"
+        r"(?://[^\n]*\n\s*)*"          # allow eslint-disable comments
+        r"\[\s*\]",                     # empty dependency array
+        re.DOTALL,
+    )
+    assert pattern.search(src), (
+        "teleprompterTranslateY useMemo MUST have an EMPTY dependency array. "
+        "Anything else would recreate the AnimatedInterpolation on renders "
+        "and re-introduce the Fabric registration crash."
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

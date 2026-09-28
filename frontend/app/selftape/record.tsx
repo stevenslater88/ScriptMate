@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -92,6 +92,29 @@ export default function RecordScreen() {
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
   const teleprompterAnim = useRef(new Animated.Value(0)).current;
   const teleprompterAnimation = useRef<Animated.CompositeAnimation | null>(null);
+
+  // ─── Fabric-safe teleprompter translateY interpolation ──────────────────
+  // MUST be created ONCE at mount and kept unconditionally in the JSX
+  // transform. When the teleprompter is idle, teleprompterAnim.value === 0
+  // → translateY resolves to 0 → no visual effect. When it animates, the
+  // wrapping <Animated.View> translates smoothly on the UI thread.
+  //
+  // Do NOT conditionally add/remove this interpolation from the transform
+  // based on `teleprompterActive && teleprompterPlaying`. On Android 16 /
+  // Fabric, a natively-driven AnimatedInterpolation cannot be safely
+  // injected into a component's `style.transform` AFTER mount — the native
+  // animation manager expects registration at mount time, not on a prop
+  // diff. Doing so crashed Samsung SM-S918B immediately at Start Recording
+  // because `startRecording()` calls `startTeleprompter()` →
+  // `setTeleprompterPlaying(true)` → conditional transform flip → crash.
+  // Regression: backend/tests/test_phase3_selftape_regression.py
+  const teleprompterTranslateY = useMemo(
+    () => Animated.multiply(teleprompterAnim, -1),
+    // teleprompterAnim is a stable ref value; dependency array is empty
+    // to guarantee this interpolation is created exactly once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
   const recordingStartTime = useRef<number>(0);
   const currentScrollPosition = useRef(0);
 
@@ -569,10 +592,7 @@ export default function RecordScreen() {
           */}
           <Animated.View
             style={{
-              transform:
-                teleprompterActive && teleprompterPlaying
-                  ? [{ translateY: Animated.multiply(teleprompterAnim, -1) }]
-                  : [],
+              transform: [{ translateY: teleprompterTranslateY }],
             }}
           >
           {lines.map((line: any, index: number) => {
