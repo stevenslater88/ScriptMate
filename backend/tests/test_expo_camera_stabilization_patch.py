@@ -212,6 +212,64 @@ def test_installed_expo_camera_has_patch_applied() -> None:
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 2026-02: extended patch also guards ProcessCameraProvider.awaitInstance
+# (upstream expo/expo#47696). Intermittent Samsung SM-S918B / Android 16
+# first-record process crashes now route through onMountError instead of
+# terminating the app.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_installed_expo_camera_has_await_instance_guard() -> None:
+    """The installed ExpoCameraView.kt must include the try/catch around
+    ProcessCameraProvider.awaitInstance and a routing through
+    onMountError → CameraMountErrorEvent."""
+    if not KOTLIN_FILE.exists():
+        import pytest
+        pytest.skip("expo-camera node_modules copy not present")
+    src = KOTLIN_FILE.read_text()
+    # awaitInstance must now sit inside a try/catch and be preceded by
+    # `val cameraProvider = try {` (with any whitespace).
+    assert re.search(
+        r"val\s+cameraProvider\s*=\s*try\s*\{\s*\n\s*"
+        r"ProcessCameraProvider\.awaitInstance\(context\)",
+        src,
+    ), (
+        "Installed ExpoCameraView.kt must wrap "
+        "`ProcessCameraProvider.awaitInstance(context)` in a try/catch. "
+        "Without this guard, an InitializationException (root cause: "
+        "CameraUnavailableException) on Samsung SM-S918B / Android 16 "
+        "propagates unhandled and terminates the process — the exact "
+        "'Something went wrong with ScriptMate Pro' native dialog "
+        "reported by physical QA."
+    )
+    # Failure path must route through onMountError with a useful message.
+    assert "Camera provider unavailable" in src, (
+        "The awaitInstance catch block must surface a "
+        "'Camera provider unavailable' CameraMountErrorEvent so JS sees a "
+        "controlled mount error instead of a process crash."
+    )
+    assert re.search(
+        r"catch\s*\(\s*e:\s*Throwable\s*\)\s*\{[^}]*onMountError",
+        src,
+        re.DOTALL,
+    ), (
+        "The awaitInstance catch block must call onMountError(...) so the "
+        "failure travels through the same event surface Route B now wires "
+        "in teleprompter.tsx (onMountError handler)."
+    )
+
+
+def test_await_instance_upstream_reference_in_patch() -> None:
+    """The patch must reference the upstream Expo issue so future readers
+    can trace the fix back to expo/expo#47696."""
+    src = PATCH_FILE.read_text()
+    assert "expo/expo#47696" in src, (
+        "Patch must reference upstream expo/expo#47696 for the "
+        "awaitInstance guard."
+    )
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v", "-s"])

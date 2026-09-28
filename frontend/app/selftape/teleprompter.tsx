@@ -98,6 +98,23 @@ export default function TeleprompterScreen() {
   //
   // Regression: backend/tests/test_teleprompter_framing_guides.py
   const [showFramingGuides, setShowFramingGuides] = useState(false);
+
+  // ─── Camera bring-up observability + guarding (2026-02 hardening) ─────
+  // Two independent signals mirror the proven Route A shape (record.tsx):
+  //   * `isCameraReady`  → set by <CameraView onCameraReady>. Record is
+  //     guarded on this so recordAsync() cannot be invoked before the
+  //     native camera provider + capture use cases are bound.
+  //   * `cameraMountError` → set by <CameraView onMountError>. Route B
+  //     shows a controlled, user-visible error and does NOT crash. The
+  //     underlying expo-camera patch (expo-camera+17.0.10.patch) has been
+  //     extended to route ProcessCameraProvider.awaitInstance failures
+  //     into this same mount-error surface (upstream expo/expo#47696),
+  //     so intermittent Samsung SM-S918B / Android 16 first-record
+  //     process crashes now arrive here instead of terminating the app.
+  //
+  // Regression: backend/tests/test_route_b_camera_hardening.py
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [cameraMountError, setCameraMountError] = useState<string | null>(null);
   
   // Post-record state
   const [showActionSheet, setShowActionSheet] = useState(false);
@@ -350,6 +367,24 @@ export default function TeleprompterScreen() {
 
   const startRecording = async () => {
     if (!cameraRef.current) return;
+    // 2026-02 hardening: never invoke recordAsync before the native camera
+    // provider + capture use cases have finished binding. onCameraReady is
+    // what flips isCameraReady; without this guard a fast tap on Record
+    // during first-frame bring-up on Samsung SM-S918B / Android 16 lands
+    // in expo-camera's `recorder?.let { … } ?: promise.reject(...)` early
+    // return with no user-visible surface. Route B now mirrors Route A's
+    // proven readiness contract.
+    if (!isCameraReady) {
+      Alert.alert(
+        'Camera Not Ready',
+        'The camera is still initializing. Please try again in a moment.',
+      );
+      return;
+    }
+    if (cameraMountError) {
+      Alert.alert('Camera Error', cameraMountError);
+      return;
+    }
 
     // Countdown
     for (let i = 3; i > 0; i--) {
@@ -567,6 +602,28 @@ export default function TeleprompterScreen() {
         style={styles.camera}
         facing={facing}
         mode="video"
+        onCameraReady={() => {
+          // 2026-02 hardening — mirrors Route A. Flip readiness only after
+          // expo-camera has bound the CameraX use cases; startRecording()
+          // is guarded on this.
+          setIsCameraReady(true);
+          setCameraMountError(null);
+        }}
+        onMountError={(event: any) => {
+          // 2026-02 hardening — the expo-camera patch we ship extends this
+          // surface to also cover ProcessCameraProvider.awaitInstance()
+          // failures (upstream expo/expo#47696) so a Samsung SM-S918B /
+          // Android 16 first-record bring-up failure lands here instead
+          // of terminating the process. Show a controlled, recoverable
+          // error to the user; never crash.
+          const msg =
+            event?.nativeEvent?.message ||
+            event?.message ||
+            'Camera failed to initialize. Please close and reopen the app.';
+          console.error('[Teleprompter] Camera mount error:', msg);
+          setIsCameraReady(false);
+          setCameraMountError(msg);
+        }}
       >
         {/*
           Framing Guides overlay — Post-Phase-3 polish.
@@ -684,6 +741,39 @@ export default function TeleprompterScreen() {
 
         {/* Bottom Controls */}
         <View style={styles.bottomControls}>
+          {/*
+            Camera bring-up status banner (2026-02 hardening).
+            Two mutually-exclusive states are surfaced to the user WITHOUT
+            crashing the app:
+              * cameraMountError → hard failure; user can retry via
+                Go Back / reopen. Handled here instead of a native crash
+                dialog.
+              * !isCameraReady   → transient bring-up delay. Visible until
+                onCameraReady fires. Record button is disabled during this
+                window.
+          */}
+          {cameraMountError ? (
+            <View
+              style={styles.cameraStatusErrorBanner}
+              testID="camera-mount-error-banner"
+            >
+              <Ionicons name="warning" size={18} color="#fff" />
+              <Text style={styles.cameraStatusErrorText} numberOfLines={2}>
+                {cameraMountError}
+              </Text>
+            </View>
+          ) : !isCameraReady ? (
+            <View
+              style={styles.cameraStatusPendingBanner}
+              testID="camera-initializing-banner"
+            >
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.cameraStatusPendingText}>
+                Camera initializing…
+              </Text>
+            </View>
+          ) : null}
+
           {/* Teleprompter Controls Row */}
           <View style={styles.teleprompterControls}>
             <TouchableOpacity onPress={resetTeleprompter} style={styles.smallButton}>
@@ -736,8 +826,20 @@ export default function TeleprompterScreen() {
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.recordButton, isRecording && styles.recordButtonRecording]}
+              style={[
+                styles.recordButton,
+                isRecording && styles.recordButtonRecording,
+                (!isCameraReady || !!cameraMountError) &&
+                  !isRecording &&
+                  styles.recordButtonDisabled,
+              ]}
               onPress={isRecording ? stopRecording : startRecording}
+              disabled={(!isCameraReady || !!cameraMountError) && !isRecording}
+              accessibilityState={{
+                disabled:
+                  (!isCameraReady || !!cameraMountError) && !isRecording,
+              }}
+              testID="record-button"
             >
               {isRecording ? (
                 <View style={styles.stopIcon} />
@@ -1238,6 +1340,44 @@ const styles = StyleSheet.create({
   recordButtonRecording: {
     backgroundColor: 'rgba(239, 68, 68, 0.3)',
     borderColor: '#ef4444',
+  },
+  recordButtonDisabled: {
+    opacity: 0.45,
+  },
+  // ─── Camera bring-up status banners (2026-02 hardening) ──────────────
+  cameraStatusErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+  },
+  cameraStatusErrorText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  cameraStatusPendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignSelf: 'center',
+  },
+  cameraStatusPendingText: {
+    color: '#e5e7eb',
+    fontSize: 13,
+    fontWeight: '500',
   },
   recordIcon: {
     width: 60,

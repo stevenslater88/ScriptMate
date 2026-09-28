@@ -1,8 +1,35 @@
 diff --git a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
-index fc56526..376d0a3 100644
+index fc56526..a3c0b1a 100644
 --- a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
 +++ b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
-@@ -562,11 +562,28 @@ class ExpoCameraView(
+@@ -411,7 +411,25 @@ class ExpoCameraView(
+       return
+     }
+     shouldCreateCamera = false
+-    val cameraProvider = ProcessCameraProvider.awaitInstance(context)
++    // SCRIPTmate patch (expo-camera 17.0.10, upstream expo/expo#47696):
++    // ProcessCameraProvider.awaitInstance can throw InitializationException
++    // (root cause: CameraUnavailableException) on Samsung SM-S918B / Android
++    // 16 when the platform Camera2 HAL / camera.provider service has not
++    // finished warming up. Because the throw is unhandled here, it bubbles
++    // out of createCamera() at the coroutine dispatcher level, terminates
++    // the Android process with the native "Something went wrong with
++    // ScriptMate Pro" dialog, and never reaches onMountError (which lives
++    // inside the try/catch further down that only wraps bindToLifecycle).
++    // Guard the call so intermittent bring-up failures surface as a
++    // CameraMountErrorEvent instead of a process crash.
++    val cameraProvider = try {
++      ProcessCameraProvider.awaitInstance(context)
++    } catch (e: Throwable) {
++      onMountError(
++        CameraMountErrorEvent("Camera provider unavailable: ${e.message ?: e.javaClass.simpleName}")
++      )
++      return
++    }
+ 
+     ratio?.let {
+       previewView.scaleType =
+@@ -562,11 +580,28 @@ class ExpoCameraView(
          this.recorder = it
        }
  
