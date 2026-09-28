@@ -514,6 +514,16 @@ export default function ScriptDetailScreen() {
 
       {/* Bottom Action Buttons */}
       <View style={styles.bottomBar}>
+        {/* Learn Button — Phase 4 Learn system entry point */}
+        <TouchableOpacity
+          style={styles.learnButton}
+          onPress={() => router.push(`/learn?scriptId=${id}`)}
+          testID="script-learn-btn"
+        >
+          <Ionicons name="school" size={18} color="#22d3ee" />
+          <Text style={styles.learnButtonText}>Learn Lines</Text>
+        </TouchableOpacity>
+
         {/* Practice Mode Button */}
         <TouchableOpacity
           style={styles.practiceButton}
@@ -1035,6 +1045,24 @@ const styles = StyleSheet.create({
     color: '#10b981',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Phase 4 Learn button — visually distinct from Practice Mode.
+  learnButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(34, 211, 238, 0.10)',
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 8,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 211, 238, 0.35)',
+  },
+  learnButtonText: {
+    color: '#22d3ee',
+    fontSize: 14,
+    fontWeight: '700',
   },
   buttonRow: {
     flexDirection: 'row',
