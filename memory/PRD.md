@@ -614,3 +614,82 @@ untouched. No native / expo-camera / Fabric edits in this fix.
 Not built. No EAS trigger. No GitHub push. Per user's explicit
 instruction.
 
+
+---
+
+## 2026-02 · Phase 4 — Rehearsal debug UI leak + cold-start crash triage
+
+### Physical evidence in this round
+Samsung S23 Ultra / SM-S918B / Android 16 / ScriptMate 1.0.46 /
+VersionCode 1069 / Build 1110.
+
+**Cold-reopen intermittent crash — 5 attempts:**
+- Attempt 1: crash
+- Attempt 2: crash
+- Attempt 3: normal
+- Attempt 4: crash
+- Attempt 5: normal
+
+Every successful reopen showed the same diagnostic sequence:
+`ScriptScreen opened → script-1.docx → 3 characters → 33 lines →
+createRehearsal ok → rehearsal navigation`. Persistence and the
+happy-path are confirmed functional. The crash is intermittent and has
+no adb / logcat / tombstone / Android bugreport / Sentry evidence
+available in the preview container.
+
+**Debug UI leak — visible in the rehearsal screen on-device.** The
+diagnostic screenshot showed `[DEBUG] SR current state: inactive` and
+`SR:Y | Auto:N | Listen:N | State:idle` rendered directly to the user.
+
+### Fix — Rehearsal debug UI leak
+- `frontend/app/rehearsal/[id].tsx` — wrap the visible debug banner in
+  `{__DEV__ && ( ... )}`. Metro strips `__DEV__` branches from release
+  APKs so the banner cannot render for production users.
+- Internal `debugLog()` (`console.log('[Rehearsal-Debug] ...')` +
+  `setDebugInfo(msg)`) is preserved so QA logcat capture still works.
+- New testID `rehearsal-debug-banner` for future QA toggling.
+- No changes to speech recognition, auto-advance, state machine,
+  permissions, animation, or navigation.
+
+### Cold-start / reopen crash
+**NOT fixed in this pass. Investigation only.** No native evidence
+available in this environment. Working hypotheses (all source-level,
+none proven) previously logged: community `Slider` on Fabric,
+RevenueCat init/configure race, always-mounted `<Modal>` + Slider,
+`VoiceAssignment` mount-time AsyncStorage storm. None of them were
+converted into code per user directive: "Do not create a speculative
+fix merely to make the issue disappear."
+
+### Files changed
+- `frontend/app/rehearsal/[id].tsx` — one JSX block gated behind `__DEV__`.
+- `backend/tests/test_rehearsal_debug_ui_leak.py` — NEW, 10 guards.
+
+### Tests
+- **NEW:** `test_rehearsal_debug_ui_leak.py` — **10 / 10 pass**.
+- Full guard regression: **226 / 226 pass** (previous 216 + 10 new).
+- Entitlement/premium: **34 / 34 pass** (subset of the 226).
+- Runtime engine smoke `scripts/learn_engine_smoketest.js`:
+  **22 / 22 pass** (unchanged baseline).
+- TypeScript on `app/rehearsal/[id].tsx`: 1 pre-existing error at
+  line 586 (`Type 'number' is not assignable to type 'Timeout'`) —
+  **not touched by this fix**. No new TS errors introduced.
+- 18 pre-existing backend lint issues: untouched per user directive.
+
+### Not changed
+`services/learnEngine.ts`, `services/learnStorage.ts`, `app/learn/*`,
+scriptStore, parser, Phase 3 self-tape files,
+`patches/expo-camera+17.0.10.patch`, self-tape storage, Script Library
+storage, speech-recognition wiring, auto-advance, permissions.
+
+### Network Error
+`AxiosError: Network Error` in the diagnostic remains unrelated to the
+crash and to the rehearsal happy-path — the same session shows
+successful `/api/scripts/{id}` (200), `createRehearsal` (200), and
+rehearsal navigation. Most probable source is a transient failure on
+`initializeUser` / `fetchUserLimits` / `fetchSubscriptionPlans`
+(background, wrapped in try/catch, fail-soft). No networking rewrite
+performed.
+
+### APK
+Not built. No EAS trigger. No GitHub push. Per user directive.
+

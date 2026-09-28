@@ -1152,15 +1152,32 @@ export default function RehearsalScreen() {
         </View>
       )}
 
-      {/* DEBUG BANNER - Shows speech recognition state on device */}
-      <View style={{ backgroundColor: '#1a1a2e', padding: 8, borderBottomWidth: 1, borderBottomColor: '#333' }}>
-        <Text style={{ color: '#f59e0b', fontSize: 11, fontFamily: 'monospace' }} numberOfLines={2}>
-          [DEBUG] {debugInfo}
-        </Text>
-        <Text style={{ color: '#6b7280', fontSize: 10 }}>
-          SR:{speechRecognitionAvailable ? 'Y' : 'N'} | Auto:{autoAdvanceEnabled ? 'Y' : 'N'} | Listen:{isListening ? 'Y' : 'N'} | State:{state}
-        </Text>
-      </View>
+      {/*
+        DEBUG BANNER — visible speech-recognition state on device.
+
+        Gated behind `__DEV__` so it renders only in development builds
+        (Metro / Expo Go) and is stripped from release APKs by the Metro
+        bundler's `__DEV__` constant. Physical release users must never
+        see the raw SR/Auto/Listen/State internals — that leak was
+        reported on Samsung S23 Ultra / Android 16 on build 1110.
+
+        The internal `debugLog()` (console.log + setDebugInfo state) is
+        deliberately preserved for QA logcat capture — only the visible
+        JSX is production-gated.
+      */}
+      {__DEV__ && (
+        <View
+          style={{ backgroundColor: '#1a1a2e', padding: 8, borderBottomWidth: 1, borderBottomColor: '#333' }}
+          testID="rehearsal-debug-banner"
+        >
+          <Text style={{ color: '#f59e0b', fontSize: 11, fontFamily: 'monospace' }} numberOfLines={2}>
+            [DEBUG] {debugInfo}
+          </Text>
+          <Text style={{ color: '#6b7280', fontSize: 10 }}>
+            SR:{speechRecognitionAvailable ? 'Y' : 'N'} | Auto:{autoAdvanceEnabled ? 'Y' : 'N'} | Listen:{isListening ? 'Y' : 'N'} | State:{state}
+          </Text>
+        </View>
+      )}
 
       {/* Current Line Display */}
       <View style={styles.currentLineContainer}>
