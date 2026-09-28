@@ -475,3 +475,34 @@ Full local-first, offline-capable, deterministic actor line-learning system. Reu
 
 **No APK built. No EAS triggered. No push to GitHub.** Awaiting user review before the single Phase 4 physical build on Samsung SM-S918B / Android 16.
 
+
+## 2026-02 — Phase 4 physical fix: Fabric-safe masked-line render
+
+### Symptom
+Samsung SM-S918B / Android 16 QA reported a crash when tapping between difficulty pills during a Learn session.
+
+### Root cause (source-verified)
+`app/learn/session.tsx` rendered the masked line as a MIX of bare strings and nested `<Text>` children inside an outer `<Text>`. On rapid difficulty taps Fabric re-parents the child list every render, and the mixed sibling shape (string | `<Text>`) is a known Android 16 Fabric-strictness crash surface — the same class as Phase 3's record.tsx Animated node crashes, teleprompter Animated.multiply purge, and community-slider removal.
+
+### Fix
+Refactor the masked-line render to a FLAT SINGLE STRING inside a SINGLE `<Text>` child:
+- NEW: `renderMaskedLine(text, difficulty)` pure helper in `session.tsx`. Reuses `maskProportionFor(difficulty)` from the engine so mask ratios are identical to the 22-assertion runtime smoke.
+- Replaces the `{tokens.map(...)}` JSX with `{renderMaskedLine(...)}`.
+- Difficulty-4 first-letter hint is now actually visible (previously rendered with `color: '#0a0a0f'` on `bg: '#0a0a0f'`, invisible for the hint character — fixed by concatenating the hint into the same flat string).
+- Removed the unused `tokenizeForMode` import (still exported from the engine for future consumers) and the unused `maskedWord` style.
+
+### Ignored per user directive
+- **QA-checklist PDF false alarm on character detection** — NO parser change made. Parser regression suite remains 10/10 green. The 17 "characters" (NO, YES, PASS, FAIL, OPEN SCRIPTMATE, TAP LEARN LINES, TEST SUPPORTED, TEST CUE-ASSISTED, TEST BLACKOUT, TEST FULL RECALL, RESUME, TAP PRACTICE AGAIN, ENABLE AIRPLANE MODE, OPEN SELF-TAPE, OPEN TELEPROMPTER MODE NEW, TURN FRAMING GUIDES ON, OPEN REHEARSAL, FINAL ACCEPTANCE) are QA checklist section headings from `ScriptMate_Phase_4_Physical_Test_Script.pdf`, not real screenplay dialogue.
+- **Intermittent `/api/scripts/upload-base64` "Network Error"** — NO upload pipeline rewrite. Two prior successful uploads in the same session (200 in 487ms and 1493ms) followed by one Network Error is a classic intermittent client-side network condition (cellular/wifi handover, backend cold-start warm-up). Marked for investigation with a real logcat if it recurs.
+
+### Regression
+- Phase 4 Learn suite: **42/42** (+4 new Fabric-safety guards).
+- Full accumulated: **186/186** in 1.69s.
+- Runtime engine smoke: **22/22**.
+- Parser regression: **10/10**.
+- TypeScript: 3 pre-existing, 0 new.
+- 18 pre-existing backend lint issues untouched. No new dependencies. `expo-camera+17.0.10.patch` untouched. Phase 3 selftape untouched. Learn engine + storage architecture untouched.
+
+### Commit
+- `41389b6` — fix(learn): Fabric-safe masked-line render — eliminates difficulty-tap crash on Android 16
+
