@@ -297,3 +297,45 @@ Rehearsal, teleprompter, TTS, voice gating, script parser, script library, self-
 3. **One issue at a time** — user has explicitly requested single-issue passes.
 4. **Backend is required** — script/user/rehearsal ops go through FastAPI. Do not add offline fallbacks without direction.
 5. **Save to GitHub before EAS build** — user must click "Save to GitHub" in Emergent UI; the deploy pipeline pulls source from GitHub.
+
+## 2026-09 — Phase 3 Self-Tape Native Crash Campaign (Failures 4–6 + Record Crash)
+
+Physical-device stabilization work against Samsung SM-S918B / Android 16 /
+Expo SDK 54 / New Architecture / Fabric.
+
+### Failure 4 — Teleprompter Slider mount crash (RESOLVED)
+- **Cause:** `@react-native-community/slider` v4.5.x is old-arch-only; mounting on Fabric SDK 54 native-crashes on enable.
+- **Fix (commit `68c7774`):** removed the Slider entirely; replaced with a segmented `TouchableOpacity` speed control [1..5] mapped to `pxPerSecond = [30, 60, 90, 120, 150]` in `app/selftape/record.tsx`. Physical acceptance passed for enable.
+
+### Failure 5 — Start Recording with teleprompter enabled crashed the app (RESOLVED)
+- **Cause:** native-driver `Animated.timing` driving an `Animated.multiply` translateY transform inside `Animated.ScrollView`, started in the same Fabric commit as `CameraView.recordAsync()` began native capture.
+- **Fix (commit `c1f8a2d`):** replaced the entire native teleprompter driver with a JS `requestAnimationFrame` loop calling `ScrollView.scrollTo({ animated: false })`. Converted outer `<Animated.ScrollView>` → plain `<ScrollView>` and removed the inner `<Animated.View>` translateY wrapper. Physical acceptance NOT verified alone (Failure 6 uncovered next stage).
+
+### Failure 6 — Enable Teleprompter crashed (diagnostic experiment) + Save-path deprecation (RESOLVED)
+- **Diagnostic (commit `103a763`):** flipped `controlsOpacity` from `useNativeDriver: true` to `false` in `hideControlsWithDelay` and `showControlsAnimated`. Physical result: Enable succeeded and Recording succeeded. Save then failed with the SDK 54 top-level `expo-file-system` deprecation.
+- **Root cause of that Save failure:** the Self-Tape "Teleprompter Mode NEW" card in `app/selftape/index.tsx:151` routes users to `app/selftape/teleprompter.tsx`, which imported `expo-file-system` from the deprecated top level and called `FileSystem.getInfoAsync` in `handleSave` before delegating to `selfTapeStorage.saveRecording`. Signature confirmed by the "Could not save: {msg}" alert prefix (exclusive to `teleprompter.tsx:426`) and the "Recording Complete! · Teleprompter Mode" success-screen text (exclusive to `teleprompter.tsx:737-739`).
+- **Save-path fix (commit `adf52e5`):** single-line import in `app/selftape/teleprompter.tsx:19` changed from `'expo-file-system'` to `'expo-file-system/legacy'`. The handoff summary had incorrectly flagged `teleprompter.tsx` as an "orphan/quarantined" file; the routing evidence proves it is a live entry point.
+
+### Startup API diagnostic false alarm (RESOLVED)
+- **Cause:** `services/apiConfig.ts` hard-coded the obsolete `'script-recovery-1'` substring as its correctness check, causing "Correct: NO × WRONG URL!" against the healthy `https://scriptmate-8.emergent.host` backend.
+- **Fix (commit `ce19460`):** added `LEGITIMATE_BACKEND_HOST_SUFFIXES = ['.emergent.host', '.preview.emergentagent.com']` and an `isLegitimateBackendUrl()` helper (URL-parsed hostname suffix match). Both call sites (module-load warning + `getApiDiagnostics().isCorrectDomain`) now delegate to the helper. Empty-URL FATAL and `android-upload-test` WARNING preserved.
+
+### Record crash — expo-camera unconditional video stabilization (COMMITTED, PHYSICAL VERIFICATION PENDING)
+- **Root cause (PROVEN via installed source + upstream expo/expo#45896):** `node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt:569` (in `createVideoCapture()`) unconditionally calls `setVideoStabilizationEnabled(true)` on every VideoCapture. Samsung S23 Ultra's active camera on Android 16 does not advertise the requested CameraX stabilization capability → HAL raises unhandled native exception → Android kills the process with no JS error / stack / promise rejection. Matches the physical symptom exactly.
+- **Fix (commit `ed6a1bf`):** new `patches/expo-camera+17.0.10.patch` gates the call on `Recorder.getVideoCapabilities(cameraInfo).isStabilizationSupported`, wrapped in try/catch for defence in depth. Wired via `patch-package` + `postinstall-postinstall` (both devDeps) and `scripts.postinstall = 'patch-package'` in `frontend/package.json`. EAS `yarn install` will apply the patch before Gradle compiles the Android bundle.
+- **Physical acceptance required:** Samsung SM-S918B, Android 16, install new APK, Self Tape → prep → record OR Teleprompter Mode → press Record. Expect no crash. This is the ONE outstanding physical gate.
+
+### Regression coverage summary (as of `ed6a1bf`)
+- `test_phase3_selftape_regression.py` — 22 guards (Failures 1, 4, 5, 6, save-path, camera path intact)
+- `test_frontend_entitlement_audit.py` — 21 guards
+- `test_qa_premium_bypass.py` — 13 guards
+- `test_startup_api_diagnostic.py` — 7 guards
+- `test_expo_camera_stabilization_patch.py` — 9 guards
+- **Total: 72 / 72 passing** in 0.83s. TypeScript baseline maintained (5 pre-existing warnings on `record.tsx`/`teleprompter.tsx`, zero new).
+
+### Absolute development rules currently in force
+- One hypothesis → one controlled change → automated tests → regression → build only when needed → physical test only when needed.
+- Do not fix the 18 pre-existing backend lint errors.
+- Do not create production AABs.
+- Do not push to GitHub (user does via "Save to GitHub" UI).
+- Preserve `expo-file-system/legacy` imports, JS-driven teleprompter scroll, `useNativeDriver: false` on `controlsOpacity`, patch-package pipeline, and all camera/permissions/save/retake flows.
