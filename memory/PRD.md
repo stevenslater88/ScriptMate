@@ -546,3 +546,71 @@ Not addressed here. Awaiting adb logcat / Sentry payload / bugreport. Resume UX 
 ### Commit
 - `238273a` — feat(learn): Resume vs Start again in Learn Hub
 
+
+---
+
+## 2026-02 · Phase 4 — Learn Hub practice-mode tabs (SCENE + WEAK LINES) fix
+
+### Physical trigger
+Samsung S23 Ultra screenshot showed the Learn Hub for JACK with three
+practice-mode tabs — FULL SCRIPT | SCENE | WEAK LINES — but SCENE and
+WEAK LINES were visually presented as tabs while being effectively
+`disabled`:
+- `disabled={availableScenes.length <= 1}` on the Scene chip.
+- `disabled={progress.weak === 0}` on the Weak Lines chip.
+
+### Fix
+Minimal, Hub-only. `services/learnEngine.ts` and
+`services/learnStorage.ts` untouched. No new dependency, no new session
+model, no parser change.
+
+- **Scene chip** is always tappable. Auto-selects `availableScenes[0]`
+  when `sceneNumber == null` and at least one recognised scene exists,
+  so single-scene scripts can be practised in Scene mode without a
+  scene picker. Multi-scene picker unchanged. If the character has zero
+  scenes we render an empty-state banner
+  (testID `learn-hub-scene-empty`).
+- **Weak Lines chip** is always tappable. When items exist but no line
+  is weak yet, we render an empty-state banner
+  (testID `learn-hub-weak-empty`) explaining lines become weak after
+  repeated missed attempts and pointing back to Full script.
+- Footer: when either empty state is on-screen we swap
+  "Start learning" for "Back to Full script"
+  (testID `learn-hub-back-to-full`).
+- `handleStartAgain` now bails when `filteredItems.length === 0`, so
+  switching to Weak/Scene mode with no items cannot silently wipe a
+  resumable session.
+
+### Files changed
+- `frontend/app/learn/index.tsx` — the Hub only.
+- `backend/tests/test_learn_practice_mode_tabs.py` — NEW, 22 guards.
+
+### Tests
+- **NEW:** `backend/tests/test_learn_practice_mode_tabs.py` — 22 pass.
+- Guard baseline: previous 194 guards still pass → **216/216** with
+  the new 22 layered on. (The `test_frontend_entitlement_audit.py` +
+  `test_qa_premium_bypass.py` bucket is **34/34 pass**.)
+- Runtime engine smoke `scripts/learn_engine_smoketest.js`: **22/22
+  pass** (unchanged baseline).
+- TypeScript on `app/learn/index.tsx`: **0 errors**. Pre-existing
+  errors in unrelated files (per user's explicit no-fix directive):
+  unchanged.
+- 18 pre-existing backend lint issues: untouched.
+
+### Not changed
+`services/learnEngine.ts`, `services/learnStorage.ts`,
+`app/learn/session.tsx`, `app/learn/summary.tsx`, scriptStore, script
+parser, Phase 3 self-tape files, `patches/expo-camera+17.0.10.patch`,
+self-tape storage, Script Library storage. Resume UX still renders.
+Difficulty 1–5 / Active Recall / masked-line render / self-assessment
+/ Session Summary all still lock in `test_phase4_learn.py` (42 tests
+pass) and `test_learn_resume_ux.py` (15 tests pass).
+
+### Native crash: STILL OPEN
+Samsung S23 Ultra / Android 16 post-reopen crash unchanged and
+untouched. No native / expo-camera / Fabric edits in this fix.
+
+### APK
+Not built. No EAS trigger. No GitHub push. Per user's explicit
+instruction.
+

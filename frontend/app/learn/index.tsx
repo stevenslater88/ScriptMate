@@ -174,6 +174,18 @@ export default function LearnHubScreen() {
     );
   }, [resumableSession, characters]);
 
+  /**
+   * True when the currently selected mode has no playable items so we
+   * should render an empty-state banner + "Back to Full script" action
+   * instead of a disabled Start button. See the empty-state banners
+   * inside the ScrollView for the copy shown to the user.
+   */
+  const isModeEmpty = useMemo(() => {
+    if (mode === 'weak') return items.length > 0 && progress.weak === 0;
+    if (mode === 'scene') return availableScenes.length === 0;
+    return false;
+  }, [mode, items.length, progress.weak, availableScenes.length]);
+
   async function handleResume() {
     if (!resumableSession) return;
     router.push(
@@ -184,6 +196,10 @@ export default function LearnHubScreen() {
   async function handleStartAgain() {
     // Explicit user opt-in: discard the in-flight session and create a
     // fresh one at line 1. LearningRecord history is untouched.
+    // Guard: if the currently selected mode has no playable items,
+    // don't clobber the active session — bail so the resume banner
+    // stays visible.
+    if (!script || !characterId || filteredItems.length === 0) return;
     await clearActiveSession();
     setActiveSession(null);
     await handleStart();
@@ -305,12 +321,16 @@ export default function LearnHubScreen() {
             style={[styles.modeChip, mode === 'scene' && styles.modeChipActive]}
             onPress={() => {
               setMode('scene');
+              // Auto-select the first available scene whenever the user
+              // enters Scene mode without one selected. When the script
+              // has a single recognised scene (e.g. no explicit scene
+              // headers → all items are scene 1) this makes Scene mode
+              // directly playable without needing a picker.
               if (sceneNumber == null && availableScenes.length > 0) {
                 setSceneNumber(availableScenes[0]);
               }
             }}
             testID="learn-hub-mode-scene"
-            disabled={availableScenes.length <= 1}
           >
             <Ionicons
               name="film"
@@ -330,7 +350,6 @@ export default function LearnHubScreen() {
             style={[styles.modeChip, mode === 'weak' && styles.modeChipActive]}
             onPress={() => setMode('weak')}
             testID="learn-hub-mode-weak"
-            disabled={progress.weak === 0}
           >
             <Ionicons
               name="pulse"
@@ -373,6 +392,37 @@ export default function LearnHubScreen() {
           </View>
         )}
 
+        {/*
+          Empty-state banners (2026-02 Phase 4 Learn tab fix).
+
+          Scene and Weak Lines chips are now always selectable. When the
+          selected mode has zero playable items we render a clear,
+          honest empty state instead of silently disabling Start. We
+          never fabricate items — we always tell the user *why* the
+          mode is empty and give them an obvious path back to Full
+          Script (still on the same Hub screen).
+        */}
+        {mode === 'weak' && items.length > 0 && progress.weak === 0 && (
+          <View style={styles.emptyStateCard} testID="learn-hub-weak-empty">
+            <Ionicons name="checkmark-circle-outline" size={22} color="#22d3ee" />
+            <Text style={styles.emptyStateTitle}>No weak lines yet</Text>
+            <Text style={styles.emptyStateBody}>
+              Lines become weak after repeated missed attempts. Practice
+              your full script to build your weak-line list.
+            </Text>
+          </View>
+        )}
+        {mode === 'scene' && availableScenes.length === 0 && (
+          <View style={styles.emptyStateCard} testID="learn-hub-scene-empty">
+            <Ionicons name="film-outline" size={22} color="#a78bfa" />
+            <Text style={styles.emptyStateTitle}>No scenes to practice</Text>
+            <Text style={styles.emptyStateBody}>
+              This character doesn't have any lines in a recognised
+              scene yet. Try Full script to practice everything.
+            </Text>
+          </View>
+        )}
+
         {/* Progress card */}
         <View style={styles.progressCard} testID="learn-hub-progress">
           <Text style={styles.progressTitle}>Your progress</Text>
@@ -387,13 +437,15 @@ export default function LearnHubScreen() {
           </View>
         </View>
 
-        <View style={styles.selectionHint} testID="learn-hub-selection-hint">
-          <Ionicons name="information-circle-outline" size={16} color="#9ca3af" />
-          <Text style={styles.selectionHintText}>
-            {filteredItems.length} line
-            {filteredItems.length === 1 ? '' : 's'} in this session
-          </Text>
-        </View>
+        {!isModeEmpty && (
+          <View style={styles.selectionHint} testID="learn-hub-selection-hint">
+            <Ionicons name="information-circle-outline" size={16} color="#9ca3af" />
+            <Text style={styles.selectionHintText}>
+              {filteredItems.length} line
+              {filteredItems.length === 1 ? '' : 's'} in this session
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -431,6 +483,15 @@ export default function LearnHubScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        ) : isModeEmpty ? (
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => setMode('full')}
+            testID="learn-hub-back-to-full"
+          >
+            <Ionicons name="library" size={20} color="#0a0a0f" />
+            <Text style={styles.primaryButtonText}>Back to Full script</Text>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={[
@@ -532,6 +593,25 @@ const styles = StyleSheet.create({
   progressStatLabel: { color: '#9ca3af', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
   selectionHint: { flexDirection: 'row', gap: 6, alignItems: 'center' },
   selectionHintText: { color: '#9ca3af', fontSize: 13 },
+  emptyStateCard: {
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#1f2937',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  emptyStateTitle: {
+    color: '#f3f4f6',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  emptyStateBody: {
+    color: '#9ca3af',
+    fontSize: 13,
+    lineHeight: 18,
+  },
   footer: { padding: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#1f2937' },
   primaryButton: {
     flexDirection: 'row',
