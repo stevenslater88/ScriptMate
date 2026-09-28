@@ -426,3 +426,52 @@ Initial ScrollView y position is the RN default (0). No new scroll override adde
 ### Commit
 - `e8aab71` — polish(teleprompter): default fresh sessions to top position + speed 2
 
+
+## 2026-02 — Phase 4: Learn system (4A–4G) shipped
+
+Full local-first, offline-capable, deterministic actor line-learning system. Reuses the existing Script / Character / DialogueLine model from `store/scriptStore.ts` — no duplicate script model, no duplicate character model. No AI, no backend calls in the core loop. Fabric-safe (no `Animated` import, no community slider).
+
+### Architecture
+
+**Engine — `frontend/services/learnEngine.ts` (pure functions):**
+- Types: `LearningRecord`, `LearningSession`, `LearnItem`, `MasteryLevel`, `DifficultyLevel`, `SelfAssessment`, `SessionType`, `SessionState`.
+- Extraction: `extractLearnItems(script, characterId, existingRecords)` returns actor lines with their immediately-preceding cue and a deterministic scene number (incremented on stage-direction scene headers matching `/^(INT\.?|EXT\.?|SCENE|ACT)/i`). Missing character or empty script → `[]`.
+- Stable IDs: `makeRecordId(scriptId, characterId, lineId)` → `${scriptId}:${characterId}:${lineId}`. **Never** array index.
+- Cue words: `deriveCueWords(text, count=3)` — deterministic; stop-word set + parenthetical stripping + min-length 3.
+- Masking: `tokenizeForMode(text, difficulty)` produces `{kind:'word', original, masked, isMasked} | {kind:'space', text}` tokens with proportions 0 / 0.30 / 0.55 / 0.80 / 1.00 for difficulty 1..5; L4 preserves the first letter.
+- Assessment: `applyAssessment(record, 'got_it'|'almost'|'missed', nowIso)` — pure, returns a NEW record. `got_it` bumps successes+streak; `missed` bumps misses and resets streak; `almost` bumps attempts only and resets streak. Recomputes `isWeak` + `masteryLevel` + `difficultyLevel` every call → mastery is reversible by design.
+- Classifiers: `classifyWeak` (misses ≥ 2 AND miss-rate ≥ 0.4 AND streak < 2; cleared when streak ≥ 3) and `classifyMastery` (5 states, streak-driven, reversible).
+- Session lifecycle: `createSession`, `advanceSession`, `goToNext`, `goToPrevious`, `pauseSession`, `resumeSession`, `restartSession`, `aggregateProgress`.
+
+**Storage — `frontend/services/learnStorage.ts` (AsyncStorage only):**
+- Three namespaced keys: `@scriptmate/learn/records`, `@scriptmate/learn/session/active`, `@scriptmate/learn/history`.
+- Defensive JSON parsing — corrupted data returns a safe empty shape.
+- `purgeOrphans(activeScriptIds)` removes records whose script no longer exists (no silent orphan corruption).
+- History capped at `HISTORY_MAX = 50`, deduped by session id.
+
+**UI:**
+- `app/learn/index.tsx` — Learn Hub with character picker, mode picker (full / scene / weak), scene chip row, and a progress card (lines / practised / strong+ / weak).
+- `app/learn/session.tsx` — Practice screen: cue card + actor-line card with per-word masking, 5-level difficulty pills (matching Phase 3 segmented-control shape), Reveal button, Got it / Almost / Missed assessment row, prev / pause / next nav, restart, quit-with-preserve.
+- `app/learn/summary.tsx` — Post-session summary with duration + success rate + overall character stats + Practice again.
+- `app/script/[id].tsx` — added Learn Lines button (cyan accent, `testID="script-learn-btn"`) wiring Library → Script → Learn.
+
+**All screens carry data-testids** for the testing agent: `learn-hub`, `learn-hub-start`, `learn-hub-mode-{full,scene,weak}`, `learn-hub-character-<id>`, `learn-hub-scene-<n>`, `learn-hub-progress`, `learn-session`, `learn-session-progress`, `learn-session-cue-card`, `learn-session-reveal`, `learn-session-assess-{missed,almost,got}`, `learn-session-difficulty-${d}`, `learn-session-{prev,next,pauseresume,restart,quit,mastery}`, `learn-summary`, `learn-summary-again`, `learn-summary-overall`.
+
+### Test coverage
+- **NEW:** `backend/tests/test_phase4_learn.py` — 38 source-level guards (stable-ID shape, session states, session types, five difficulty levels, weak recovery clause, mastery reversibility, storage defensive-JSON, three-key namespace, `purgeOrphans` present, testIDs on every user-facing surface, no `Animated`/community-slider, no backend/AI imports, Phase 3 sentinels intact, `expo-camera` patch intact, runtime engine smoke bridge).
+- **NEW:** `scripts/learn_engine_smoketest.js` — 22 runtime pure-function assertions (extraction, cue-word derivation, tokenizeForMode masks at 0/30/55/80/100%, applyAssessment, weak recovery, mastery progression + regression, session lifecycle, aggregateProgress). Compiled from TS and executed in the same pytest run.
+- **Regression run:** 182/182 pass in 1.67s across the full accumulated suite. Phase 3 selftape / camera hardening / Framing Guides / UX defaults / entitlement / QA-premium — all green. TypeScript: 3 pre-existing errors, 0 new.
+
+### Not modified
+- `frontend/app/selftape/*.tsx`, `frontend/services/selfTapeStorage.ts`, `frontend/patches/expo-camera+17.0.10.patch`, backend, dependencies, EAS config, 18 pre-existing backend lint issues.
+
+### Deferred
+- Streaks (4F.3) — deferred pending a positive-only design (directive: don't punish missed days).
+- AI Line Coach / AI Rehearsal Partner / ElevenLabs voice partner / Dialect Coach — architecture-compatible via `LearningRecord` + `LearningSession`; out of Phase 4 scope.
+- Backfill / migration for pre-Phase-4 records (none exist yet).
+
+### Commit
+- `361b910` — feat(learn): Phase 4 — actor-focused Learn system (4A–4G)
+
+**No APK built. No EAS triggered. No push to GitHub.** Awaiting user review before the single Phase 4 physical build on Samsung SM-S918B / Android 16.
+
