@@ -46,26 +46,35 @@ def _read(rel: str) -> str:
 # Pipeline wiring
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_patch_package_is_a_dev_dependency() -> None:
-    """patch-package must be a devDependency so EAS installs it."""
+def test_patch_package_is_in_dependencies() -> None:
+    """patch-package must be a top-level `dependencies` entry so the
+    EAS OTA production install (which runs `yarn install` with
+    `NODE_ENV=production` and therefore skips devDependencies) can
+    still resolve the binary during the `postinstall` hook.
+    Moved from devDependencies → dependencies in 2026-02 as a fix for
+    the `build_image` failure in the EAS OTA lane (exit 127:
+    `patch-package: not found`)."""
     d = _read_pkg()
-    dev = d.get("devDependencies", {})
-    assert "patch-package" in dev, (
-        "patch-package must be listed under devDependencies of "
+    deps = d.get("dependencies", {})
+    assert "patch-package" in deps, (
+        "patch-package must be listed under `dependencies` of "
         "frontend/package.json so the postinstall step can apply our "
-        "expo-camera patches during EAS Android builds."
+        "expo-camera patches during EAS Android builds under "
+        "NODE_ENV=production."
     )
 
 
-def test_postinstall_postinstall_is_a_dev_dependency() -> None:
+def test_postinstall_postinstall_is_in_dependencies() -> None:
     """postinstall-postinstall guarantees the hook runs after every
-    `yarn install`, including in transitive dev flows."""
+    `yarn install`, including in transitive dev flows. Moved to
+    `dependencies` alongside patch-package for the same
+    NODE_ENV=production reason (see above)."""
     d = _read_pkg()
-    dev = d.get("devDependencies", {})
-    assert "postinstall-postinstall" in dev, (
-        "postinstall-postinstall must be listed under devDependencies "
+    deps = d.get("dependencies", {})
+    assert "postinstall-postinstall" in deps, (
+        "postinstall-postinstall must be listed under `dependencies` "
         "so patch-package always re-applies after any subsequent "
-        "yarn install, not just the first."
+        "yarn install (including EAS OTA production installs)."
     )
 
 

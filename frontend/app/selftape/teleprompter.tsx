@@ -88,6 +88,16 @@ export default function TeleprompterScreen() {
   const [position, setPosition] = useState<'top' | 'middle' | 'bottom'>('bottom');
   const [showSettings, setShowSettings] = useState(false);
   const [highlightMyLines, setHighlightMyLines] = useState(true);
+  // ─── Framing Guides (Post-Phase-3 polish) ─────────────────────────────
+  // Optional, purely-visual placement guides overlaid on the camera view.
+  // Off by default. STRICTLY no face detection, no CV, no camera APIs, no
+  // animation, no recording-pipeline changes — just static <View>s rendered
+  // OUTSIDE the teleprompter ScrollView so they stay fixed while the
+  // script scrolls. Overlay uses `pointerEvents="none"` so it cannot
+  // intercept touches on any control below it.
+  //
+  // Regression: backend/tests/test_teleprompter_framing_guides.py
+  const [showFramingGuides, setShowFramingGuides] = useState(false);
   
   // Post-record state
   const [showActionSheet, setShowActionSheet] = useState(false);
@@ -558,6 +568,35 @@ export default function TeleprompterScreen() {
         facing={facing}
         mode="video"
       >
+        {/*
+          Framing Guides overlay — Post-Phase-3 polish.
+          Rendered as the FIRST child inside CameraView so it sits under
+          all interactive controls (top bar, teleprompter, bottom bar).
+          Fixed to the camera viewport → does NOT move when the
+          teleprompter ScrollView scrolls. `pointerEvents="none"` on the
+          container guarantees zero interference with recording, scrolling,
+          settings, save, retake, or countdown.
+        */}
+        {showFramingGuides && (
+          <View
+            style={styles.framingGuidesLayer}
+            pointerEvents="none"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            testID="framing-guides-overlay"
+          >
+            {/* Rule-of-thirds — 2 vertical + 2 horizontal thin lines. */}
+            <View style={[styles.framingGuideVLine, { left: '33.333%' }]} />
+            <View style={[styles.framingGuideVLine, { left: '66.666%' }]} />
+            <View style={[styles.framingGuideHLine, { top: '33.333%' }]} />
+            <View style={[styles.framingGuideHLine, { top: '66.666%' }]} />
+            {/* Face-safe zone — centered oval in the upper-middle third. */}
+            <View style={styles.framingGuideFaceZone} />
+            {/* Eye-line marker — subtle horizontal tick at ~1/3 down. */}
+            <View style={styles.framingGuideEyeLine} />
+          </View>
+        )}
+
         {/* Top Bar */}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
@@ -812,6 +851,23 @@ export default function TeleprompterScreen() {
                 color={highlightMyLines ? '#6366f1' : '#6b7280'} 
               />
             </TouchableOpacity>
+
+            {/* Framing Guides Toggle — visual-only camera placement guides. */}
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => setShowFramingGuides(!showFramingGuides)}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: showFramingGuides }}
+              accessibilityLabel="Framing Guides"
+              testID="framing-guides-toggle"
+            >
+              <Text style={styles.settingLabel}>Framing Guides</Text>
+              <Ionicons
+                name={showFramingGuides ? 'checkbox' : 'square-outline'}
+                size={24}
+                color={showFramingGuides ? '#6366f1' : '#6b7280'}
+              />
+            </TouchableOpacity>
             
             <TouchableOpacity 
               style={styles.settingsDone}
@@ -957,6 +1013,52 @@ const styles = StyleSheet.create({
     fontSize: 120,
     fontWeight: '700',
     color: '#fff',
+  },
+
+  // ─── Framing Guides (Post-Phase-3 polish) ─────────────────────────────
+  // Purely visual overlay. Absolute-fill inside CameraView, pointerEvents
+  // none, no animation, no native APIs. Fixed to the viewport → does not
+  // scroll with the teleprompter.
+  framingGuidesLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  framingGuideVLine: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+  },
+  framingGuideHLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+  },
+  framingGuideFaceZone: {
+    // Head-and-shoulders safe zone: ~55% width × ~40% height, centered
+    // horizontally, positioned so the oval spans roughly the upper-third
+    // to just below the horizon line. Ellipse via borderRadius: 999.
+    position: 'absolute',
+    width: '55%',
+    height: '40%',
+    left: '22.5%',
+    top: '18%',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.55)',
+    borderRadius: 999,
+    backgroundColor: 'transparent',
+  },
+  framingGuideEyeLine: {
+    // Recommended eye-line — sits at the upper rule-of-thirds line,
+    // rendered as a slightly brighter tick so the actor has a target.
+    position: 'absolute',
+    left: '30%',
+    right: '30%',
+    top: '33.333%',
+    height: 1,
+    backgroundColor: 'rgba(99, 102, 241, 0.7)',
   },
   
   // Teleprompter
