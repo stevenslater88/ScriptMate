@@ -1,0 +1,24 @@
+{
+  "summary": "Phase 4 Learn Hub Resume UX — ran the exact scoped test set requested. 201/201 pytest guards passed (including the 15 new test_learn_resume_ux.py tests) and 22/22 learn_engine_smoketest.js runtime assertions passed. No frontend browser automation attempted (React Native / Expo, not applicable). No code modifications made.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_learn_resume_ux.py",
+    "/app/backend/tests/test_phase4_learn.py",
+    "/app/test_reports/pytest/resume_ux.xml",
+    "/app/scripts/learn_engine_smoketest.js"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Resume UX contract fully covered by source-level guards: loadActiveSession on mount, resumableSession predicate (scriptId/characterId/state/itemIds/currentIndex bounds), testIDs learn-hub-resume-banner / learn-hub-resume / learn-hub-start-again / learn-hub-start, clearActiveSession-before-createSession ordering in Start Again path. All guards green.",
+    "Phase 3 files (teleprompter.tsx, record.tsx, prep.tsx, selfTapeStorage.ts, expo-camera+17.0.10.patch) untouched — Phase 3 regression 34/34 passes.",
+    "Per user directive, the 18 pre-existing backend lint issues were not inspected or modified."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (201/201 pytest + 22/22 engine smoketest)", "frontend": "N/A (React Native / Expo — not testable via Playwright)"},
+  "test_credentials": "none — Learn Hub is fully offline",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Scoped test list in review_request.other_misc_info is the canonical set. Do NOT run wider backend pytest — many pre-existing integration tests need a live backend and fail unrelated. Learn Hub UX is verified via source-level pytest guards only; React Native Expo screens are not testable via Playwright in this environment."
+}
