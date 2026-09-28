@@ -24,8 +24,12 @@ export default function PrepScreen() {
   const [fontSize, setFontSize] = useState(18);
   const [hideOthers, setHideOthers] = useState(false);
   const [countdownEnabled, setCountdownEnabled] = useState(true);
-  const [teleprompterEnabled, setTeleprompterEnabled] = useState(false);
-  const [teleprompterSpeed, setTeleprompterSpeed] = useState(3);
+  // NOTE: The old prep-screen "Enable Teleprompter" toggle + speed slider
+  // were removed. The single teleprompter entry point is now
+  // Self Tape Studio → Teleprompter Mode NEW → /selftape/teleprompter
+  // (Route B, converged to the proven JS-driven scroll architecture in
+  // commit 6e21ef7). Route A record.tsx retains its in-screen teleprompter
+  // controls for continuity, but is no longer pre-configured from prep.
 
   useEffect(() => {
     if (script?.characters?.length) {
@@ -60,8 +64,6 @@ export default function PrepScreen() {
         fontSize: fontSize.toString(),
         hideOthers: hideOthers.toString(),
         countdown: countdownEnabled.toString(),
-        teleprompter: teleprompterEnabled.toString(),
-        teleprompterSpeed: teleprompterSpeed.toString(),
       },
     });
   };
@@ -171,43 +173,12 @@ export default function PrepScreen() {
           </View>
         </View>
 
-        {/* Teleprompter Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Teleprompter</Text>
-
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleInfo}>
-              <Text style={styles.toggleLabel}>Enable Teleprompter</Text>
-              <Text style={styles.toggleDescription}>Auto-scroll script during recording</Text>
-            </View>
-            <Switch
-              value={teleprompterEnabled}
-              onValueChange={setTeleprompterEnabled}
-              trackColor={{ false: '#374151', true: '#6366f1' }}
-              thumbColor="#fff"
-            />
-          </View>
-
-          {teleprompterEnabled && (
-            <>
-              <View style={styles.settingRow}>
-                <Text style={styles.settingLabel}>Scroll Speed</Text>
-                <Text style={styles.settingValue}>{['Slow', 'Medium-Slow', 'Medium', 'Medium-Fast', 'Fast'][teleprompterSpeed - 1]}</Text>
-              </View>
-              <Slider
-                style={styles.slider}
-                minimumValue={1}
-                maximumValue={5}
-                step={1}
-                value={teleprompterSpeed}
-                onValueChange={setTeleprompterSpeed}
-                minimumTrackTintColor="#6366f1"
-                maximumTrackTintColor="#374151"
-                thumbTintColor="#6366f1"
-              />
-            </>
-          )}
-        </View>
+        {/*
+          Teleprompter Settings — REMOVED.
+          The old prep-screen "Enable Teleprompter" toggle and speed
+          slider were removed to leave a single, clear teleprompter
+          entry point: Self Tape Studio → Teleprompter Mode NEW.
+        */}
 
         {/* Preview */}
         <View style={styles.section}>

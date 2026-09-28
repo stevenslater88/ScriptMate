@@ -1308,27 +1308,49 @@ async def cancel_subscription(device_id: str):
 
 @api_router.post("/scripts", response_model=Script)
 async def create_script(script_data: ScriptCreate):
-    """Create a new script from raw text"""
+    """Create a new script from raw text.
+
+    IMPORT LATENCY FIX (2026-02):
+    Previously this handler synchronously called ``parse_script_with_ai``
+    (gpt-4o), which typically took 20-40 seconds even for tiny (~2 KB)
+    scripts — the Samsung SM-S918B physical timing showed 27.21s for a
+    2260-char / 39-line / 3-character script. That is unacceptably slow
+    for a "save script" UX and the LLM output was not actually needed
+    synchronously: the frontend script-parser screen has already produced
+    ``parseResult.parsedLines`` deterministically (client-side) and the
+    user has already selected their character from those results before
+    tapping Save. The backend ``fallback_parse_script`` is the same
+    deterministic parser already trusted as the LLM's safety net.
+
+    We now use ``fallback_parse_script`` directly so ``POST /api/scripts``
+    completes in tens of milliseconds. The LLM helper ``parse_script_with_ai``
+    remains in place for any future non-blocking enhancement endpoint —
+    it is not removed, only no longer called from the save path.
+
+    API contract, model shape, character/scene/dialogue extraction,
+    persistence, and user-limit checks are all preserved.
+    """
     try:
         # Check user limits
         limits_check = await check_user_limits(script_data.user_id, "create_script")
         if not limits_check["allowed"]:
             raise HTTPException(status_code=403, detail=limits_check["upgrade_reason"])
-        
-        parsed = await parse_script_with_ai(script_data.raw_text)
-        
+
+        # Deterministic parse — same output shape as parse_script_with_ai.
+        parsed = fallback_parse_script(script_data.raw_text)
+
         characters = []
         char_line_counts = {}
         for line in parsed.get("lines", []):
             if line.get("character"):
                 char_line_counts[line["character"]] = char_line_counts.get(line["character"], 0) + 1
-        
+
         for char_name in parsed.get("characters", []):
             characters.append(Character(
                 name=char_name,
                 line_count=char_line_counts.get(char_name, 0)
             ))
-        
+
         lines = []
         for idx, line in enumerate(parsed.get("lines", [])):
             lines.append(DialogueLine(
@@ -1337,7 +1359,7 @@ async def create_script(script_data: ScriptCreate):
                 is_stage_direction=line.get("is_stage_direction", False),
                 line_number=idx
             ))
-        
+
         script = Script(
             title=script_data.title,
             raw_text=script_data.raw_text,
@@ -1345,15 +1367,15 @@ async def create_script(script_data: ScriptCreate):
             lines=lines,
             user_id=script_data.user_id
         )
-        
+
         await db.scripts.insert_one(script.dict())
-        
+
         # Update user script count
         await db.users.update_one(
             {"$or": [{"id": script_data.user_id}, {"device_id": script_data.user_id}]},
             {"$inc": {"scripts_count": 1}}
         )
-        
+
         return script
     except HTTPException:
         raise
