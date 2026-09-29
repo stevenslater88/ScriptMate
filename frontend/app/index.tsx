@@ -15,6 +15,7 @@ import { API_BASE_URL } from '../services/apiConfig';
 import { useScriptStore } from '../store/scriptStore';
 import { safeHandler } from '../services/debugService';
 import { shouldShowOnboarding } from '../components/OnboardingTutorial';
+import AIComingSoonSection from '../components/AIComingSoonSection';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -128,30 +129,20 @@ export default function HomeScreen() {
           <Text style={st.heroSub} numberOfLines={1}>{recent ? recent.title : 'Select a script to begin'}</Text>
         </TouchableOpacity>
 
-        {/* ─── 4-TOOL GRID — Acting Coach, Dialect Coach, Self Tape, New Script ─── */}
+        {/* ─── 4-TOOL GRID — Self Tape, New Script, Recall, My Scripts ─── */}
+        {/*
+          NOTE (2026-02): "Acting Coach" and "Dialect Coach" tiles were
+          removed from the primary grid because those features are now
+          part of the "ScriptMate AI · Coming Soon" roadmap section
+          below. The underlying routes (`/acting-coach`,
+          `/dialect-coach`) still exist for deeplinks and profile
+          entries, but they are no longer surfaced as primary CTAs.
+        */}
         <View style={st.grid4}>
-          <ToolCard icon="school"     color="#8b5cf6" label="Acting Coach"  route="/acting-coach"   testId="acting-coach-btn" />
-          <ToolCard icon="mic"        color="#ec4899" label="Dialect Coach" route="/dialect-coach"   testId="dialect-coach-btn" />
           <ToolCard icon="videocam"   color="#ef4444" label="Self Tape"     route="/selftape"        testId="selftape-btn" />
           <ToolCard icon="add-circle" color="#10b981" label="New Script"    route="/script-parser"   testId="new-script-btn" />
-        </View>
-
-        {/* ─── RECALL + MY SCRIPTS row ─── */}
-        <View style={st.dualRow}>
-          <TouchableOpacity style={st.dualCard} onPress={() => router.push('/recall')} activeOpacity={0.85} data-testid="recall-btn">
-            <View style={[st.dualIc, { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
-              <Ionicons name="bulb" size={22} color="#f59e0b" />
-            </View>
-            <Text style={st.dualH}>Recall</Text>
-            <Text style={st.dualSub}>Line memory</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={st.dualCard} onPress={() => router.push('/scripts')} activeOpacity={0.85} data-testid="my-scripts-btn">
-            <View style={[st.dualIc, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
-              <Ionicons name="library" size={22} color="#6366f1" />
-            </View>
-            <Text style={st.dualH}>My Scripts</Text>
-            <Text style={st.dualSub}>{scripts.length} saved</Text>
-          </TouchableOpacity>
+          <ToolCard icon="bulb"       color="#f59e0b" label="Recall"        route="/recall"          testId="recall-btn" />
+          <ToolCard icon="library"    color="#6366f1" label="My Scripts"    route="/scripts"         testId="my-scripts-btn" />
         </View>
 
         {/* ─── DAILY DRILL ─── */}
@@ -164,6 +155,9 @@ export default function HomeScreen() {
             <View style={st.drillXp}><Text style={st.drillXpTx}>+25 XP</Text></View>
           </TouchableOpacity>
         )}
+
+        {/* ─── SCRIPTMATE AI · COMING SOON ─── */}
+        <AIComingSoonSection />
 
         {/* ─── MORE TOOLS ─── */}
         <Text style={st.secLabel}>More</Text>

@@ -769,3 +769,71 @@ build. No native evidence was needed for this fix because the source
 evidence (Fabric flag + slider version + call-site count on each
 crashing screen) is deterministic.
 
+
+---
+
+## 2026-02 · ScriptMate AI · Coming Soon (UI-only) + Slider migration confirmed
+
+### Task 1 — Fabric-safe Slider (already applied in the prior pass)
+Confirmed still applied on this pass. No community-slider imports
+remain in `recall.tsx`, `script/[id].tsx`, `acting-coach.tsx`, or
+`selftape/prep.tsx`. `@miblanchard/react-native-slider` present in
+`dependencies`. Wrapper `components/FabricSafeSlider.tsx` intact.
+Locked by 22 pytest guards.
+
+### Task 2 — AI Coming Soon
+Purely UI presentation. Zero AI functionality, API calls, backend,
+dependencies, or paywall changes. Five features rendered in a
+dedicated roadmap section:
+
+  1. AI Rehearsal Partner
+  2. AI Line Coach
+  3. AI Scene Coach
+  4. AI Script Assistant
+  5. World-Class Dialect Coach
+
+Each card carries a "COMING SOON" badge. Cards are decorative — no
+TouchableOpacity, no router calls, no onPress. Section reused
+verbatim on both Home and Dashboard.
+
+### Files changed (Task 2)
+- **NEW:** `frontend/components/AIComingSoonSection.tsx` — the
+  reusable roadmap section. Exports `AIComingSoonSection` (default)
+  and `AI_ROADMAP` (frozen readonly list for tests).
+- `frontend/app/index.tsx`:
+  - Removed "Acting Coach" and "Dialect Coach" from the 4-tool grid.
+  - Grid now: Self Tape · New Script · Recall · My Scripts.
+  - Removed the redundant "Recall + My Scripts" dualRow (folded up
+    into the grid).
+  - Added `<AIComingSoonSection />` before the "More" section.
+- `frontend/app/dashboard.tsx`:
+  - Removed the "Dialect Coach" and "Acting Coach" Quick Action
+    tiles (routed to `/dialect-coach` and `/acting-coach`).
+  - Added `<AIComingSoonSection />` under Quick Actions.
+- **NEW:** `backend/tests/test_ai_coming_soon_ui.py` — 18 guards.
+
+### Not changed (Task 2)
+Underlying route files `app/acting-coach.tsx`, `app/dialect-coach.tsx`,
+`app/scene-partner.tsx` remain intact so deeplinks and share URLs
+still resolve. This is a UI demotion, not a feature removal.
+Learn Hub / Session / Summary, Learn engine + storage, Phase 3
+self-tape files, expo-camera patch, scriptStore, script parser,
+Script Library storage, paywall, RevenueCat, ElevenLabs, Sentry —
+all untouched.
+
+### Tests
+- **NEW:** `test_ai_coming_soon_ui.py` — **18 / 18 pass**.
+- **NEW (prior pass):** `test_fabric_safe_slider_migration.py` —
+  **22 / 22 pass**.
+- Full guard regression: **266 / 266 pass** (248 previous + 18 new).
+- Entitlement/premium: **34 / 34 pass** (subset).
+- Runtime engine smoke: **22 / 22 pass**.
+- TypeScript: **0 new errors** introduced. Verified via `git stash`
+  diff — the two remaining errors in `index.tsx` and `dashboard.tsx`
+  are pre-existing (only line numbers shifted by ±1 due to added
+  imports).
+- 18 pre-existing backend lint issues: untouched.
+
+### APK
+Not built. No EAS trigger. No GitHub push. Per user directive.
+

@@ -21,6 +21,7 @@ import {
   SceneProgress,
 } from '../services/progressService';
 import { getPendingAuditions, getAuditionStats, AuditionStats } from '../services/auditionService';
+import AIComingSoonSection from '../components/AIComingSoonSection';
 
 export default function DashboardScreen() {
   const { scripts, fetchScripts, loading, initializeUser, isPremium } = useScriptStore();
@@ -359,41 +360,22 @@ export default function DashboardScreen() {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#4b5563" />
           </TouchableOpacity>
-          
-          {/* Dialect Coach */}
-          <TouchableOpacity 
-            style={[styles.actionCard, styles.actionCardWide]}
-            onPress={() => router.push('/dialect-coach')}
-            data-testid="dialect-coach-btn"
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#8b5cf6' }]}>
-              <Ionicons name="mic" size={26} color="#fff" />
-            </View>
-            <View style={styles.actionCardContent}>
-              <Text style={styles.actionTitle}>Dialect Coach</Text>
-              <Text style={styles.actionSubtitle}>Master accents with AI feedback</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#4b5563" />
-          </TouchableOpacity>
 
-          {/* Acting Coach - NEW */}
-          <TouchableOpacity 
-            style={[styles.actionCard, styles.actionCardWide]}
-            onPress={() => router.push('/acting-coach')}
-            data-testid="acting-coach-btn"
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#6366f1' }]}>
-              <Ionicons name="sparkles" size={26} color="#fff" />
-            </View>
-            <View style={styles.actionCardContent}>
-              <Text style={styles.actionTitle}>Acting Coach</Text>
-              <Text style={styles.actionSubtitle}>AI performance coaching</Text>
-            </View>
-            <View style={styles.newFeatureBadge}>
-              <Text style={styles.newFeatureText}>NEW</Text>
-            </View>
-          </TouchableOpacity>
+          {/*
+            NOTE (2026-02): "Dialect Coach" and "Acting Coach" action
+            tiles were removed from Quick Actions because those
+            capabilities are now part of the "ScriptMate AI · Coming
+            Soon" roadmap rendered below. The underlying routes
+            (`/dialect-coach`, `/acting-coach`) still exist for
+            deeplinks — this is a UI-only demotion, not a feature
+            removal.
+          */}
         </View>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            SCRIPTMATE AI · COMING SOON
+        ═══════════════════════════════════════════════════════════════════ */}
+        <AIComingSoonSection />
 
         {/* ═══════════════════════════════════════════════════════════════════
             PREMIUM UPGRADE (Soft, Non-Intrusive)
