@@ -61,7 +61,11 @@ export interface ParseResult {
 // mixed-case scene headings (rare, but seen in some drafts) are
 // caught too.
 const HEADING_RE =
-  /^(?:\d+[A-Z]?\.?\s+)?(?:INT\.?(?:\/EXT\.?)?|EXT\.?(?:\/INT\.?)?|I\.?\/E\.?|E\.?\/I\.?|SCENE\b|ACT\b|CHAPTER\b|PART\b|SECTION\b|FADE\s+(?:IN|OUT|TO)\b|CUT\s+TO\b|DISSOLVE(?:\s+TO)?\b|SMASH\s+CUT\b|MATCH\s+CUT\b|JUMP\s+CUT\b|TIME\s+CUT\b|HARD\s+CUT\b|QUICK\s+CUT\b|IRIS\s+(?:IN|OUT)\b|FREEZE\s+FRAME\b|BACK\s+TO\s+SCENE\b|BACK\s+TO\b|TITLE\s+CARD\b|END\s+OF\b|THE\s+END\b|INTERCUT\b|MONTAGE\b|FLASH(?:BACK|-BACK|\s+BACK)\b|FLASHFORWARD\b|PRELAP\b|SUPER(?:IMPOSE)?\b|ANGLE\s+ON\b|CLOSE\s+ON\b|WIDE\s+ON\b|POV\b)/i;
+  // Case-sensitive by design: screenplay convention requires scene /
+  // transition headings to be UPPERCASE. A case-insensitive match
+  // would misclassify lowercase dialogue like "back to me." or
+  // "iris in the eye" as a scene heading.
+  /^(?:\d+[A-Z]?\.?\s+)?(?:INT\.?(?:\/EXT\.?)?|EXT\.?(?:\/INT\.?)?|I\.?\/E\.?|E\.?\/I\.?|SCENE\b|ACT\b|CHAPTER\b|PART\b|SECTION\b|FADE\s+(?:IN|OUT|TO)\b|CUT\s+TO\b|DISSOLVE(?:\s+TO)?\b|SMASH\s+CUT\b|MATCH\s+CUT\b|JUMP\s+CUT\b|TIME\s+CUT\b|HARD\s+CUT\b|QUICK\s+CUT\b|IRIS\s+(?:IN|OUT)\b|FREEZE\s+FRAME\b|BACK\s+TO\s+SCENE\b|TITLE\s+CARD\b|THE\s+END\b|END\s+OF\s+(?:SCENE|ACT|EPISODE|PART|SHOW|FILM|MOVIE)\b|INTERCUT\b|MONTAGE\b|FLASH(?:BACK|-BACK|\s+BACK)\b|FLASHFORWARD\b|PRELAP\b|SUPERIMPOSE\b|ANGLE\s+ON\b|CLOSE\s+ON\b|WIDE\s+ON\b|POV\b)/;
 const PAREN_RE = /^\s*\(.*\)?\s*$/;
 const CAPS_RATIO_THRESHOLD = 0.7;
 const MAX_CHARACTER_NAME_LEN = 35;

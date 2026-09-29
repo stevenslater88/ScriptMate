@@ -1295,23 +1295,25 @@ _SCENE_HEADING_RE = re.compile(
       | IRIS\s+(?:IN|OUT)\b
       | FREEZE\s+FRAME\b
       | BACK\s+TO\s+SCENE\b
-      | BACK\s+TO\b
       | TITLE\s+CARD\b
-      | END\s+OF\b
       | THE\s+END\b
+      | END\s+OF\s+(?:SCENE|ACT|EPISODE|PART|SHOW|FILM|MOVIE)\b
       | INTERCUT\b
       | MONTAGE\b
       | FLASH(?:BACK|-BACK|\s+BACK)\b
       | FLASHFORWARD\b
       | PRELAP\b
-      | SUPER(?:IMPOSE)?\b
+      | SUPERIMPOSE\b
       | ANGLE\s+ON\b
       | CLOSE\s+ON\b
       | WIDE\s+ON\b
       | POV\b                # e.g. "POV JACK"
     )
     """,
-    re.IGNORECASE | re.VERBOSE,
+    # Case-sensitive: screenplay convention requires scene / transition
+    # headings to be UPPERCASE. Dropping IGNORECASE prevents dialogue
+    # like "back to me." or "iris in the eye" from being mis-classified.
+    re.VERBOSE,
 )
 
 # Trailing character-cue extension parenthetical: `(V.O.)`, `(O.S.)`,
@@ -1378,6 +1380,26 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             continue
             
         potential_char = line.replace(':', '').strip()
+        # Scene-heading / transition / structural-heading — terminates any
+        # in-progress dialogue block and is stored as its own stage-direction
+        # line. This prevents Feb-2026 physical bug where SARAH's dialogue
+        # absorbed a following `2. INT. KITCHEN — MORNING` + action lines
+        # because the scene heading fell through to `current_text.append`.
+        if _looks_like_scene_heading(potential_char):
+            if current_character and current_text:
+                lines_data.append({
+                    "character": current_character,
+                    "text": _repair(_smart_join_dialogue(current_text)),
+                    "is_stage_direction": False
+                })
+                current_text = []
+            current_character = ""   # scene heading breaks the block
+            lines_data.append({
+                "character": "",
+                "text": _repair(line),
+                "is_stage_direction": True
+            })
+            continue
         # Character-cue detection: uppercase, short, non-empty, and NOT
         # a screenplay scene/transition heading, and NOT a bare
         # parenthetical (which belongs to the stage-direction path).
@@ -1409,6 +1431,17 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                     "is_stage_direction": False
                 })
                 current_text = []
+            lines_data.append({
+                "character": "",
+                "text": _repair(line),
+                "is_stage_direction": True
+            })
+        elif not current_character:
+            # Between a scene heading and the next character cue any
+            # narrative text is screenplay action, NOT dialogue. Store
+            # as a stage-direction line so TTS/rehearsal never reads it
+            # as a character speaking. Matches the Feb-2026 physical
+            # QA requirement: "Action lines must NEVER enter dialogue".
             lines_data.append({
                 "character": "",
                 "text": _repair(line),

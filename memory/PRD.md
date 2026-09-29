@@ -123,6 +123,60 @@ Physical S23 QA build's *character-select* screen still surfaced numbered screen
 
 **Regression coverage added to `backend/tests/test_scene_heading_detection_feb2026.py`:**
 - 20 new numbered-scene-heading positive cases (`1. INT. …`, `101A. EXT. …`, `12 INT. …`).
+
+### 2026-02 — Dialogue Boundary Hardening (Feb 2026)
+
+Physical S23 QA build reported: SARAH's TTS/Rehearsal dialogue leaked adjacent scene heading + action prose. Exact failing shape:
+```
+SARAH
+You're not listening. We're running out of time, and I'll tell you exactly what happened.
+
+2. INT. KITCHEN — MORNING
+
+A kettle clicks off. Sarah enters carrying two mugs. Jack looks at the clock.
+```
+SARAH's stored `text` became `"You're not listening. … what happened. 2. INT. KITCHEN — MORNING A kettle clicks off. Sarah enters carrying two mugs. Jack looks at the clock."`, and the TTS therefore spoke the scene heading and the action prose as her dialogue.
+
+**Root cause (traced in `backend/server.py::fallback_parse_script`):**
+- The prior scene-heading fix correctly REJECTED scene headings from character-cue classification, but the fall-through `else: current_text.append(line)` branch then absorbed the heading (and any following action lines) into the accumulator for the previous character's dialogue.
+- The frontend `smartScriptParser` already handled this correctly (it explicitly resets `inDialogueBlock` and `currentCharacter` on `HEADING`), but the on-device build uses the frontend parser for the DISPLAY on the Script Parser screen only — Rehearsal/TTS reads the stored `Script.lines` produced by the backend `fallback_parse_script` (see `POST /api/scripts` handler which stores via `fallback_parse_script`).
+
+**Fix (evidence-based, minimum scope):**
+- `backend/server.py::fallback_parse_script`: added an explicit scene-heading branch BEFORE the character-cue branch that
+  - finalises the in-progress dialogue block,
+  - stores the heading itself as an `is_stage_direction=True` line with `character=""`,
+  - resets `current_character` to `""` so subsequent narrative lines don't attach to the previous character.
+- Added a new `elif not current_character:` branch that routes free-text lines between a scene heading and the next character cue to the stage-direction path (`character=""`, `is_stage_direction=True`), fulfilling the invariant "Action lines must NEVER enter dialogue".
+
+**Secondary fix — false-positive elimination:**
+- Both `_SCENE_HEADING_RE` (backend) and `HEADING_RE` (`frontend/services/smartScriptParser.ts`) were IGNORECASE, which caused legitimate dialogue like `"Back to me."` and `"Iris in the eye"` to be classified as scene headings. Screenplay convention REQUIRES scene / transition headings to be UPPERCASE, so both regexes are now CASE-SENSITIVE (Python removed `re.IGNORECASE`; JS dropped the `/i` flag). Additionally removed the over-broad `BACK\s+TO\b` and `END\s+OF\b` alternatives (kept only `BACK TO SCENE` and `END OF (SCENE|ACT|EPISODE|PART|SHOW|FILM|MOVIE)`).
+
+**Retained functionality:**
+- Feb-2026 DOCX word-boundary repair (`kno w`, `look lik e`, `nothinghappens`, `disciplinary .`) — validated via combined-invariant test `test_regression_word_boundary_repair_still_holds`.
+- Character cue extension stripping (`JACK (V.O.)` → `JACK`).
+- All previously-detected legitimate characters (JACK, SARAH, DET. HARRIS, DREW, ANG, HANN AH, MRS. SMITH, GUARD 1, NPC 2, SOLDIER 3).
+- Numbered scene-heading rejection (`1. INT.`, `101A. EXT.`, `12 INT.`).
+
+**Regression coverage — `backend/tests/test_dialogue_boundary_feb2026.py`** (16 tests):
+- Physical-shape assertion: `test_physical_stress_sarah_dialogue_is_only_dialogue` — asserts SARAH's dialogue contains no `INT.`, `EXT.`, `kettle`, `carrying two mugs`, `clock`.
+- Symmetric JACK assertion.
+- Scene headings stored as stage direction with empty character.
+- Action prose stored as stage direction.
+- 9 parametrised boundary-invariant cases: numbered scene, unnumbered scene, INT/EXT slug, transition (CUT TO), action-after-scene, parenthetical-between-dialogue, consecutive dialogue, multi-paragraph dialogue, FADE OUT terminates.
+- End-to-end synthesised-DOCX round-trip (`test_e2e_docx_dialogue_boundary_holds_after_extraction`).
+- TTS-payload invariant (`test_tts_payload_dialogue_is_pure_dialogue`).
+- Combined-invariant guard with the word-boundary fix.
+
+**Pre-build gate — GREEN:**
+- Feb-2026 dialogue-boundary suite: **16 / 16 passed**
+- Feb-2026 scene-heading suite: 108 / 108 passed
+- Feb-2026 word-boundary hardening suite: 110 / 110 passed
+- Full accumulated static regression (21 suites): **602 / 602 passed**
+- Runtime smoke (`GET /api/health`): healthy
+- Frontend TypeScript: **37 errors — unchanged baseline** (no new TS errors introduced)
+- Backend ruff: **327 errors** — below the 328 pre-Feb baseline; the 18 pre-existing blocking issues untouched
+- No dependency changes, no lockfile regeneration, no camera/slider/RevenueCat/Sentry/Phase 3/Phase 4 functional changes, no backend URL change.
+
 - 3 new legit-numbered-character negative guards (`GUARD 1`, `NPC 2`, `SOLDIER 3`).
 - 1 new titled-character guard (`DET. HARRIS`).
 - End-to-end `NUMBERED_STRESS_TEXT` scene + DOCX round-trip test.
