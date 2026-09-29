@@ -18,6 +18,7 @@ import PyPDF2
 import io
 import tempfile
 from docx import Document
+from common_english_words import COMMON_ENGLISH_WORDS
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import html as html_escape
 from emergentintegrations.llm.openai import OpenAISpeechToText
@@ -989,33 +990,6 @@ def _normalize_docx_whitespace(s: str) -> str:
     return s
 
 
-# Common short English stopwords that must NEVER be merged across a
-# space — protects legitimate dialogue phrases like "the man", "did
-# not", "you know", "say hello", "how are", "a bike" from the
-# aggressive rules below.
-_INTRA_WORD_STOPWORDS = frozenset({
-    "a", "an", "and", "as", "at", "be", "but", "by",
-    "can", "come", "did", "do", "does", "down",
-    "each", "even", "ever",
-    "for", "from",
-    "get", "give", "go", "goes", "got",
-    "had", "has", "have", "he", "her", "him", "his", "how",
-    "i", "if", "in", "is", "it", "its",
-    "just", "keep", "know",
-    "let", "like",
-    "made", "make", "many", "may", "me", "more", "most", "much", "must", "my",
-    "new", "no", "not", "now",
-    "of", "off", "on", "once", "one", "only", "or", "our", "out", "over", "own",
-    "said", "say", "see", "seen", "sent", "she", "so", "some", "such",
-    "than", "that", "the", "them", "then", "they", "this", "thus", "time",
-    "to", "too", "two",
-    "up", "upon", "us", "use",
-    "very",
-    "want", "was", "way", "we", "well", "were", "what", "when", "where", "who",
-    "why", "will", "with",
-    "you", "your",
-})
-
 # Rule A — apostrophe / hyphen glue. Matches `letter + spaces + [' or -] +
 # optional spaces + letter`. Covers contractions split by a stray space
 # (`isn 't`, `don 't`, `we 're`) and spaced hyphens (`mid - way`).
@@ -1031,46 +1005,215 @@ _INTRA_WORD_SINGLE_LETTER = re.compile(
     r"(?:^|(?<=\s))([b-hj-np-zB-HJ-NP-Z]) +([a-z]{2,})\b"
 )
 
-# Rule C — short-fragment merge, with stopword guard. Left is 2-4
-# lowercase letters, right is 2+ lowercase letters. Neither side may
-# be a stopword. Repairs `unde rstand`, `ne ver`; leaves `the man`,
-# `did not`, `you know` untouched.
-_INTRA_WORD_SHORT_FRAGMENT = re.compile(r"\b([a-z]{2,4}) +([a-z]{2,})\b")
+# Rule C — dictionary-aware fragment merge. Two lowercase runs
+# separated by a single space are merged only when the joined form is
+# a common English word AND at least one fragment is NOT a valid word
+# on its own — the classic mid-word split signature (`unde` + `rstand`
+# → `understand`). Legitimate word pairs where BOTH sides are real
+# words (`look back`, `hard work`, `dear john`) are NEVER merged. See
+# `_dict_aware_merge` for the token scan; a regex-based approach fails
+# because `re.sub` gobbles the greedy-longest left match and misses
+# the shorter merge opportunity later in the same span.
+
+# Rule D — space before terminal punctuation (`disciplinary .` →
+# `disciplinary.`). Purely typographic; safe.
+_SPACE_BEFORE_PUNCT = re.compile(r"[ \t]+([.,;:!?])")
+
+# Rule E — split a concatenated compound where the DOCX run boundary
+# swallowed a space (`nothinghappens` → `nothing happens`). Only fires
+# when the whole token is NOT a dictionary word AND exactly one
+# split-position yields two dictionary words of ≥4 letters each.
+_MIN_SPLIT_LEN = 10   # tokens shorter than this are never split
+_MIN_HALF_LEN = 4     # each split half must have ≥ this many chars
+
+
+def _is_common_word(w: str) -> bool:
+    return w.lower() in COMMON_ENGLISH_WORDS
 
 
 def _repair_intra_word_spaces(text: str) -> str:
     """Repair intra-word whitespace artefacts introduced by DOCX/PDF
     extraction (`isn 't` → `isn't`, `w hat` → `what`,
-    `unde rstand` → `understand`, etc.).
+    `unde rstand` → `understand`, `kno w` → `know`,
+    `look lik e` → `look like`, `disciplinary .` → `disciplinary.`).
 
     Applied per source line inside `fallback_parse_script`, right
     after `.strip()`. Complements `_smart_join_dialogue` which handles
-    the newline-split flavour of the same defect.
+    the newline-split flavour of the same defect and
+    `_split_concatenated_words` which handles the missing-space
+    counterpart (`nothinghappens` → `nothing happens`).
 
-    The three rules are deliberately conservative — see the
-    stopword allowlist and the character class exclusions in the
-    module constants above. Character-cue lines (uppercase single
-    tokens) never match any of the three rules. Stage-direction
-    lines that contain only real word boundaries (`(pausing softly)`)
-    are also unaffected: Rule A needs an apostrophe/hyphen, Rule B
-    needs a single non-vowel letter followed by a lowercase word (rare
-    in stage directions), and Rule C's stopword guard covers the
-    common cases.
+    The rules are deliberately conservative:
+      • Rule A / B are character-class based and never fire in
+        contexts where a legitimate short word would be affected.
+        Rule B additionally consults the dictionary so it never
+        merges a legitimate 1-char suffix (`kno w what` stays as
+        two adjacent word pairs, then `kno w` is merged by Rule C).
+      • Rule C consults a 10K common-English-word dictionary and only
+        merges fragments when the joined form is a real word AND at
+        least one fragment alone is NOT a real word. This protects
+        common phrases like `look back`, `dear john`, `hard work`
+        from over-eager merging.
+      • Rule D strips spaces immediately before terminal punctuation
+        (`.` `,` `;` `:` `!` `?`) — a pure-typography fix.
     """
     if not text:
         return text
     # Rule A — apostrophe/hyphen glue.
     text = _INTRA_WORD_APOSTROPHE_HYPHEN.sub(r"\1\2\3", text)
-    # Rule B — single-letter non-vowel prefix.
-    text = _INTRA_WORD_SINGLE_LETTER.sub(r"\1\2", text)
-    # Rule C — short-fragment merge, with stopword guard.
-    def _c_repl(m):
-        left, right = m.group(1), m.group(2)
-        if left in _INTRA_WORD_STOPWORDS or right in _INTRA_WORD_STOPWORDS:
-            return m.group(0)
-        return left + right
-    text = _INTRA_WORD_SHORT_FRAGMENT.sub(_c_repl, text)
+    # Rule C first — dictionary-aware fragment merge. Running before
+    # Rule B prevents Rule B from misfiring on a legitimate 1-char
+    # suffix (`kno w what` — the `w` belongs to `kno`, not to `what`
+    # — Rule C merges `kno w` → `know`, then Rule B sees no lone `w`
+    # in front of `what`).
+    text = _dict_aware_merge(text)
+    # Rule B — single-letter non-vowel prefix (e.g. `w ant`), guarded
+    # by the dictionary so `wwhat`-style false positives can't occur.
+    text = _apply_single_letter_prefix(text)
+    # Rule D — space-before-punctuation.
+    text = _SPACE_BEFORE_PUNCT.sub(r"\1", text)
     return text
+
+
+def _apply_single_letter_prefix(text: str) -> str:
+    """Rule B — merge `X word` when `X` is a lone non-vowel letter and
+    the joined form is a common English word. Never fires on `a`,
+    `i`, or `o` (real short words) and never on a merge that isn't a
+    dictionary hit (`w what` stays as-is because `wwhat` isn't a word).
+    """
+    def _repl(m: "re.Match") -> str:
+        left, right = m.group(1), m.group(2)
+        merged = (left + right).lower()
+        if merged in COMMON_ENGLISH_WORDS:
+            return left + right
+        return m.group(0)
+    return _INTRA_WORD_SINGLE_LETTER.sub(_repl, text)
+
+
+def _dict_aware_merge(text: str) -> str:
+    """Apply Rule C repeatedly until no more merges occur.
+
+    Token-based to avoid the greedy-regex trap: `re.sub` on
+    `\\b\\w+ \\w+\\b` gobbles the longest left match, so `look lik e`
+    would consume `look lik` as one no-op match and never see `lik e`.
+    A token scan checks each adjacent pair explicitly and can merge
+    right-to-left in the same pass.
+
+    A merge fires only when the joined form is a common English word
+    AND at least one side is NOT a common word — the classic mid-word
+    split signature. Guards against merging real word pairs like
+    `look back`, `hard work`, `run fast`.
+    """
+    _TRAIL_PUNCT = ".,;:!?)"
+    prev = None
+    guard = 0
+    while text != prev and guard < 8:
+        prev = text
+        guard += 1
+        # Preserve whitespace runs so we can reconstruct exactly.
+        parts = re.split(r"(\s+)", text)
+        # Merge candidate pairs (parts[i], parts[i+2]) separated by a
+        # single space run parts[i+1]. Only single-space separators
+        # are eligible — multiple spaces or tabs are treated as
+        # paragraph structure and never collapsed.
+        i = 0
+        out: list[str] = []
+        while i < len(parts):
+            if (
+                i + 2 < len(parts)
+                and parts[i + 1] == " "
+                and _is_pure_lowercase_word(parts[i])
+            ):
+                right_raw = parts[i + 2]
+                # Split trailing punctuation off the right token so
+                # `rstand.` can still match `rstand` for the merge
+                # decision but keep its period after merging.
+                right_core = right_raw
+                trailing = ""
+                while right_core and right_core[-1] in _TRAIL_PUNCT:
+                    trailing = right_core[-1] + trailing
+                    right_core = right_core[:-1]
+                if _is_pure_lowercase_word(right_core):
+                    left = parts[i]
+                    if _should_merge_fragments(left, right_core):
+                        out.append(left + right_core + trailing)
+                        i += 3
+                        continue
+            out.append(parts[i])
+            i += 1
+        text = "".join(out)
+    return text
+
+
+def _is_pure_lowercase_word(s: str) -> bool:
+    """True iff `s` is a non-empty run of ASCII lowercase letters."""
+    return bool(s) and s.isalpha() and s.islower()
+
+
+def _should_merge_fragments(left: str, right: str) -> bool:
+    """Decide whether `left + right` is a mid-word split needing repair.
+
+    Returns True iff the joined form is a common English word AND at
+    least one side is NOT itself a common word (i.e. this is not a
+    legitimate two-word phrase).
+    """
+    if len(left) == 1 and len(right) == 1:
+        # Two-single-letter is Rule B territory; never merge here.
+        return False
+    merged = (left + right).lower()
+    if merged not in COMMON_ENGLISH_WORDS:
+        return False
+    left_is_word = left.lower() in COMMON_ENGLISH_WORDS
+    right_is_word = right.lower() in COMMON_ENGLISH_WORDS
+    return not (left_is_word and right_is_word)
+
+
+def _split_concatenated_words(text: str) -> str:
+    """Insert a space inside tokens whose runs were concatenated during
+    DOCX extraction (`nothinghappens` → `nothing happens`).
+
+    Fires only when ALL of the following hold, keeping the fix
+    extremely conservative:
+      • Token length ≥ `_MIN_SPLIT_LEN` (10 chars).
+      • Token is purely alphabetic (no digits, punctuation, apostrophe).
+      • Token is NOT already a common English word.
+      • Exactly ONE split position exists where both halves are
+        common English words AND each half is ≥ `_MIN_HALF_LEN`
+        characters.
+
+    This rules out proper nouns, technical terms, and long real
+    English words that aren't in the top-10K list — all of them keep
+    a length ≥ 10 shape but fail the "exactly one valid dictionary
+    split" test, so the function returns them unchanged.
+    """
+    if not text:
+        return text
+
+    def _fix_token(tok: str) -> str:
+        if len(tok) < _MIN_SPLIT_LEN or not tok.isalpha():
+            return tok
+        lower = tok.lower()
+        if lower in COMMON_ENGLISH_WORDS:
+            return tok
+        found: list[int] = []
+        for i in range(_MIN_HALF_LEN, len(tok) - _MIN_HALF_LEN + 1):
+            left = lower[:i]
+            right = lower[i:]
+            if left in COMMON_ENGLISH_WORDS and right in COMMON_ENGLISH_WORDS:
+                found.append(i)
+                if len(found) > 1:
+                    return tok  # ambiguous — do nothing
+        if len(found) == 1:
+            i = found[0]
+            return tok[:i] + " " + tok[i:]
+        return tok
+
+    # Split on runs of whitespace but preserve the whitespace itself so
+    # we can reconstruct the string exactly (only the tokens change).
+    parts = re.split(r"(\s+)", text)
+    for idx in range(0, len(parts), 2):
+        parts[idx] = _fix_token(parts[idx])
+    return "".join(parts)
 
 
 def _smart_join_dialogue(fragments: list) -> str:
@@ -1120,6 +1263,11 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
     current_character = ""
     current_text = []
     
+    def _repair(t: str) -> str:
+        """Full repair pipeline: intra-word space repair, then split any
+        run-boundary word concatenations (`nothinghappens`)."""
+        return _split_concatenated_words(_repair_intra_word_spaces(t))
+
     for line in lines:
         line = line.strip()
         if not line:
@@ -1130,7 +1278,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             if current_character and current_text:
                 lines_data.append({
                     "character": current_character,
-                    "text": _repair_intra_word_spaces(_smart_join_dialogue(current_text)),
+                    "text": _repair(_smart_join_dialogue(current_text)),
                     "is_stage_direction": False
                 })
             current_character = potential_char
@@ -1140,13 +1288,13 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             if current_character and current_text:
                 lines_data.append({
                     "character": current_character,
-                    "text": _repair_intra_word_spaces(_smart_join_dialogue(current_text)),
+                    "text": _repair(_smart_join_dialogue(current_text)),
                     "is_stage_direction": False
                 })
                 current_text = []
             lines_data.append({
                 "character": "",
-                "text": _repair_intra_word_spaces(line),
+                "text": _repair(line),
                 "is_stage_direction": True
             })
         else:
@@ -1155,7 +1303,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
     if current_character and current_text:
         lines_data.append({
             "character": current_character,
-            "text": _repair_intra_word_spaces(_smart_join_dialogue(current_text)),
+            "text": _repair(_smart_join_dialogue(current_text)),
             "is_stage_direction": False
         })
     

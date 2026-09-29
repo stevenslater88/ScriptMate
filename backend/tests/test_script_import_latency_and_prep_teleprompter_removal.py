@@ -173,40 +173,25 @@ Amazing news, Alice.
 
 
 def _load_fallback_parser():
-    """Extract fallback_parse_script by AST without triggering server.py's
-    top-level DB/env dependencies."""
-    src = BACKEND_SERVER.read_text()
-    code = _get_source_function(src, "fallback_parse_script")
-    # `fallback_parse_script` delegates to `_smart_join_dialogue`
-    # (2026-02 fix for the PDF newline-split intra-word defect) and to
-    # `_repair_intra_word_spaces` (2026-02 DOCX literal-space fix).
-    # Both helpers must be present in the isolated namespace.
-    helper_smart = _get_source_function(src, "_smart_join_dialogue")
-    helper_repair = _get_source_function(src, "_repair_intra_word_spaces")
-    # Module-level constants the repair helper references.
-    import re as _re
-    _stopwords_match = _re.search(
-        r"_INTRA_WORD_STOPWORDS\s*=\s*frozenset\(\{[\s\S]*?\}\)",
-        src,
-    )
-    _apos_match = _re.search(r"_INTRA_WORD_APOSTROPHE_HYPHEN\s*=\s*re\.compile\([^\n]+\)", src)
-    _single_match = _re.search(r"_INTRA_WORD_SINGLE_LETTER\s*=\s*re\.compile\([\s\S]*?\)\n", src)
-    _short_match = _re.search(r"_INTRA_WORD_SHORT_FRAGMENT\s*=\s*re\.compile\([^\n]+\)", src)
-    assert _stopwords_match and _apos_match and _single_match and _short_match, (
-        "Failed to AST-extract intra-word repair module constants"
-    )
-    ns: Dict[str, Any] = {"re": _re}
-    from typing import Dict as _D, Any as _A  # noqa: F401
-    ns["Dict"] = _D
-    ns["Any"] = _A
-    exec(_stopwords_match.group(0), ns)  # noqa: S102
-    exec(_apos_match.group(0), ns)  # noqa: S102
-    exec(_single_match.group(0), ns)  # noqa: S102
-    exec(_short_match.group(0), ns)  # noqa: S102
-    exec(helper_smart, ns)  # noqa: S102
-    exec(helper_repair, ns)  # noqa: S102
-    exec(code, ns)  # noqa: S102
-    return ns["fallback_parse_script"]
+    """Load fallback_parse_script from server.py without incurring the
+    LLM/network startup cost. The Feb-2026 hardening refactor moved
+    the repair pipeline to depend on a curated dictionary
+    (`COMMON_ENGLISH_WORDS`) and split into several helpers
+    (`_dict_aware_merge`, `_apply_single_letter_prefix`,
+    `_split_concatenated_words`, `_should_merge_fragments`,
+    `_is_pure_lowercase_word`), so an AST-only loader would have to
+    hoist every helper by hand. That is brittle — a future helper
+    rename would silently break the loader. Instead, import the
+    module directly: server.py's top-level dependencies (MONGO_URL,
+    DB_NAME) are provided by the test env via /app/backend/.env, and
+    the LLM startup cost is amortised across the test session by
+    Python's import cache. If the module cannot be imported the test
+    fails loudly with the exact ImportError, which is much easier to
+    debug than a mysterious AST regex mismatch."""
+    import importlib
+    import server as _server_mod
+    importlib.reload(_server_mod)
+    return _server_mod.fallback_parse_script
 
 
 def test_fallback_parse_script_extracts_expected_output_shape() -> None:

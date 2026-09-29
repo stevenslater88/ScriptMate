@@ -17,6 +17,46 @@
 ## Screens present (routes in `app/`)
 `index`, `dashboard`, `scripts`, `script/[id]`, `rehearsal/[id]`, `selftape/{index,library,prep,record,review,teleprompter}`, `auditions`, `daily-drill`, `recall`, `scene-partner`, `acting-coach`, `acting-feedback`, `dialect-coach`, `voice-studio`, `premium`, `paywall`, `profile`, `signin`, `onboarding`, `debug`, `support`, `terms`, `privacy`, `stats`, `upload`, `script-parser`, `_layout`. Total: 34 route files.
 
+
+### 2026-02 — DOCX Script Text Integrity — Final Hardening (Feb 2026)
+
+Physical S23 Ultra QA build still exhibited residual DOCX text corruption after the Nov-2025 intra-word repair pass:
+- `kno w` → should be `know`
+- `look lik e` → should be `look like`
+- `nothinghappens` → should be `nothing happens`
+- `disciplinary .` → should be `disciplinary.`
+
+**Root cause (evidence from controlled DOCX reproduction, `backend/tests/test_docx_hardening_feb2026.py`):**
+- The Nov-2025 repair used a small stopword-guarded regex ("Rule C"). Because the stopword list was under-sized, the regex greedily merged legitimate short-word pairs (`look back` → `lookback`, `dear john` → `dearjohn`, `hard work` → `hardwork`) — a serious latent regression.
+- The Nov-2025 Rule B ("single non-vowel prefix") had NO dictionary check, so it happily produced non-words (`w what` → `wwhat`).
+- The parser had no repair for the run-boundary "missing space" case (`nothinghappens`).
+- The parser had no repair for a floated punctuation run (`disciplinary .`).
+
+**Fix (evidence-based, minimal scope):**
+1. `backend/common_english_words.py` (NEW): frozenset of ~10K common English words, sourced from the public-domain `google-10000-english-usa` list, with:
+   - **All 5+ letter entries** kept from top-10K.
+   - **1-4 letter entries CURATED** by hand — removes tech/state/country abbreviations (`ne`, `ver`, `pm`, `usa`, `tv`, etc.) that would produce false "is a word" signals.
+   - **Curated compound tail** (`goodbye`, `something`, `everyone`, `understand`, `disciplinary`, etc.) to prevent legitimate long words from being split.
+2. `backend/server.py`:
+   - **Rule C** replaced with `_dict_aware_merge` — a token-based scan (not regex, which greedily gobbles longest match) that merges `left right` iff `left+right` is in the dictionary AND at least one side is NOT (the classic mid-word split signature).
+   - **Rule B** now consults the dictionary — never merges to a non-word.
+   - **Rule D** (`_SPACE_BEFORE_PUNCT`) strips spaces immediately before terminal `.` `,` `;` `:` `!` `?`.
+   - **Rule E** (`_split_concatenated_words`) inserts a space in a token iff the token is ≥ 10 chars, NOT itself a word, and exactly one dictionary-valid split (both halves ≥ 4 chars, both dict words) exists.
+3. Rule ordering: A → C → B → D at line level; E applied per token in `fallback_parse_script`.
+
+**Regression coverage (all deterministic, no HTTP):**
+- `backend/tests/test_docx_hardening_feb2026.py` — 110 tests: physical failure cases, adversarial legitimate-phrase guards (`look back`, `dear john`, `hard work`, …), contractions, hyphenated words, punctuation, stage directions, character cues, end-to-end synthesised-DOCX round-trip covering every failure signature.
+- `backend/tests/test_docx_intra_word_spacing.py` — updated `test_w_anto` to reflect the new dictionary-gated Rule B (`w anto` no longer merges because `wanto` isn't a word — a deliberate improvement over the Nov-2025 behavior).
+- `backend/tests/test_script_import_latency_and_prep_teleprompter_removal.py` — updated `_load_fallback_parser` to import directly instead of AST-extracting the old `_INTRA_WORD_STOPWORDS`/`_INTRA_WORD_SHORT_FRAGMENT` constants that no longer exist.
+
+**Final regression totals (post-fix, static guards only, no HTTP):** 478/478 passed across the 19 accumulated static regression suites (test_docx_hardening_feb2026, test_docx_intra_word_spacing, test_smart_join_and_rehearsal_scroll, test_phase3_selftape_regression, test_phase4_learn, test_fabric_safe_slider_migration, test_rehearsal_debug_ui_leak, test_ai_coming_soon_ui, test_learn_practice_mode_tabs, test_learn_resume_ux, test_teleprompter_framing_guides, test_teleprompter_ux_defaults, test_route_b_camera_hardening, test_expo_camera_stabilization_patch, test_script_import_latency_and_prep_teleprompter_removal, test_qa_premium_bypass, test_frontend_entitlement_audit, test_startup_api_diagnostic, test_scripts_create_timeout).
+
+**TypeScript baseline:** unchanged at 37 pre-existing errors (all in files not touched by this fix: `app/upload.tsx`, `app/voice-studio.tsx`, `services/auditionService.ts`, `services/debugLogService.ts`, `services/revenuecat.ts`, `services/voiceStudioStorage.ts`).
+
+**Backend lint baseline:** the 18 pre-existing "blocking" issues (6 potential-ObjectId-serialisation, 1 F811 `get_user_stats` redefinition, 11 E722 bare-except) remain untouched per user directive.
+
+**Scope guarantees:** no changes to Phase 3 selftape, camera lifecycle, FabricSafeSlider, RevenueCat, Sentry, or any frontend rendering code. No dependency changes. No lockfile regeneration. No new external dependencies (the wordlist is a plain-Python module).
+
 ## Changelog
 
 ### 2026-02 — Restore + P0 stabilization

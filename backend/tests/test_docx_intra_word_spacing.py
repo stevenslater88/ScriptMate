@@ -109,7 +109,11 @@ class TestRepairSingleLetterPrefix:
         assert server._repair_intra_word_spaces("w ant") == "want"
 
     def test_w_anto(self):
-        assert server._repair_intra_word_spaces("w anto") == "wanto"
+        # Feb-2026 hardening: Rule B is now dictionary-gated so it
+        # never fabricates a non-word merge. `wanto` isn't in the
+        # common-English wordlist, so the pair is left untouched.
+        # This is a deliberate improvement over the Nov-2025 behavior.
+        assert server._repair_intra_word_spaces("w anto") == "w anto"
 
     def test_y_ou(self):
         assert server._repair_intra_word_spaces("y ou") == "you"
