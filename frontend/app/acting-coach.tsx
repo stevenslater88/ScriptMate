@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Slider from '@react-native-community/slider';
+import Slider from '../components/FabricSafeSlider';
 import { getScenes, analyzePerformance, Scene } from '../services/actingCoachService';
 import useRevenueCat from '../hooks/useRevenueCat';
 

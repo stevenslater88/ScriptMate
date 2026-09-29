@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import Slider from '@react-native-community/slider';
+import Slider from '../components/FabricSafeSlider';
 import { useScriptStore } from '../store/scriptStore';
 import useRevenueCat from '../hooks/useRevenueCat';
 import {

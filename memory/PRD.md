@@ -693,3 +693,79 @@ performed.
 ### APK
 Not built. No EAS trigger. No GitHub push. Per user directive.
 
+
+---
+
+## 2026-02 · Phase 4 — Fabric-safe Slider migration (Option A)
+
+### Physical trigger
+Samsung S23 Ultra / SM-S918B / Android 16 / build 1.0.47 (VC 1070) —
+deterministic native crash ("ScriptMate Pro closed because this app
+has a bug") on tapping the Home "Recall" tile. Same underlying cause
+as the intermittent Library → ScriptScreen cold-reopen crash.
+
+### Root cause (source-supported)
+`@react-native-community/slider@4.5.5` × `newArchEnabled: true` × Android 16.
+The 4.x community slider has incomplete Fabric interop and aborts
+during native-view attach on this exact device/OS combination.
+Learn/Session uses pill `TouchableOpacity` selectors — no slider —
+which is why Phase 4 physically passed while Recall (2 sliders on
+mount) crashed deterministically.
+
+### Fix — Option A (per user directive)
+Swap the community slider for a pure-JS wrapper on
+`@miblanchard/react-native-slider@2.6.0`. No native module, no
+codegen, no Fabric interop → the exact native surface that crashes
+cannot be reached. Same visual output. Callers keep their `number`
+value + `(number) => void` callback signatures unchanged; the wrapper
+handles the underlying library's `number[]` shape.
+
+### Files changed
+- **NEW:** `frontend/components/FabricSafeSlider.tsx` — thin adapter,
+  drop-in default-exported `Slider` component preserving the community
+  slider's exact prop signature.
+- `frontend/app/recall.tsx` — import swap (2 sliders unchanged).
+- `frontend/app/script/[id].tsx` — import swap (2 sliders unchanged).
+- `frontend/app/acting-coach.tsx` — import swap (1 slider unchanged).
+- `frontend/app/selftape/prep.tsx` — import swap (1 slider unchanged).
+- `frontend/package.json`:
+  - **Removed:** `@react-native-community/slider@^4.5.5` from
+    `dependencies` and from `resolutions`.
+  - **Removed:** `expo.install.exclude` entry for the community slider.
+  - **Added:** `@miblanchard/react-native-slider@2.6.0` in
+    `dependencies`.
+- `frontend/yarn.lock` — regenerated via `yarn expo install`.
+- **NEW:** `backend/tests/test_fabric_safe_slider_migration.py` — 22
+  guards locking the migration.
+
+### Not changed
+Learn engine, Learn storage, Learn Hub, Learn session (already
+slider-free), Learn summary, Phase 3 record.tsx, teleprompter.tsx,
+selfTapeStorage.ts, expo-camera patch, scriptStore, script parser,
+Script Library storage. No behaviour or UX change anywhere — same
+`<Slider ... />` JSX at every existing call site, just a different
+import target.
+
+### Tests
+- **NEW:** `test_fabric_safe_slider_migration.py` — **22 / 22 pass**.
+- Full guard regression: **248 / 248 pass** (226 previous + 22 new).
+- Entitlement/premium: **34 / 34 pass** (subset).
+- Runtime engine smoke `scripts/learn_engine_smoketest.js`:
+  **22 / 22 pass**.
+- TypeScript: **0 new errors**. The migration actually resolved 4
+  pre-existing "Cannot find module" errors that appeared once the
+  community-slider dependency was removed. All remaining TS errors in
+  the four caller files are pre-existing (untouched per user
+  directive).
+- 18 pre-existing backend lint issues: untouched per user directive.
+
+### APK
+Not built. No EAS trigger. No GitHub push. Per user directive.
+
+### Native crash status
+Recall crash + intermittent ScriptScreen cold-reopen crash: root
+cause addressed source-side. Physical verification pending the next
+build. No native evidence was needed for this fix because the source
+evidence (Fabric flag + slider version + call-site count on each
+crashing screen) is deterministic.
+
