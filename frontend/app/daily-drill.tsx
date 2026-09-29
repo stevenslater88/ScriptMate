@@ -20,6 +20,12 @@ export default function DailyDrillScreen() {
   const [feedback, setFeedback] = useState<any>(null);
   const [loadingFeedback, setLoadingFeedback] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Local-only "active/in progress" state. Not persisted — if the user
+  // navigates away before completing, the drill returns to "available"
+  // (no /complete has been posted, so no XP has been awarded). This adds a
+  // deliberate step between reading the prompt and marking XP claimed, so
+  // testers can no longer complete the drill in a single accidental tap.
+  const [started, setStarted] = useState(false);
 
   const getDeviceId = async () => {
     let id = await AsyncStorage.getItem('device_id');
@@ -205,23 +211,45 @@ export default function DailyDrillScreen() {
           </View>
         )}
 
-        {/* Action Buttons */}
-        {drill && !drill.completed ? (
+        {/* Action Buttons — three UI states:
+              1. available  (drill loaded, not started, not completed) → "Start Drill"
+              2. active     (started locally, not completed)           → "In progress" indicator + "Complete Drill — Claim XP"
+              3. completed  (backend completed=true)                    → "Today's drill complete!" banner
+            Only state 2's completion button calls POST /complete.
+        */}
+        {drill && !drill.completed && !started ? (
           <TouchableOpacity
             style={[styles.completeBtn, { backgroundColor: accentColor }]}
-            onPress={completeDrill}
-            disabled={completing}
-            testID="complete-drill-btn"
+            onPress={() => setStarted(true)}
+            testID="start-drill-btn"
           >
-            {completing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                <Text style={styles.completeBtnText}>I Did It! Claim XP</Text>
-              </>
-            )}
+            <Ionicons name="play-circle" size={24} color="#fff" />
+            <Text style={styles.completeBtnText}>Start Drill</Text>
           </TouchableOpacity>
+        ) : drill && !drill.completed && started ? (
+          <>
+            <View style={styles.activeIndicator} testID="drill-active-indicator">
+              <ActivityIndicator size="small" color={accentColor} />
+              <Text style={[styles.activeIndicatorText, { color: accentColor }]}>
+                Drill in progress — perform the challenge above, then tap below.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.completeBtn, { backgroundColor: accentColor }]}
+              onPress={completeDrill}
+              disabled={completing}
+              testID="complete-drill-btn"
+            >
+              {completing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                  <Text style={styles.completeBtnText}>Complete Drill — Claim XP</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </>
         ) : drill?.completed ? (
           <View style={styles.completedBanner}>
             <Ionicons name="checkmark-circle" size={32} color="#10b981" />
@@ -326,6 +354,13 @@ const styles = StyleSheet.create({
     padding: 18, borderRadius: 14, gap: 10, marginBottom: 24,
   },
   completeBtnText: { fontSize: 18, fontWeight: '700', color: '#fff' },
+  activeIndicator: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 12, padding: 14, marginBottom: 12,
+    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  activeIndicatorText: { fontSize: 13, fontWeight: '600', flex: 1 },
   completedBanner: { alignItems: 'center', padding: 24, marginBottom: 24 },
   completedText: { fontSize: 20, fontWeight: '700', color: '#10b981', marginTop: 8 },
   completedSub: { fontSize: 14, color: '#6b7280', marginTop: 4 },

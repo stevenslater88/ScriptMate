@@ -80,6 +80,7 @@ STATIC_REGRESSION_TESTS = [
     "tests/test_scripts_create_timeout.py",
     "tests/test_scene_heading_detection_feb2026.py",
     "tests/test_dialogue_boundary_feb2026.py",
+    "tests/test_daily_drill_ux_three_state_feb2026.py",
 ]
 
 # Files required for the frontend/backend to build/run. Missing = RED.

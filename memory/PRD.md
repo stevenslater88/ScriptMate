@@ -59,6 +59,32 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 
 ## Changelog
 
+### 2026-02 — Daily Drill 3-State UX Fix (post-QA-1110 finding)
+
+Physical QA on build 1110 showed the Daily Drill screen jumping straight to "Today's drill complete!" from a single tap of "I Did It! Claim XP" — the tester perceived that the drill never initiated. Root cause investigation confirmed it was NOT a backend bug: the DB row can only reach `completed:true` via `POST /api/daily-drill/{user_id}/complete`, which the old button called on the first tap.
+
+**Fix — smallest UX change; no backend, DB, or dependency changes:**
+- `frontend/app/daily-drill.tsx`:
+  - Added a component-local `started` boolean (`useState(false)`) — not persisted.
+  - Split the single button into a 3-state block:
+    1. `available`  → **"Start Drill"** (icon `play-circle`, `testID="start-drill-btn"`). Tap only calls `setStarted(true)` — **no HTTP call**.
+    2. `active`     → In-progress indicator card (`testID="drill-active-indicator"`) with the copy *"Drill in progress — perform the challenge above, then tap below."* plus the **"Complete Drill — Claim XP"** button (`testID="complete-drill-btn"`) which calls the existing `completeDrill()` → the existing `POST /complete`.
+    3. `completed`  → unchanged **"Today's drill complete!"** banner.
+  - Added `styles.activeIndicator` and `styles.activeIndicatorText`. No new dependencies, no new imports.
+  - `started` is deliberately not persisted so navigating away resets to available (no XP has been awarded — no data loss).
+- `backend/tests/test_daily_drill_ux_three_state_feb2026.py` — 12 new static regression guards asserting the UX contract and that no backend / schema / dependency change slipped in.
+- `scripts/prebuild_gate.py` — new test file added to STATIC_REGRESSION_TESTS allowlist. Gate count is now 614 / 614 GREEN.
+
+**Live backend verification (fresh device_id, https://scriptmate-8.emergent.host):**
+1. Fresh GET → `completed:false`. ✅
+2. GET again after "Start Drill" tap → `completed:false` (no /complete call). ✅
+3. POST /complete → `xp_awarded:25`. ✅
+4. GET → `completed:true`, `completed_at` set. ✅
+5. Streak → `current_streak:1`, `total_xp:25`, `today_completed:true`, `activities_today:['daily_drill']`. ✅
+6. Double POST /complete → `xp_awarded:0` (idempotent, no double XP). ✅
+
+**Scope guarantees:** no changes to `backend/server.py`, `daily_drills` schema, XP/streak logic, or any other feature (Rehearsal / Import / Library / Teleprompter / Self-Tape / Premium untouched). No dependency or `yarn.lock` change (the pre-existing `yarn.lock` diff for `@miblanchard/react-native-slider@2.6.0` predates this task and was not authored here). No APK / AAB build.
+
 ### 2026-02 — ScriptMate Pre-Build Quality Gate
 
 Added a reusable, baseline-aware pre-build gate that blocks the QA APK / production AAB build unless every regression check is GREEN. Infrastructure only — no product code touched.
