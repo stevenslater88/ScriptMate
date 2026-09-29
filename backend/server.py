@@ -1269,6 +1269,8 @@ def _smart_join_dialogue(fragments: list) -> str:
 # in the Feb-2026 physical DOCX stress test.
 _SCENE_HEADING_RE = re.compile(
     r"""^
+    (?:\d+[A-Z]?\.?\s+)?         # Optional scene-number prefix:
+                                 # `1.`, `10.`, `101A.`, `12 ` etc.
     (?:
         SCENE\b              # SCENE 1, SCENE 2 - X, SCENE ONE
       | ACT\b                # ACT ONE, ACT 1

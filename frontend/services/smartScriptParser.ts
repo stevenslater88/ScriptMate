@@ -35,7 +35,33 @@ export interface ParseResult {
 
 // --- Helpers ---
 
-const HEADING_RE = /^(INT\.|EXT\.|INT\/EXT\.|I\/E\.)/i;
+// Screenplay scene-heading / transition / structural-heading detector.
+// The Nov-2025 regex only recognised bare sluglines (`INT.`, `EXT.`,
+// `INT/EXT.`, `I/E.`) and silently promoted numbered headings
+// (`1. INT. APARTMENT — NIGHT`), `SCENE N` headings, and transitions
+// (`FADE IN:`, `CUT TO:`) to speaking characters on the Feb-2026
+// physical S23 QA build.
+//
+// The Feb-2026 detector accepts:
+//   • an optional numeric/alphanumeric scene number prefix
+//     (`1.`, `10.`, `101A.`, `12 `) followed by whitespace before
+//     the slug
+//   • sluglines: INT / EXT / INT./EXT. / EXT./INT. / I/E / E/I
+//   • block headings: SCENE / ACT / CHAPTER / PART / SECTION
+//   • transitions: FADE IN / FADE OUT / FADE TO / CUT TO /
+//     DISSOLVE (TO) / SMASH CUT / MATCH CUT / JUMP CUT / TIME CUT /
+//     HARD CUT / QUICK CUT / IRIS IN / IRIS OUT / FREEZE FRAME
+//   • editorial markers: BACK TO SCENE / TITLE CARD / THE END /
+//     END OF / INTERCUT / MONTAGE / FLASHBACK / FLASHFORWARD /
+//     PRELAP / SUPER(IMPOSE) / ANGLE ON / CLOSE ON / WIDE ON
+//
+// Anchored at the start of the (trimmed) line — a legitimate
+// character name that happens to contain one of these words
+// elsewhere is not disqualified. Matched case-insensitively so
+// mixed-case scene headings (rare, but seen in some drafts) are
+// caught too.
+const HEADING_RE =
+  /^(?:\d+[A-Z]?\.?\s+)?(?:INT\.?(?:\/EXT\.?)?|EXT\.?(?:\/INT\.?)?|I\.?\/E\.?|E\.?\/I\.?|SCENE\b|ACT\b|CHAPTER\b|PART\b|SECTION\b|FADE\s+(?:IN|OUT|TO)\b|CUT\s+TO\b|DISSOLVE(?:\s+TO)?\b|SMASH\s+CUT\b|MATCH\s+CUT\b|JUMP\s+CUT\b|TIME\s+CUT\b|HARD\s+CUT\b|QUICK\s+CUT\b|IRIS\s+(?:IN|OUT)\b|FREEZE\s+FRAME\b|BACK\s+TO\s+SCENE\b|BACK\s+TO\b|TITLE\s+CARD\b|END\s+OF\b|THE\s+END\b|INTERCUT\b|MONTAGE\b|FLASH(?:BACK|-BACK|\s+BACK)\b|FLASHFORWARD\b|PRELAP\b|SUPER(?:IMPOSE)?\b|ANGLE\s+ON\b|CLOSE\s+ON\b|WIDE\s+ON\b|POV\b)/i;
 const PAREN_RE = /^\s*\(.*\)?\s*$/;
 const CAPS_RATIO_THRESHOLD = 0.7;
 const MAX_CHARACTER_NAME_LEN = 35;

@@ -58,6 +58,17 @@ SCENE_HEADING_POSITIVE = [
     "SCENE 6 — PARENTHETICALS",
     "SCENE 7 — STAGE DIRECTIONS",
     "SCENE ONE",
+    # Numbered scene headings — Feb-2026 physical failure #2.
+    "1. INT. APARTMENT — NIGHT",
+    "2. INT. KITCHEN — MORNING",
+    "3. EXT. STREET — DAY",
+    "5. INT. OFFICE — NIGHT",
+    "6. INT. INTERROGATION ROOM",
+    "10. INT. OFFICE — NIGHT",
+    "101A. EXT. STREET — DAY",
+    "12 INT. ROOM — NIGHT",         # numeric prefix without dot
+    "1. EXT. STREET — DAY",
+    "1A. INT. HALL — NIGHT",
     # Sluglines.
     "INT. KITCHEN",
     "INT. KITCHEN - NIGHT",
@@ -121,6 +132,7 @@ LEGIT_CHARACTER_NAMES = [
     "MRS. SMITH",
     "MR. JONES",
     "DR. HOUSE",
+    "DET. HARRIS",          # Feb-2026 physical: must be preserved
     # Character extensions (kept before extension-stripping).
     "JACK (V.O.)",
     "SARAH (O.S.)",
@@ -131,6 +143,13 @@ LEGIT_CHARACTER_NAMES = [
     "POLICE OFFICER",
     "OLD MAN",
     "YOUNG WOMAN",
+    # Numbered character names — legitimate screenplay convention
+    # (e.g. `GUARD 1`, `NPC 2`). Must survive scene-heading rejection
+    # because the numeric prefix only fires BEFORE the slug/scene
+    # keyword, not after a name.
+    "GUARD 1",
+    "NPC 2",
+    "SOLDIER 3",
 ]
 
 
@@ -418,3 +437,137 @@ def test_scene_fix_does_not_regress_word_boundary_repair():
     assert "know" in dialogue["JACK"]
     assert "Nothing happens" in dialogue["JACK"] or "nothing happens" in dialogue["JACK"]
     assert "disciplinary." in dialogue["SARAH"]
+
+
+# ---------------------------------------------------------------------------
+# Feb-2026 physical failure #2 — numbered scene headings.
+# ---------------------------------------------------------------------------
+
+NUMBERED_STRESS_TEXT = """1. INT. APARTMENT — NIGHT
+
+JACK
+Hello there.
+
+2. INT. KITCHEN — MORNING
+
+JACK
+Coffee?
+
+SARAH
+Yes please.
+
+3. EXT. STREET — DAY
+
+DET. HARRIS
+This is disciplinary.
+
+5. INT. OFFICE — NIGHT
+
+JACK
+Case closed.
+
+6. INT. INTERROGATION ROOM
+
+DET. HARRIS
+Tell me everything.
+
+101A. EXT. STREET — DAY
+
+SARAH
+Wait!
+"""
+
+
+def test_numbered_scene_headings_not_promoted_to_characters():
+    """Reproduces the Feb-2026 physical S23 build failure: numbered
+    scene headings (`1. INT. APARTMENT — NIGHT`, `101A. EXT. STREET
+    — DAY`, etc.) must not appear in the character list — only real
+    characters (JACK, SARAH, DET. HARRIS)."""
+    parsed = fallback_parse_script(NUMBERED_STRESS_TEXT)
+    assert set(parsed["characters"]) == {"JACK", "SARAH", "DET. HARRIS"}
+
+
+def test_numbered_scene_headings_dialogue_attributed_correctly():
+    """Every attributed dialogue line still points at a real character."""
+    parsed = fallback_parse_script(NUMBERED_STRESS_TEXT)
+    for line in parsed["lines"]:
+        if line["is_stage_direction"] or not line["character"]:
+            continue
+        assert line["character"] in {"JACK", "SARAH", "DET. HARRIS"}, line
+
+
+def test_numeric_only_prefix_variants():
+    """`12 INT. ROOM — NIGHT` (space-separated numeric prefix)
+    variant must also be rejected."""
+    text = (
+        "12 INT. ROOM — NIGHT\n\n"
+        "JACK\nHello.\n\n"
+        "13 INT. HALL\n\n"
+        "SARAH\nBye.\n"
+    )
+    parsed = fallback_parse_script(text)
+    assert set(parsed["characters"]) == {"JACK", "SARAH"}
+
+
+def test_e2e_docx_numbered_stress_document():
+    """Round-trip the numbered-scene stress text through a synthesised
+    DOCX and confirm no numbered heading is stored as a character."""
+    blob = _synth_docx([
+        _run("1. INT. APARTMENT — NIGHT"),
+        _run("JACK"),
+        _run("Hello there."),
+        _run("2. INT. KITCHEN — MORNING"),
+        _run("SARAH"),
+        _run("Coffee?"),
+        _run("101A. EXT. STREET — DAY"),
+        _run("DET. HARRIS"),
+        _run("Move it."),
+    ])
+    text = extract_text_from_docx(blob)
+    parsed = fallback_parse_script(text)
+    assert set(parsed["characters"]) == {"JACK", "SARAH", "DET. HARRIS"}
+
+
+# ---------------------------------------------------------------------------
+# Cross-parser regex parity — frontend smartScriptParser must reject
+# the same shapes as backend `_looks_like_scene_heading`.
+# ---------------------------------------------------------------------------
+
+def test_frontend_smart_script_parser_heading_regex_covers_numbered():
+    """The on-device parser at `frontend/services/smartScriptParser.ts`
+    is what the physical build uses for the "Detected Characters"
+    screen. Its `HEADING_RE` must cover the same numbered / SCENE /
+    transition / structural shapes as the backend detector. This test
+    reads the source and greps for the required tokens so a future
+    regex simplification cannot silently drop coverage."""
+    frontend_parser = (
+        Path(__file__).resolve().parents[2] / "frontend" / "services"
+        / "smartScriptParser.ts"
+    )
+    src = frontend_parser.read_text(encoding="utf-8")
+    # Locate HEADING_RE (single line, ES-regex literal).
+    import re as _re
+    m = _re.search(r"const\s+HEADING_RE\s*=\s*(/.*?/[gimsuy]*)\s*;",
+                   src, _re.DOTALL)
+    assert m, "HEADING_RE not found in smartScriptParser.ts"
+    regex_literal = m.group(1)
+    # Required alternatives that must be present after the Feb-2026 fix.
+    # These are LITERAL substrings of the JS regex source — using `in`
+    # instead of `re.search` so we're not double-escaping.
+    required = [
+        r"\d+[A-Z]?",   # numbered-prefix (JS: \d+[A-Z]?)
+        "SCENE",
+        "INT",
+        "EXT",
+        "FADE",
+        "CUT",
+        "DISSOLVE",
+        "ACT",
+        "CHAPTER",
+        "MONTAGE",
+        "FLASH",         # matches FLASH(?:BACK|-BACK|\s+BACK) and FLASHFORWARD
+    ]
+    for token in required:
+        assert token in regex_literal, (
+            f"HEADING_RE must contain {token!r} — got: {regex_literal}"
+        )

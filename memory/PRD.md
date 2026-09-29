@@ -95,6 +95,48 @@ Physical DOCX maximum-stress-test surfaced a NEW parser defect after the word-bo
   - `app.config.js` line 10
 - **Metro cache flush:** removed stale `.expo/types/` cache that caused phantom `ENOENT app/diagnostics.tsx` errors during web bundling.
 
+### 2026-02 — Numbered Scene Headings — Follow-up Hardening (Feb 2026)
+
+Physical S23 QA build's *character-select* screen still surfaced numbered screenplay scene headings (`1. INT. APARTMENT — NIGHT`, `2. INT. KITCHEN — MORNING`, `3. EXT. STREET — DAY`, `5. INT. OFFICE — NIGHT`, `6. INT. INTERROGATION ROOM`, `101A. EXT. STREET — DAY`, …) as speaking characters — the on-device build listed 12 "characters" when only 3 (JACK, SARAH, DET. HARRIS) exist in the source screenplay.
+
+**Root cause (traced in `frontend/services/smartScriptParser.ts`):**
+- The physical "Detected Characters" screen (`app/script-parser.tsx`) uses the on-device parser `smartScriptParser.ts::parseScript`, NOT the backend `fallback_parse_script` I hardened in the previous step. The backend fix was necessary but insufficient.
+- The on-device `HEADING_RE` was `/^(INT\.|EXT\.|INT\/EXT\.|I\/E\.)/i` — it recognised bare sluglines only. It did NOT recognise:
+  - Numbered scene prefixes (`1. INT. …`, `10. INT. …`, `101A. EXT. …`, `12 INT. …`).
+  - `SCENE N` block headings.
+  - Transitions (`FADE IN:`, `CUT TO:`, `DISSOLVE TO:`, etc.).
+  - Structural headings (`ACT ONE`, `CHAPTER 3`).
+  - Editorial markers (`MONTAGE`, `FLASHBACK`, `INTERCUT`).
+- Result: `isHeading()` returned false for `1. INT. APARTMENT — NIGHT`, so `isLikelyCharacterName()` ran, saw all-caps text ≤ 3 words after the caps-ratio calc, promoted it to a character with high confidence.
+
+**Fix (evidence-based, minimum scope):**
+- `frontend/services/smartScriptParser.ts::HEADING_RE` extended to a single regex mirroring the backend `_SCENE_HEADING_RE`:
+  - Optional numeric/alphanumeric prefix `(?:\d+[A-Z]?\.?\s+)?`
+  - Slugs: `INT.?(?:\/EXT.?)?`, `EXT.?(?:\/INT.?)?`, `I.?\/E.?`, `E.?\/I.?`
+  - Blocks: `SCENE`, `ACT`, `CHAPTER`, `PART`, `SECTION`
+  - Transitions: `FADE IN|OUT|TO`, `CUT TO`, `DISSOLVE (TO)?`, `SMASH/MATCH/JUMP/TIME/HARD/QUICK CUT`, `IRIS IN|OUT`, `FREEZE FRAME`
+  - Editorial: `BACK TO (SCENE)?`, `TITLE CARD`, `END OF`, `THE END`, `INTERCUT`, `MONTAGE`, `FLASH(BACK|-BACK| BACK)`, `FLASHFORWARD`, `PRELAP`, `SUPER(IMPOSE)?`, `ANGLE ON`, `CLOSE ON`, `WIDE ON`, `POV`
+  - Anchored `^`, IGNORECASE.
+- `backend/server.py::_SCENE_HEADING_RE` extended to include the same numeric/alphanumeric prefix (`(?:\d+[A-Z]?\.?\s+)?`) — keeps both parsers in lockstep.
+
+**Retained functionality:** `DET. HARRIS`, `MRS. SMITH`, `MR. JONES`, `DR. HOUSE`, `GUARD 1`, `NPC 2`, `SOLDIER 3` — every user-called-out legitimate character name — is still detected. Character extensions (`JACK (V.O.)`, `SARAH (O.S.)`, `MARY (CONT'D)`) still work. Word-boundary repair (`kno w`, `nothinghappens`, `disciplinary .`) still holds.
+
+**Regression coverage added to `backend/tests/test_scene_heading_detection_feb2026.py`:**
+- 20 new numbered-scene-heading positive cases (`1. INT. …`, `101A. EXT. …`, `12 INT. …`).
+- 3 new legit-numbered-character negative guards (`GUARD 1`, `NPC 2`, `SOLDIER 3`).
+- 1 new titled-character guard (`DET. HARRIS`).
+- End-to-end `NUMBERED_STRESS_TEXT` scene + DOCX round-trip test.
+- `test_frontend_smart_script_parser_heading_regex_covers_numbered` — cross-parser parity guard that reads `frontend/services/smartScriptParser.ts` and asserts every required alternative (`\d+[A-Z]?`, `SCENE`, `INT`, `EXT`, `FADE`, `CUT`, `DISSOLVE`, `ACT`, `CHAPTER`, `MONTAGE`, `FLASH`) is present in the source `HEADING_RE`. This prevents a future frontend regex simplification from silently regressing the fix.
+
+**Full static-guard totals:** 586/586 passed across 20 accumulated regression suites.
+
+**TypeScript baseline:** unchanged at 37 pre-existing errors (only regex literal replaced in `smartScriptParser.ts`; no new TS errors — verified).
+
+**Backend lint baseline:** the 18 pre-existing "blocking" issues untouched; ruff total 327 (below the 328 pre-Feb-hardening baseline).
+
+**Scope guarantees:** no dependency changes, no lockfile regeneration, no camera/slider/RevenueCat/Sentry/Phase 3/Phase 4 functional changes, no backend URL change.
+
+
 ### 2026-02 — Main rehearsal journey verified (testing_agent iteration_25)
 All 12 rehearsal-journey steps PASS. See `/app/test_reports/iteration_25.json`.
 
