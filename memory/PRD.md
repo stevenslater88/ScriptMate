@@ -65,6 +65,29 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 - **Startup fixes reapplied:**
   - `app.json` → `updates.enabled: false` added.
   - `eas.json` → `channel: "production"` removed from production build profile.
+
+### 2026-02 — Scene-Heading / Character-Detection Hardening (Feb 2026)
+
+Physical DOCX maximum-stress-test surfaced a NEW parser defect after the word-boundary fix landed. Screenplay section headings (`SCENE 1`, `SCENE 2—CONTRACTIONS`, `INT. KITCHEN`, `FADE IN:`, `ACT ONE`, etc.) were being classified as speaking characters and polluting the character-select UI.
+
+**Root cause (evidence in `backend/tests/test_scene_heading_detection_feb2026.py`):** the fallback parser's character heuristic was `line.replace(':','').strip().isupper() and len(split()) <= 3 and len > 1`. This is TRUE for `SCENE 1`, `INT. KITCHEN`, `FADE IN`, `CUT TO`, `ACT ONE`, `SCENE 2—CONTRACTIONS`, etc. The heuristic had no awareness of screenplay structural elements. Additionally the multi-word form `SCENE 2 — CONTRACTIONS` (with spaces around em-dash) escaped detection only because it had 4 tokens — a fragile guarantee that broke when DOCX runs collapsed the surrounding whitespace on device.
+
+**Fix (evidence-based, minimum scope):**
+- `backend/server.py`: added `_looks_like_scene_heading()` — an anchored, IGNORECASE, VERBOSE regex that matches screenplay conventions: `SCENE|ACT|CHAPTER|PART|SECTION`, sluglines (`INT.|EXT.|INT./EXT.|I/E`), transitions (`FADE IN|FADE OUT|CUT TO|DISSOLVE|SMASH CUT|MATCH CUT|JUMP CUT|TIME CUT|IRIS IN|IRIS OUT|FREEZE FRAME`), and editorial markers (`MONTAGE|FLASHBACK|INTERCUT|ANGLE ON|CLOSE ON|TITLE CARD|THE END|BACK TO SCENE|PRELAP|SUPER(IMPOSE)`). The character heuristic in `fallback_parse_script` now also rejects `startswith('(', '[')` and any line matching `_looks_like_scene_heading`.
+- Added `_strip_character_cue_extension()` which strips `(V.O.)`, `(O.S.)`, `(CONT'D)`, `(OFF SCREEN)`, `(INTO PHONE)`, `(PRE-LAP)`, etc. from character-cue lines so the stored character name is just `JACK` (not `JACK (V.O.)`). Guarded so a bare `(V.O.)` line is not eaten to empty string — routed to the stage-direction path instead.
+
+**Retained functionality:** The Feb-2026 DOCX word-boundary hardening (`kno w`, `look lik e`, `nothinghappens`, `disciplinary .`) is still in place; a combined-fix invariant test proves both fixes work together on the same stress-shape document.
+
+**Regression coverage:** `backend/tests/test_scene_heading_detection_feb2026.py` — 89 tests: scene-heading positive detection (48 cases: SCENE / INT. / EXT. / FADE / CUT / DISSOLVE / ACT / MONTAGE / FLASHBACK / etc.), legit-character negative guards (16 cases: JACK, SARAH, DREW, ANG, `HANN AH`, MRS. SMITH, `JACK (V.O.)`, `SARAH (O.S.)`, `MARY (CONT'D)`, `POLICE OFFICER`, `OLD MAN`, …), extension-stripping unit tests, end-to-end string parsing (compact-hyphen variant, transitions-only, sluglines-only, ACT headings, extension collapse, bare-parenthetical routing, all-legit-names preservation), and synthesised-DOCX round-trip through `extract_text_from_docx` + `fallback_parse_script`.
+
+**Full static-guard totals:** 567/567 passed across 20 accumulated regression suites.
+
+**TypeScript baseline:** unchanged at 37 pre-existing errors (frontend not touched by this fix).
+
+**Backend lint baseline:** the 18 pre-existing "blocking" issues untouched; ruff total 327 (below the 328 pre-Feb-hardening baseline).
+
+**Scope guarantees:** no changes to Phase 3 selftape, camera lifecycle, FabricSafeSlider, RevenueCat, Sentry, frontend, dependencies, lockfile, backend URL, or any other passing functionality. Extension of the two-phase Feb-2026 DOCX hardening — no rewrite, no refactor.
+
   - `registerRootComponent` NOT needed — branch uses `"main": "expo-router/entry"` which handles registration natively.
 - **Env restored:** `/app/frontend/.env` (Expo tunnel vars + `EXPO_PUBLIC_BACKEND_URL=save-script-verify.preview.emergentagent.com`) and `/app/backend/.env` (`MONGO_URL`, `DB_NAME`, `CORS_ORIGINS`).
 - **Backend URL fix (P0):** replaced hardcoded `script-recovery-1.preview.emergentagent.com` in two places with `process.env.EXPO_PUBLIC_BACKEND_URL || 'https://scriptmate-8.emergent.host'`:

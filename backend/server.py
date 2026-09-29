@@ -1254,6 +1254,108 @@ def _smart_join_dialogue(fragments: list) -> str:
     return out
 
 
+# Screenplay scene-heading / transition / structural-heading detector.
+# The Nov-2025 parser classified any uppercase 1-3 token line as a
+# character (e.g. `SCENE 1`, `INT. KITCHEN`, `FADE IN:`). This mis-
+# classifies scene structure as speaking characters and pollutes the
+# character-selection UI on physical devices. The Feb-2026 fix rejects
+# lines that match the screenplay conventions below BEFORE the
+# character-detection heuristic runs. Non-anchored matches are avoided
+# so a legitimate name that merely contains one of these words
+# (unlikely, but e.g. an actor called `SCENE`) is not disqualified.
+#
+# Sourced from the Screenwriter's Bible + WGA Format Guide screenplay
+# conventions; extended by matching every scene-header shape observed
+# in the Feb-2026 physical DOCX stress test.
+_SCENE_HEADING_RE = re.compile(
+    r"""^
+    (?:
+        SCENE\b              # SCENE 1, SCENE 2 - X, SCENE ONE
+      | ACT\b                # ACT ONE, ACT 1
+      | CHAPTER\b
+      | PART\b
+      | SECTION\b
+      | INT[./\s]            # INT. KITCHEN, INT KITCHEN, INT/EXT
+      | EXT[./\s]            # EXT. STREET, EXT DAY
+      | INT\.?/EXT           # INT./EXT. or INT/EXT
+      | EXT\.?/INT
+      | I\.?/E\b             # I/E or I./E.
+      | E\.?/I\b
+      | FADE\s+(?:IN|OUT|TO)\b
+      | CUT\s+TO\b
+      | DISSOLVE(?:\s+TO)?\b
+      | SMASH\s+CUT\b
+      | MATCH\s+CUT\b
+      | JUMP\s+CUT\b
+      | TIME\s+CUT\b
+      | HARD\s+CUT\b
+      | QUICK\s+CUT\b
+      | IRIS\s+(?:IN|OUT)\b
+      | FREEZE\s+FRAME\b
+      | BACK\s+TO\s+SCENE\b
+      | BACK\s+TO\b
+      | TITLE\s+CARD\b
+      | END\s+OF\b
+      | THE\s+END\b
+      | INTERCUT\b
+      | MONTAGE\b
+      | FLASH(?:BACK|-BACK|\s+BACK)\b
+      | FLASHFORWARD\b
+      | PRELAP\b
+      | SUPER(?:IMPOSE)?\b
+      | ANGLE\s+ON\b
+      | CLOSE\s+ON\b
+      | WIDE\s+ON\b
+      | POV\b                # e.g. "POV JACK"
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# Trailing character-cue extension parenthetical: `(V.O.)`, `(O.S.)`,
+# `(CONT'D)`, `(OS)`, `(VO)`, `(OFF)`, `(INTO PHONE)`, `(PRE-LAP)`.
+# When present after the character name we strip it so the character
+# set stores just the name (e.g. `JACK`, not `JACK (V.O.)`). This is a
+# cosmetic normalization that keeps the character-select UI clean and
+# matches how the AI-parsed path already stores names.
+_CHAR_CUE_EXTENSION_RE = re.compile(r"\s*\(([^)]*)\)\s*$")
+
+
+def _looks_like_scene_heading(line: str) -> bool:
+    """True iff `line` matches a known screenplay scene / transition /
+    structural-heading pattern. Anchored at the start of the line so a
+    legitimate character name that happens to contain one of the
+    keywords elsewhere is not disqualified.
+
+    Examples that ARE headings:
+        SCENE 1                    SCENE 2 - CONTRACTIONS
+        INT. KITCHEN               INT. KITCHEN — NIGHT
+        EXT. STREET — DAY          INT./EXT. CAR — NIGHT
+        FADE IN:                   CUT TO:
+        ACT ONE                    ACT 1
+
+    Examples that are NOT headings (must still be recognised as chars):
+        JACK           SARAH         DREW           ANG
+        HANN AH        MRS. SMITH    POLICE OFFICER
+        JACK (V.O.)    SARAH (O.S.)  MARY (CONT'D)
+    """
+    if not line:
+        return False
+    return bool(_SCENE_HEADING_RE.match(line.strip()))
+
+
+def _strip_character_cue_extension(name: str) -> str:
+    """Remove a trailing `(V.O.)` / `(O.S.)` / `(CONT'D)` / etc. from
+    a character-cue line. Returns the name unchanged if no trailing
+    parenthetical is present.
+    """
+    stripped = _CHAR_CUE_EXTENSION_RE.sub("", name).strip()
+    # Guard: if stripping produced an empty string (input was ONLY the
+    # parenthetical, e.g. `(V.O.)` on its own), return the original —
+    # the caller's stage-direction path already handles bare parens.
+    return stripped or name
+
+
 def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
     """Simple fallback parser for scripts"""
     lines_data = []
@@ -1274,14 +1376,27 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             continue
             
         potential_char = line.replace(':', '').strip()
-        if potential_char.isupper() and len(potential_char.split()) <= 3 and len(potential_char) > 1:
+        # Character-cue detection: uppercase, short, non-empty, and NOT
+        # a screenplay scene/transition heading, and NOT a bare
+        # parenthetical (which belongs to the stage-direction path).
+        # See `_looks_like_scene_heading` for the full list of rejected
+        # prefixes.
+        if (
+            potential_char.isupper()
+            and len(potential_char.split()) <= 3
+            and len(potential_char) > 1
+            and not potential_char.startswith(('(', '['))
+            and not _looks_like_scene_heading(potential_char)
+        ):
             if current_character and current_text:
                 lines_data.append({
                     "character": current_character,
                     "text": _repair(_smart_join_dialogue(current_text)),
                     "is_stage_direction": False
                 })
-            current_character = potential_char
+            # Normalise trailing character-cue extensions so the
+            # character-select UI shows `JACK`, not `JACK (V.O.)`.
+            current_character = _strip_character_cue_extension(potential_char)
             current_text = []
             characters.add(current_character)
         elif line.startswith('(') or line.startswith('['):
