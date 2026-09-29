@@ -1297,7 +1297,13 @@ _SCENE_HEADING_RE = re.compile(
       | BACK\s+TO\s+SCENE\b
       | TITLE\s+CARD\b
       | THE\s+END\b
-      | END\s+OF\s+(?:SCENE|ACT|EPISODE|PART|SHOW|FILM|MOVIE)\b
+      | END\s+OF\s+(?:SCENE|ACT|EPISODE|PART|SHOW|FILM|MOVIE|SCREENPLAY|STORY|PLAY|CHAPTER|TEASER|COLD\s+OPEN|PILOT)\b
+      # Standalone screenplay terminator: `END`, `END.`, `END:`, `END!`
+      # on its own line. Anchored with the outer `^` at the start and
+      # `$` inside this alt so a character named e.g. `ENDER` (which
+      # begins with END but has trailing letters) is NOT disqualified —
+      # the `\s*[.:!]?\s*$` requires the line to end right there.
+      | END\s*[.:!]?\s*$
       | INTERCUT\b
       | MONTAGE\b
       | FLASH(?:BACK|-BACK|\s+BACK)\b

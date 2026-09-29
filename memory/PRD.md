@@ -59,6 +59,49 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 
 ## Changelog
 
+### 2026-02 — "END OF SCREENPLAY" false-character fix (post-QA finding)
+
+Physical S23 Ultra QA reported the character list on `ScriptScreen` contained the terminator `END OF SCREENPLAY` alongside real characters (`JACK`, `DET. HARRIS`). This was a parser-side false positive.
+
+**Root cause:** The Feb-2026 scene-heading regex enumerated `END OF SCENE|ACT|EPISODE|PART|SHOW|FILM|MOVIE` but did NOT list `SCREENPLAY`, `STORY`, `PLAY`, `PILOT`, `TEASER`, `COLD OPEN`. It also had no matcher for a bare `END` / `END.` / `END:` terminator on its own line. Any line that fell through the scene-heading filter and was uppercase became a candidate character — so `END OF SCREENPLAY` was classified as one.
+
+**Trace (evidence):**
+1. Raw extracted DOCX text ends with `\n\nFADE OUT.\n\nEND OF SCREENPLAY`.
+2. Backend `fallback_parse_script` on unfixed code returned `characters=['END OF SCREENPLAY','JACK','DET. HARRIS']`.
+3. That list was persisted to Mongo and returned by `POST /api/scripts`.
+4. Frontend `smartScriptParser.parseScript` had the identical missing tokens in its `HEADING_RE`, so had it re-parsed the raw text client-side it would have produced the same list.
+5. `ScriptScreen` read `currentScript.characters` verbatim → the diagnostic surfaced `firstThreeCharacters: "JACK, DET. HARRIS, END OF SCREENPLAY"`.
+
+**Fix — narrowest possible regex change, applied to BOTH parsers (parity is contract):**
+- `backend/server.py::_SCENE_HEADING_RE`:
+  - Extended `END OF (…)` alternation to include `SCREENPLAY | STORY | PLAY | CHAPTER | TEASER | COLD OPEN | PILOT`.
+  - Added a new alternative `END\s*[.:!]?\s*$` that matches a standalone `END`, `END.`, `END:`, `END!` — anchored with `$` inside the alternative so a real character named `ENDER` or `ENDANGERED SPECIES` remains detected.
+- `frontend/services/smartScriptParser.ts::HEADING_RE`: mirrored the same additions.
+
+**Regression tests (34 new cases in `backend/tests/test_end_of_screenplay_character_feb2026.py`):**
+- 18 parametrised terminator cases must be rejected as scene headings: `END OF SCREENPLAY`, `THE END`, `END`, `END.`, `END:`, `END OF SCENE`, `END OF ACT`, `END OF EPISODE`, `END OF SHOW`, `END OF FILM`, `END OF STORY`, `END OF PLAY`, `END OF PILOT`, `END OF TEASER`, `END OF COLD OPEN`, `FADE OUT`, `FADE OUT.`, `CUT TO:`.
+- 12 real-character cases must NOT be rejected: `JACK`, `SARAH`, `DET. HARRIS`, `MRS. SMITH`, `POLICE OFFICER`, `JACK (V.O.)`, `SARAH (O.S.)`, `MARY (CONT'D)`, `DREW`, plus adversarial near-misses `ENDER`, `ENDANGERED SPECIES`, `BENDER`, `PENDING`.
+- 1 end-to-end DOCX-shaped stress-text test proving the character list from a screenplay ending in `FADE OUT. / END OF SCREENPLAY` is exactly `{JACK, DET. HARRIS, SARAH}` with no terminator leakage.
+- 1 dialogue-preservation guard proving `"Back to me."` (the historically problematic dialogue line) is still attributed to `JACK`.
+- 1 frontend-parity guard that reads `smartScriptParser.ts` and asserts every terminator token added on the backend side is mirrored — the two parsers cannot silently diverge.
+
+**Scope guarantees:**
+- No changes to `daily_drills` / `scripts` / `rehearsals` schema, no dependency changes, no `yarn.lock` change.
+- Phase 3 / Phase 4 / RevenueCat / Sentry / Rehearsal / Learn / Recall / Premium / Teleprompter / Self-Tape untouched.
+- The 18 baseline backend lint issues remain untouched; the pre-completion checker showed them shift line numbers only (same rules, same anchors).
+
+**Pre-build gate result (post-fix):**
+```
+Tests:             PASS — 648 passed, 0 failed, 0 errors     (+34 vs previous, was 614)
+Runtime smoke:     PASS — 18 ok, 0 fail
+TypeScript:        PASS (baseline-only) — 37 baseline, 0 new
+Lint regression:   PASS (baseline-only) — 327 baseline, 0 new
+Dependencies:      PASS
+Overall:           GREEN
+```
+
+**APK required for physical validation:** YES — this is a parser regex change affecting DOCX import output. The user must Save-to-GitHub to trigger the gated QA APK build; physical validation on S23 Ultra will confirm `ScriptScreen` no longer shows `END OF SCREENPLAY` in `firstThreeCharacters`.
+
 ### 2026-02 — Daily Drill 3-State UX Fix (post-QA-1110 finding)
 
 Physical QA on build 1110 showed the Daily Drill screen jumping straight to "Today's drill complete!" from a single tap of "I Did It! Claim XP" — the tester perceived that the drill never initiated. Root cause investigation confirmed it was NOT a backend bug: the DB row can only reach `completed:true` via `POST /api/daily-drill/{user_id}/complete`, which the old button called on the first tap.
