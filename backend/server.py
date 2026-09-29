@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -951,6 +952,127 @@ async def parse_script_with_ai(raw_text: str) -> Dict[str, Any]:
         logger.error(f"Error parsing script with AI: {e}")
         return fallback_parse_script(raw_text)
 
+_DOCX_WHITESPACE_REPLACEMENTS = {
+    "\t": " ",       # TAB from <w:tab/>
+    "\xa0": " ",     # non-breaking space
+    "\u2007": " ",   # figure space
+    "\u202f": " ",   # narrow no-break space
+    "\u200b": "",    # zero-width space — removed, not spaced
+}
+
+
+def _normalize_docx_whitespace(s: str) -> str:
+    """Canonicalise DOCX whitespace variants to regular spaces.
+
+    Word documents can embed a variety of non-newline whitespace
+    characters into paragraph run text (verified in-process against
+    python-docx==1.2.0):
+
+      - `<w:tab/>` between mid-word runs → paragraph.text contains `\\t`
+      - `<w:t xml:space="preserve">isn\\xa0't</w:t>` → NBSP embedded
+      - Figure / narrow no-break spaces from copy-pasted content
+      - Zero-width spaces from certain plugins / conversions
+
+    Downstream code (`fallback_parse_script`, `_smart_join_dialogue`)
+    reasons only about regular ASCII spaces + newlines. This function
+    normalises every non-newline whitespace variant to a single
+    regular space so downstream logic sees a consistent stream. `\\n`
+    is preserved so line-boundary parsing keeps working; `\\u200b`
+    is removed (not spaced) because it is a zero-width joiner and
+    inserting a space would fabricate a boundary that was never there.
+    """
+    if not s:
+        return s
+    for src, dst in _DOCX_WHITESPACE_REPLACEMENTS.items():
+        if src in s:
+            s = s.replace(src, dst)
+    return s
+
+
+# Common short English stopwords that must NEVER be merged across a
+# space — protects legitimate dialogue phrases like "the man", "did
+# not", "you know", "say hello", "how are", "a bike" from the
+# aggressive rules below.
+_INTRA_WORD_STOPWORDS = frozenset({
+    "a", "an", "and", "as", "at", "be", "but", "by",
+    "can", "come", "did", "do", "does", "down",
+    "each", "even", "ever",
+    "for", "from",
+    "get", "give", "go", "goes", "got",
+    "had", "has", "have", "he", "her", "him", "his", "how",
+    "i", "if", "in", "is", "it", "its",
+    "just", "keep", "know",
+    "let", "like",
+    "made", "make", "many", "may", "me", "more", "most", "much", "must", "my",
+    "new", "no", "not", "now",
+    "of", "off", "on", "once", "one", "only", "or", "our", "out", "over", "own",
+    "said", "say", "see", "seen", "sent", "she", "so", "some", "such",
+    "than", "that", "the", "them", "then", "they", "this", "thus", "time",
+    "to", "too", "two",
+    "up", "upon", "us", "use",
+    "very",
+    "want", "was", "way", "we", "well", "were", "what", "when", "where", "who",
+    "why", "will", "with",
+    "you", "your",
+})
+
+# Rule A — apostrophe / hyphen glue. Matches `letter + spaces + [' or -] +
+# optional spaces + letter`. Covers contractions split by a stray space
+# (`isn 't`, `don 't`, `we 're`) and spaced hyphens (`mid - way`).
+_INTRA_WORD_APOSTROPHE_HYPHEN = re.compile(r"([A-Za-z]) +(['\-]) *([A-Za-z])")
+
+# Rule B — single-letter non-vowel prefix. Matches a lone consonant (or
+# semi-vowel) followed by a spaced lowercase word. Deliberately excludes
+# `a`, `A`, `I`, `o` so real short words never get merged with the next
+# token (`a bike`, `I said`, `o my king`). The left-side boundary is
+# strict — start of line or preceded by whitespace — so a contraction
+# suffix like `t` in `isn't easy` is NOT eligible.
+_INTRA_WORD_SINGLE_LETTER = re.compile(
+    r"(?:^|(?<=\s))([b-hj-np-zB-HJ-NP-Z]) +([a-z]{2,})\b"
+)
+
+# Rule C — short-fragment merge, with stopword guard. Left is 2-4
+# lowercase letters, right is 2+ lowercase letters. Neither side may
+# be a stopword. Repairs `unde rstand`, `ne ver`; leaves `the man`,
+# `did not`, `you know` untouched.
+_INTRA_WORD_SHORT_FRAGMENT = re.compile(r"\b([a-z]{2,4}) +([a-z]{2,})\b")
+
+
+def _repair_intra_word_spaces(text: str) -> str:
+    """Repair intra-word whitespace artefacts introduced by DOCX/PDF
+    extraction (`isn 't` → `isn't`, `w hat` → `what`,
+    `unde rstand` → `understand`, etc.).
+
+    Applied per source line inside `fallback_parse_script`, right
+    after `.strip()`. Complements `_smart_join_dialogue` which handles
+    the newline-split flavour of the same defect.
+
+    The three rules are deliberately conservative — see the
+    stopword allowlist and the character class exclusions in the
+    module constants above. Character-cue lines (uppercase single
+    tokens) never match any of the three rules. Stage-direction
+    lines that contain only real word boundaries (`(pausing softly)`)
+    are also unaffected: Rule A needs an apostrophe/hyphen, Rule B
+    needs a single non-vowel letter followed by a lowercase word (rare
+    in stage directions), and Rule C's stopword guard covers the
+    common cases.
+    """
+    if not text:
+        return text
+    # Rule A — apostrophe/hyphen glue.
+    text = _INTRA_WORD_APOSTROPHE_HYPHEN.sub(r"\1\2\3", text)
+    # Rule B — single-letter non-vowel prefix.
+    text = _INTRA_WORD_SINGLE_LETTER.sub(r"\1\2", text)
+    # Rule C — short-fragment merge, with stopword guard.
+    def _c_repl(m):
+        left, right = m.group(1), m.group(2)
+        if left in _INTRA_WORD_STOPWORDS or right in _INTRA_WORD_STOPWORDS:
+            return m.group(0)
+        return left + right
+    text = _INTRA_WORD_SHORT_FRAGMENT.sub(_c_repl, text)
+    return text
+
+
 def _smart_join_dialogue(fragments: list) -> str:
     """Join dialogue fragments split across PDF/DOCX line-wraps.
 
@@ -1008,7 +1130,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             if current_character and current_text:
                 lines_data.append({
                     "character": current_character,
-                    "text": _smart_join_dialogue(current_text),
+                    "text": _repair_intra_word_spaces(_smart_join_dialogue(current_text)),
                     "is_stage_direction": False
                 })
             current_character = potential_char
@@ -1018,13 +1140,13 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             if current_character and current_text:
                 lines_data.append({
                     "character": current_character,
-                    "text": _smart_join_dialogue(current_text),
+                    "text": _repair_intra_word_spaces(_smart_join_dialogue(current_text)),
                     "is_stage_direction": False
                 })
                 current_text = []
             lines_data.append({
                 "character": "",
-                "text": line,
+                "text": _repair_intra_word_spaces(line),
                 "is_stage_direction": True
             })
         else:
@@ -1033,7 +1155,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
     if current_character and current_text:
         lines_data.append({
             "character": current_character,
-            "text": _smart_join_dialogue(current_text),
+            "text": _repair_intra_word_spaces(_smart_join_dialogue(current_text)),
             "is_stage_direction": False
         })
     
@@ -1082,21 +1204,29 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
         raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
 
 def extract_text_from_docx(docx_bytes: bytes) -> str:
-    """Extract text from Word document (.docx). Raises HTTPException with a specific reason on failure."""
+    """Extract text from Word document (.docx). Raises HTTPException with a specific reason on failure.
+
+    Note (2026-02): paragraph.text and cell.text are passed through
+    `_normalize_docx_whitespace()` so downstream code sees consistent
+    ASCII whitespace. Word can embed <w:tab/>, NBSP (\\xa0), figure
+    space (\\u2007), narrow-NBSP (\\u202f), and zero-width space
+    (\\u200b) inside run text — all of which surface as visible
+    intra-word artefacts (`isn 't`, `unde rstand`, …) unless canonicalised.
+    """
     try:
         docx_file = io.BytesIO(docx_bytes)
         doc = Document(docx_file)
         parts = []
         for paragraph in doc.paragraphs:
             if paragraph.text:
-                parts.append(paragraph.text)
+                parts.append(_normalize_docx_whitespace(paragraph.text))
         # Also pull text from tables (common in scripts formatted as tables)
         try:
             for table in doc.tables:
                 for row in table.rows:
                     for cell in row.cells:
                         if cell.text:
-                            parts.append(cell.text)
+                            parts.append(_normalize_docx_whitespace(cell.text))
         except Exception as tbl_err:
             logger.warning(f"DOCX table extract failed: {tbl_err}")
         text = "\n".join(parts)

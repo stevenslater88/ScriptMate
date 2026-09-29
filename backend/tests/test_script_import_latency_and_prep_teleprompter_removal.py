@@ -177,18 +177,35 @@ def _load_fallback_parser():
     top-level DB/env dependencies."""
     src = BACKEND_SERVER.read_text()
     code = _get_source_function(src, "fallback_parse_script")
-    # `fallback_parse_script` now delegates to `_smart_join_dialogue`
-    # (2026-02 fix for the physical intra-word spacing defect on the
-    # Samsung SM-S918B). Pull the helper too so the AST-isolated
-    # namespace still resolves.
-    helper_code = _get_source_function(src, "_smart_join_dialogue")
-    ns: Dict[str, Any] = {}
-    # Provide the type imports the source references in the signature.
+    # `fallback_parse_script` delegates to `_smart_join_dialogue`
+    # (2026-02 fix for the PDF newline-split intra-word defect) and to
+    # `_repair_intra_word_spaces` (2026-02 DOCX literal-space fix).
+    # Both helpers must be present in the isolated namespace.
+    helper_smart = _get_source_function(src, "_smart_join_dialogue")
+    helper_repair = _get_source_function(src, "_repair_intra_word_spaces")
+    # Module-level constants the repair helper references.
+    import re as _re
+    _stopwords_match = _re.search(
+        r"_INTRA_WORD_STOPWORDS\s*=\s*frozenset\(\{[\s\S]*?\}\)",
+        src,
+    )
+    _apos_match = _re.search(r"_INTRA_WORD_APOSTROPHE_HYPHEN\s*=\s*re\.compile\([^\n]+\)", src)
+    _single_match = _re.search(r"_INTRA_WORD_SINGLE_LETTER\s*=\s*re\.compile\([\s\S]*?\)\n", src)
+    _short_match = _re.search(r"_INTRA_WORD_SHORT_FRAGMENT\s*=\s*re\.compile\([^\n]+\)", src)
+    assert _stopwords_match and _apos_match and _single_match and _short_match, (
+        "Failed to AST-extract intra-word repair module constants"
+    )
+    ns: Dict[str, Any] = {"re": _re}
     from typing import Dict as _D, Any as _A  # noqa: F401
     ns["Dict"] = _D
     ns["Any"] = _A
-    exec(helper_code, ns)  # noqa: S102 — intentional isolated eval of local source
-    exec(code, ns)  # noqa: S102 — intentional isolated eval of local source
+    exec(_stopwords_match.group(0), ns)  # noqa: S102
+    exec(_apos_match.group(0), ns)  # noqa: S102
+    exec(_single_match.group(0), ns)  # noqa: S102
+    exec(_short_match.group(0), ns)  # noqa: S102
+    exec(helper_smart, ns)  # noqa: S102
+    exec(helper_repair, ns)  # noqa: S102
+    exec(code, ns)  # noqa: S102
     return ns["fallback_parse_script"]
 
 

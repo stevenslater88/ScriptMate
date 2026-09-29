@@ -932,3 +932,125 @@ schema, RevenueCat, ElevenLabs, Sentry, paywall.
 ### APK / EAS / GitHub
 None triggered.
 
+
+---
+
+## 2026-02 · DOCX intra-word spacing fix (two-layer, backend only)
+
+### Physical trigger
+S23 Ultra QA screenshot on build 1.0.47 showed `isn 't`, `w anto`,
+`unde rstand`, `w hat` in `script-1.docx` after the previous
+`_smart_join_dialogue` fix landed. Investigation traced the artefact
+to DOCX-side embedded whitespace variants surviving as intra-line
+characters that `_smart_join_dialogue` could not see because it only
+merges newline-split fragments.
+
+### Fix
+Two composable helpers in `backend/server.py`:
+
+**Layer 1 — `_normalize_docx_whitespace(s)`**: canonicalises DOCX
+whitespace variants to a single regular space. Called on each
+`paragraph.text` and `cell.text` inside `extract_text_from_docx` so
+downstream code sees a consistent stream:
+- `\t` (from `<w:tab/>`) → ` `
+- `\xa0` (NBSP) → ` `
+- `\u2007` (figure space) → ` `
+- `\u202f` (narrow NBSP) → ` `
+- `\u200b` (zero-width space) → removed
+- `\n` preserved
+
+**Layer 2 — `_repair_intra_word_spaces(text)`**: applied to the
+FINAL joined dialogue text (immediately after
+`_smart_join_dialogue(current_text)`) and to stage-direction bodies
+inside `fallback_parse_script`. Three deterministic rules with strict
+boundaries to prevent false positives on legitimate dialogue:
+
+- **Rule A — apostrophe / hyphen glue.**
+  `re.sub(r"([A-Za-z]) +(['\-]) *([A-Za-z])", r"\1\2\3", text)`
+  Repairs `isn 't`, `don 't`, `we 're`, `mid - way`.
+- **Rule B — single-letter non-vowel prefix, strict left boundary.**
+  `re.sub(r"(?:^|(?<=\s))([b-hj-np-zB-HJ-NP-Z]) +([a-z]{2,})\b", r"\1\2", text)`
+  Repairs `w hat`, `w ant`, `w anto`, `y ou`. Excludes `a`, `A`,
+  `I`, `o` so `a bike`, `I said`, `o my king` stay intact. Strict
+  `(?:^|(?<=\s))` left boundary prevents matching the `t` in
+  `isn't easy`.
+- **Rule C — short-fragment merge with stopword guard.**
+  `re.sub(r"\b([a-z]{2,4}) +([a-z]{2,})\b", …)` — merges only when
+  neither side is in a curated 92-word English stopword frozenset
+  (`the`, `and`, `did`, `you`, `not`, `now`, `too`, `who`, `why`,
+  `let`, `has`, `was`, `did`, `can`, `never`, …). Repairs
+  `unde rstand`, `ne ver`. Leaves `the man`, `did not`, `you know`,
+  `say hello`, `how are` untouched.
+
+### Wiring / composition
+The Layer 2 repair is applied AFTER `_smart_join_dialogue` (not before)
+so it never fires inside a fragment still awaiting a newline-boundary
+merge. That composition means PDF (newline-split) and DOCX (intra-line
+space) defects are both repaired without either helper interfering
+with the other.
+
+### Files changed
+- `backend/server.py`:
+  - `import re` added to the module imports.
+  - New module constants `_DOCX_WHITESPACE_REPLACEMENTS`,
+    `_INTRA_WORD_STOPWORDS`, `_INTRA_WORD_APOSTROPHE_HYPHEN`,
+    `_INTRA_WORD_SINGLE_LETTER`, `_INTRA_WORD_SHORT_FRAGMENT`.
+  - New helpers `_normalize_docx_whitespace(s)` and
+    `_repair_intra_word_spaces(text)`.
+  - `extract_text_from_docx` now normalises whitespace on each
+    `paragraph.text` / `cell.text`.
+  - `fallback_parse_script` now wraps every
+    `_smart_join_dialogue(current_text)` and every stage-direction
+    body with `_repair_intra_word_spaces(...)`.
+- `backend/tests/test_script_import_latency_and_prep_teleprompter_removal.py`:
+  - `_load_fallback_parser` extended to AST-load
+    `_repair_intra_word_spaces` + its module constants into the
+    isolated namespace so the existing latency guard keeps working.
+- **NEW** `backend/tests/test_docx_intra_word_spacing.py` — 63
+  focused guards.
+
+### Not changed
+No frontend change. No new dependency. No pdfplumber. No stored-
+scripts migration. No native code. No Phase 3 / Phase 4 touch.
+
+### Tests
+- **NEW** `test_docx_intra_word_spacing.py` — **63 / 63 pass**.
+  Covers: whitespace variants (9), apostrophe/hyphen glue (5),
+  single-letter prefix + negatives (8), short-fragment + 17 stopword
+  negatives (19), stage-direction / character-cue pass-through (8),
+  in-memory DOCX fixtures for shapes A/B/D/G end-to-end (4),
+  sentence-level artefacts vs legitimate dialogue (2),
+  `_smart_join_dialogue` regression (6), stage-direction end-to-end
+  (1).
+- `test_smart_join_and_rehearsal_scroll.py` — **28 / 28 pass** (both
+  previous failures resolved by moving repair to post-smart-join).
+- `test_script_import_latency_and_prep_teleprompter_removal.py` —
+  passing.
+- **Full guard aggregate: 357 / 357 pass** (294 previous + 63 new).
+- Runtime engine smoke: **22 / 22 pass**.
+- Entitlement / premium subset: **34 / 34 pass**.
+- TypeScript: no frontend change — unchanged baseline; the single
+  pre-existing `Timeout` error at `app/rehearsal/[id].tsx:599`
+  remains untouched.
+- 18 pre-existing backend lint issues: untouched per user directive.
+
+### Live proof against deployed backend
+`POST /api/users` + `POST /api/scripts` on
+`save-script-verify.preview.emergentagent.com`:
+- `"I don 't w ant this and you unde rstand isn 't easy."` →
+  `"I don't want this and you understand isn't easy."` ✅
+- `"Y ou w hat? I ne ver said that."` →
+  `"You what? I never said that."` ✅
+- `"Try the mid - way path."` → `"Try the mid-way path."` ✅
+- `"The man did not know you. Say hello. How are you? I said a bike."` →
+  unchanged ✅
+
+### Ship vector
+**Ready for one controlled Emergent Docker backend deployment.** No
+mobile rebuild needed for this fix to reach the S23 Ultra — the
+installed 1.0.47 APK consumes the cleaned extraction on the next
+script import. Previously-imported scripts (including the current
+`script-1.docx`) remain in Mongo with the old artefacts baked in;
+retroactive cleanup would need a separate one-off migration task
+(not part of this fix).
+
