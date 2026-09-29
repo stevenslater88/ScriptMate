@@ -1,0 +1,570 @@
+{
+  "total": 327,
+  "per_file_rule": [
+    {
+      "file": "server.py",
+      "rule": "ASYNC230",
+      "count": 3
+    },
+    {
+      "file": "server.py",
+      "rule": "B008",
+      "count": 4
+    },
+    {
+      "file": "server.py",
+      "rule": "BLE001",
+      "count": 24
+    },
+    {
+      "file": "server.py",
+      "rule": "DTZ003",
+      "count": 42
+    },
+    {
+      "file": "server.py",
+      "rule": "F401",
+      "count": 2
+    },
+    {
+      "file": "server.py",
+      "rule": "F811",
+      "count": 1
+    },
+    {
+      "file": "server.py",
+      "rule": "FURB188",
+      "count": 4
+    },
+    {
+      "file": "server.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "server.py",
+      "rule": "PERF102",
+      "count": 1
+    },
+    {
+      "file": "server.py",
+      "rule": "PIE810",
+      "count": 1
+    },
+    {
+      "file": "server.py",
+      "rule": "RUF010",
+      "count": 4
+    },
+    {
+      "file": "server.py",
+      "rule": "RUF013",
+      "count": 5
+    },
+    {
+      "file": "server.py",
+      "rule": "S110",
+      "count": 1
+    },
+    {
+      "file": "server.py",
+      "rule": "SIM102",
+      "count": 3
+    },
+    {
+      "file": "server.py",
+      "rule": "UP006",
+      "count": 31
+    },
+    {
+      "file": "server.py",
+      "rule": "UP035",
+      "count": 2
+    },
+    {
+      "file": "server.py",
+      "rule": "UP045",
+      "count": 51
+    },
+    {
+      "file": "tests/test_acting_coach_api.py",
+      "rule": "F541",
+      "count": 15
+    },
+    {
+      "file": "tests/test_acting_coach_api.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_crash_safety_audit.py",
+      "rule": "F401",
+      "count": 1
+    },
+    {
+      "file": "tests/test_crash_safety_audit.py",
+      "rule": "F541",
+      "count": 5
+    },
+    {
+      "file": "tests/test_crash_safety_audit.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_docx_hardening_feb2026.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_docx_intra_word_spacing.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_docx_intra_word_spacing.py",
+      "rule": "RUF100",
+      "count": 1
+    },
+    {
+      "file": "tests/test_frontend_entitlement_audit.py",
+      "rule": "BLE001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_frontend_entitlement_audit.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_frontend_entitlement_audit.py",
+      "rule": "UP006",
+      "count": 1
+    },
+    {
+      "file": "tests/test_frontend_entitlement_audit.py",
+      "rule": "UP035",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration15_api.py",
+      "rule": "E722",
+      "count": 2
+    },
+    {
+      "file": "tests/test_iteration15_api.py",
+      "rule": "F401",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration15_api.py",
+      "rule": "F541",
+      "count": 5
+    },
+    {
+      "file": "tests/test_iteration15_api.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration15_api.py",
+      "rule": "S110",
+      "count": 2
+    },
+    {
+      "file": "tests/test_iteration16_bug_fixes.py",
+      "rule": "F541",
+      "count": 3
+    },
+    {
+      "file": "tests/test_iteration16_bug_fixes.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration17_paywall_upload_fixes.py",
+      "rule": "E722",
+      "count": 2
+    },
+    {
+      "file": "tests/test_iteration17_paywall_upload_fixes.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration17_paywall_upload_fixes.py",
+      "rule": "PLW1510",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration17_paywall_upload_fixes.py",
+      "rule": "S110",
+      "count": 2
+    },
+    {
+      "file": "tests/test_iteration17_paywall_upload_fixes.py",
+      "rule": "SIM102",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration19_scene_partner.py",
+      "rule": "E722",
+      "count": 2
+    },
+    {
+      "file": "tests/test_iteration19_scene_partner.py",
+      "rule": "F401",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration19_scene_partner.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration19_scene_partner.py",
+      "rule": "S110",
+      "count": 2
+    },
+    {
+      "file": "tests/test_iteration20_android_fixes.py",
+      "rule": "E722",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration20_android_fixes.py",
+      "rule": "F541",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration20_android_fixes.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration20_android_fixes.py",
+      "rule": "S110",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration21_deviceid_fix.py",
+      "rule": "F541",
+      "count": 4
+    },
+    {
+      "file": "tests/test_iteration21_deviceid_fix.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration22_teleprompter.py",
+      "rule": "E722",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration22_teleprompter.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration22_teleprompter.py",
+      "rule": "S110",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration23_upload_fix.py",
+      "rule": "BLE001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration23_upload_fix.py",
+      "rule": "F541",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration23_upload_fix.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration23_upload_fix.py",
+      "rule": "S110",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration26_free_voice_gating.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration27_upload_fix.py",
+      "rule": "BLE001",
+      "count": 2
+    },
+    {
+      "file": "tests/test_iteration27_upload_fix.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration28_sentry_fix.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_iteration31_rehearsal_crash_regression.py",
+      "rule": "DTZ003",
+      "count": 1
+    },
+    {
+      "file": "tests/test_part6_training_modes.py",
+      "rule": "F541",
+      "count": 1
+    },
+    {
+      "file": "tests/test_part6_training_modes.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase2_character_mode_gate.py",
+      "rule": "BLE001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase2_character_mode_gate.py",
+      "rule": "F401",
+      "count": 2
+    },
+    {
+      "file": "tests/test_phase2_character_mode_gate.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase2_character_mode_gate.py",
+      "rule": "UP035",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase2_daily_drill.py",
+      "rule": "F541",
+      "count": 2
+    },
+    {
+      "file": "tests/test_phase2_daily_drill.py",
+      "rule": "F841",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase2_daily_drill.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase2_rehearsal_contract.py",
+      "rule": "BLE001",
+      "count": 2
+    },
+    {
+      "file": "tests/test_phase2_rehearsal_contract.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase2_rehearsal_contract.py",
+      "rule": "S110",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase4_learn.py",
+      "rule": "F401",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase4_learn.py",
+      "rule": "PLW1510",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase_cd_drill_share.py",
+      "rule": "F401",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase_cd_drill_share.py",
+      "rule": "F541",
+      "count": 8
+    },
+    {
+      "file": "tests/test_phase_cd_drill_share.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase_e_voice_studio.py",
+      "rule": "E722",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase_e_voice_studio.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_phase_e_voice_studio.py",
+      "rule": "S110",
+      "count": 1
+    },
+    {
+      "file": "tests/test_production_hardening.py",
+      "rule": "F401",
+      "count": 1
+    },
+    {
+      "file": "tests/test_production_hardening.py",
+      "rule": "F541",
+      "count": 1
+    },
+    {
+      "file": "tests/test_production_hardening.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_qa_premium_bypass.py",
+      "rule": "F401",
+      "count": 1
+    },
+    {
+      "file": "tests/test_qa_premium_bypass.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_recovery_mode_5flows.py",
+      "rule": "BLE001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_recovery_mode_5flows.py",
+      "rule": "E722",
+      "count": 2
+    },
+    {
+      "file": "tests/test_recovery_mode_5flows.py",
+      "rule": "F401",
+      "count": 3
+    },
+    {
+      "file": "tests/test_recovery_mode_5flows.py",
+      "rule": "F541",
+      "count": 2
+    },
+    {
+      "file": "tests/test_recovery_mode_5flows.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_recovery_mode_5flows.py",
+      "rule": "RUF012",
+      "count": 1
+    },
+    {
+      "file": "tests/test_recovery_mode_5flows.py",
+      "rule": "S110",
+      "count": 2
+    },
+    {
+      "file": "tests/test_rehearsal_journey.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_script_import_latency_and_prep_teleprompter_removal.py",
+      "rule": "F401",
+      "count": 2
+    },
+    {
+      "file": "tests/test_script_import_latency_and_prep_teleprompter_removal.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_script_import_latency_and_prep_teleprompter_removal.py",
+      "rule": "UP035",
+      "count": 1
+    },
+    {
+      "file": "tests/test_scriptm8_api.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_scriptmate_api.py",
+      "rule": "F541",
+      "count": 1
+    },
+    {
+      "file": "tests/test_scriptmate_api.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_scripts_create_timeout.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_scripts_create_timeout.py",
+      "rule": "UP006",
+      "count": 2
+    },
+    {
+      "file": "tests/test_scripts_create_timeout.py",
+      "rule": "UP035",
+      "count": 1
+    },
+    {
+      "file": "tests/test_smart_join_and_rehearsal_scroll.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_smart_join_and_rehearsal_scroll.py",
+      "rule": "RUF100",
+      "count": 1
+    },
+    {
+      "file": "tests/test_smart_parser_api.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_startup_api_diagnostic.py",
+      "rule": "BLE001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_startup_api_diagnostic.py",
+      "rule": "PIE810",
+      "count": 1
+    },
+    {
+      "file": "tests/test_support_regression.py",
+      "rule": "I001",
+      "count": 1
+    },
+    {
+      "file": "tests/test_watermark_feature.py",
+      "rule": "F541",
+      "count": 1
+    },
+    {
+      "file": "tests/test_watermark_feature.py",
+      "rule": "I001",
+      "count": 1
+    }
+  ]
+}

@@ -59,6 +59,42 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 
 ## Changelog
 
+### 2026-02 — ScriptMate Pre-Build Quality Gate
+
+Added a reusable, baseline-aware pre-build gate that blocks the QA APK / production AAB build unless every regression check is GREEN. Infrastructure only — no product code touched.
+
+**Files added / changed:**
+- `scripts/prebuild_gate.py` (NEW) — single entry point.
+- `scripts/prebuild_gate_baselines/ruff_baseline.json` (NEW) — snapshot of the 327 current ruff findings (which include the 18 pre-existing "blocking" backend lint issues kept intentionally per user directive).
+- `scripts/prebuild_gate_baselines/ts_baseline.json` (NEW) — snapshot of the 37 pre-existing TypeScript errors.
+- `scripts/README.md` (NEW) — usage docs.
+- `frontend/.eas/workflows/qa-apk.yml` — added a `prebuild_gate` job; `build_android_qa_apk` now `needs: [prebuild_gate]`, so EAS Workflows refuse to start the APK build when the gate exits non-zero.
+
+**Checks performed by the gate:**
+1. **Backend regression tests** — 602 static pytest cases (allowlist of the 21 hermetic suites documented in the parser-hardening changelog).
+2. **Runtime smoke** — `scripts/learn_engine_smoketest.js` (18 pure-Node assertions covering the learn engine).
+3. **TypeScript check** — `npx tsc --noEmit` diffed per (file, rule) against `ts_baseline.json`. PASS if the current error set is a subset of baseline; FAIL if any new (file, rule) pair appears or a count grows.
+4. **Lint regression (ruff)** — same diff-vs-baseline mechanism for `ruff check backend/`. The 18 known "blocking" issues remain untouched and are recognised as baseline.
+5. **Dependencies / config sanity** — required files exist (`server.py`, `common_english_words.py`, `smartScriptParser.ts`, `learnEngine.ts`, `package.json`, `yarn.lock`, `tsconfig.json`, `qa-apk.yml`, smoke script); `requirements.txt` parses; `package.json` parses; `server.py` still imports `common_english_words`.
+
+**Baseline-aware:** the gate cannot be tricked into a false-green because the diff is *count-per-(file, rule)*, and it cannot false-red on unrelated line shifts because line numbers are ignored.
+
+**Build blocking:** wired into `frontend/.eas/workflows/qa-apk.yml` via `needs: [prebuild_gate]`. The gate is also invocable locally by any developer with `python3 scripts/prebuild_gate.py`.
+
+**Self-verification results (2026-02):**
+- Known-good source → `Overall: GREEN`, exit 0.
+- Synthetic failing test injected into `test_ai_coming_soon_ui.py` → gate reported `Tests: FAIL — 602 passed, 1 failed` and `Overall: RED / Build blocked`, exit 1. Reverted.
+- Synthetic new bare-except (E722) appended to `test_learn_practice_mode_tabs.py` → gate reported `Lint regression: FAIL — 1 NEW ruff finding(s) beyond baseline (total 328)` and `Overall: RED / Build blocked`, exit 1. Reverted.
+- Post-restoration re-run → `Overall: GREEN`, exit 0.
+
+**Invocation:**
+```bash
+python3 scripts/prebuild_gate.py
+```
+
+**Scope guarantees:** no changes to Phase 3 / Phase 4 code, camera lifecycle, RevenueCat, Sentry, DOCX parser, Rehearsal, Learn/Recall, or Premium logic. No dependency or lockfile changes. No APK / AAB built, no `eas` invocation, no GitHub push performed by this task.
+
+
 ### 2026-02 — Restore + P0 stabilization
 - Restored branch `conflict_170326_0314` via git clone → rsync (preserving `.git` and `.emergent`).
 - `yarn install` clean.

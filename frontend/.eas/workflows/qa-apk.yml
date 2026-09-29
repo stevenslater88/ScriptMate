@@ -7,6 +7,12 @@
 #   Automatically build a signed Android QA APK on every push to `main`
 #   using the existing `preview` profile from ../eas.json.
 #
+#   As of 2026-02 the workflow is now gated by the ScriptMate
+#   pre-build quality gate (`scripts/prebuild_gate.py`). The APK build
+#   job depends (`needs`) on `prebuild_gate` and will NOT start when the
+#   gate is RED. See /app/scripts/prebuild_gate.py for the full set of
+#   checks (tests / runtime smoke / TypeScript / lint / deps).
+#
 # Scope guarantees (per Master Prompt / fork job 2026-02):
 #   * This file adds infrastructure ONLY. It does NOT modify application
 #     code, dependencies, RevenueCat, Premium/QA_PREMIUM logic, or any
@@ -37,8 +43,29 @@ on:
       - main
 
 jobs:
+  prebuild_gate:
+    name: ScriptMate pre-build quality gate
+    # Generic runner job — executes the reusable Python gate.
+    # The build job below has `needs: - prebuild_gate` so a RED gate
+    # (non-zero exit) blocks the APK build from starting.
+    steps:
+      - name: Install ruff (backend lint) + node deps
+        run: |
+          python3 -m pip install --quiet ruff pytest requests \
+            fastapi pydantic pymongo motor python-docx PyPDF2 \
+            python-multipart uvicorn python-jose "passlib[bcrypt]" \
+            emergentintegrations openai || true
+      - name: Run ScriptMate pre-build gate
+        # Working directory for EAS Workflows is the repo root. The gate
+        # script auto-resolves ROOT from its own location.
+        working_directory: ../..
+        run: |
+          python3 scripts/prebuild_gate.py
+
   build_android_qa_apk:
     name: Build Android QA APK (preview profile)
+    needs:
+      - prebuild_gate
     type: build
     params:
       platform: android

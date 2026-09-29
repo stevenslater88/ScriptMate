@@ -1,0 +1,125 @@
+{
+  "total": 37,
+  "per_file_rule": [
+    {
+      "file": "app/dashboard.tsx",
+      "rule": "TS2551",
+      "count": 1
+    },
+    {
+      "file": "app/dialect-coach.tsx",
+      "rule": "TS2322",
+      "count": 2
+    },
+    {
+      "file": "app/index.tsx",
+      "rule": "TS2322",
+      "count": 1
+    },
+    {
+      "file": "app/recall.tsx",
+      "rule": "TS2322",
+      "count": 1
+    },
+    {
+      "file": "app/recall.tsx",
+      "rule": "TS2339",
+      "count": 1
+    },
+    {
+      "file": "app/rehearsal/[id].tsx",
+      "rule": "TS2322",
+      "count": 1
+    },
+    {
+      "file": "app/script/[id].tsx",
+      "rule": "TS1117",
+      "count": 1
+    },
+    {
+      "file": "app/script/[id].tsx",
+      "rule": "TS2345",
+      "count": 1
+    },
+    {
+      "file": "app/selftape/index.tsx",
+      "rule": "TS2339",
+      "count": 1
+    },
+    {
+      "file": "app/selftape/prep.tsx",
+      "rule": "TS2339",
+      "count": 1
+    },
+    {
+      "file": "app/selftape/prep.tsx",
+      "rule": "TS7006",
+      "count": 2
+    },
+    {
+      "file": "app/selftape/record.tsx",
+      "rule": "TS2322",
+      "count": 2
+    },
+    {
+      "file": "app/selftape/record.tsx",
+      "rule": "TS2339",
+      "count": 1
+    },
+    {
+      "file": "app/selftape/review.tsx",
+      "rule": "TS2339",
+      "count": 1
+    },
+    {
+      "file": "app/selftape/teleprompter.tsx",
+      "rule": "TS2322",
+      "count": 1
+    },
+    {
+      "file": "app/selftape/teleprompter.tsx",
+      "rule": "TS2339",
+      "count": 1
+    },
+    {
+      "file": "app/upload.tsx",
+      "rule": "TS2339",
+      "count": 3
+    },
+    {
+      "file": "app/upload.tsx",
+      "rule": "TS2345",
+      "count": 1
+    },
+    {
+      "file": "app/upload.tsx",
+      "rule": "TS7006",
+      "count": 5
+    },
+    {
+      "file": "app/voice-studio.tsx",
+      "rule": "TS2339",
+      "count": 4
+    },
+    {
+      "file": "services/auditionService.ts",
+      "rule": "TS2322",
+      "count": 1
+    },
+    {
+      "file": "services/debugLogService.ts",
+      "rule": "TS2345",
+      "count": 1
+    },
+    {
+      "file": "services/revenuecat.ts",
+      "rule": "TS2322",
+      "count": 1
+    },
+    {
+      "file": "services/voiceStudioStorage.ts",
+      "rule": "TS2339",
+      "count": 2
+    }
+  ]
+}
