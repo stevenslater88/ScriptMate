@@ -837,3 +837,98 @@ all untouched.
 ### APK
 Not built. No EAS trigger. No GitHub push. Per user directive.
 
+
+---
+
+## 2026-02 · Two physical QA defect fixes (Rehearsal scroll + intra-word spacing)
+
+### Physical trigger
+Samsung SM-S918B / Android 16 / build 1.0.47:
+- Rehearse advanced state correctly but the ScrollView did not follow
+  the highlighted line, so the "current line" drifted off-screen.
+- Imported script text showed intra-word spaces (`w ant`,
+  `unde rstand`, `isn 't`, `ne ver`, `y ou`).
+
+### Fix 1 — Rehearsal auto-scroll uses measured y (JS-only)
+`frontend/app/rehearsal/[id].tsx`:
+- Added `lineYRef = useRef<Record<number, number>>({})` next to
+  `scrollViewRef`.
+- Added `onLayout` to the mapped script-line `<View>` writing
+  `e.nativeEvent.layout.y` into `lineYRef.current[index]`.
+- Auto-scroll effect now reads `lineYRef.current[currentLineIndex]`,
+  bails safely if that y is not yet a number, and scrolls to
+  `Math.max(0, y - 80)` while preserving `animated: true` and the
+  100 ms deferral.
+- Removed the hardcoded `currentLineIndex * 80` scroll math.
+
+### Fix 2 — Smart-join dialogue fragments (backend Python only)
+`backend/server.py`:
+- Added helper `_smart_join_dialogue(fragments)` — concatenates when
+  the previous fragment ends in a letter/apostrophe/hyphen AND the
+  next starts lowercase or apostrophe; otherwise inserts one space.
+  Handles empty/single fragments safely.
+- Replaced all three `' '.join(current_text)` sites inside
+  `fallback_parse_script` (previous lines 973, 983, 998) with
+  `_smart_join_dialogue(current_text)`.
+- PyPDF2 not replaced yet, no pdfplumber added (per user directive).
+
+### Files changed
+- `frontend/app/rehearsal/[id].tsx`
+- `backend/server.py`
+- `backend/tests/test_smart_join_and_rehearsal_scroll.py` (**NEW**, 28
+  guards)
+- `backend/tests/test_script_import_latency_and_prep_teleprompter_removal.py`
+  (minor test-helper update: AST-isolated exec now also loads
+  `_smart_join_dialogue` so the existing latency guard still exercises
+  the parser)
+
+### Not changed
+Phase 3 self-tape / camera / expo-camera patch, Phase 4 Learn engine
++ storage + Hub + session + summary, FabricSafeSlider wrapper, AI
+Coming Soon section, `parse_script_with_ai`, extractors, script
+schema, RevenueCat, ElevenLabs, Sentry, paywall.
+
+### Tests
+- **NEW:** `test_smart_join_and_rehearsal_scroll.py` — **28 / 28
+  pass** covering:
+  - 5 observed intra-word fixtures (`w ant`, `unde rstand`, `isn 't`,
+    `ne ver`, `y ou`)
+  - normal word boundaries preserved (period, comma, uppercase-new-
+    sentence, hyphen-continuation)
+  - empty and single-fragment safety
+  - `fallback_parse_script` end-to-end with synthetic mid-word
+    newlines
+  - rehearsal source guards for hardcoded-stride removal, `lineYRef`
+    declaration, `onLayout` population, measured-y read, animated
+    preservation, no-measurement safe bail
+  - deterministic synthetic mixed-height scroll targets (validity,
+    monotonicity, contentSize bounds; sanity-checks the old drift)
+- `test_script_import_latency_and_prep_teleprompter_removal.py` —
+  still **passing** (2 previously-failing tests fixed via the test-
+  helper update).
+- Full guard aggregate: **294 / 294 pass** (266 previous + 28 new).
+- Runtime engine smoke: **22 / 22 pass**.
+- TypeScript on `app/rehearsal/[id].tsx`: **0 new errors**. The 1
+  pre-existing `Timeout` error line-shifted by +13 (matches the new
+  `lineYRef` declaration + doc comment) but is otherwise unchanged.
+- 18 pre-existing backend lint issues (7 of which trigger on
+  server.py post-edit): untouched per user directive.
+
+### Ship vectors
+- **Backend intra-word spacing fix (`backend/server.py`)**:
+  **Ready for the Emergent Docker backend deploy lane.** Already-
+  installed APK (1.0.47) will consume the cleaned extraction on the
+  next script import via `/api/scripts/upload-base64` +
+  `/api/scripts`. **No mobile rebuild required.** Previously-imported
+  scripts stay unchanged (no migration triggered).
+- **Rehearsal scroll fix (`frontend/app/rehearsal/[id].tsx`)**:
+  **Ready for the next single QA APK.** Because `expo-updates` is
+  not linked into the 1.0.47 build (`app.json` has
+  `updates.enabled: false` and `expo-updates` is absent from
+  dependencies), this JS-only change cannot reach the S23 Ultra via
+  OTA. The QA APK from `eas.json` profile `preview` is sufficient —
+  no production AAB needed yet.
+
+### APK / EAS / GitHub
+None triggered.
+

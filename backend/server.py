@@ -951,6 +951,44 @@ async def parse_script_with_ai(raw_text: str) -> Dict[str, Any]:
         logger.error(f"Error parsing script with AI: {e}")
         return fallback_parse_script(raw_text)
 
+def _smart_join_dialogue(fragments: list) -> str:
+    """Join dialogue fragments split across PDF/DOCX line-wraps.
+
+    Fixes intra-word spacing artefacts introduced when the extractor
+    (typically PyPDF2 on tight-kerned screenplay PDFs) breaks a single
+    word across a hard newline. When both sides of the break look
+    mid-word — the previous fragment ends with a letter, apostrophe or
+    hyphen AND the next fragment starts with a lowercase letter or an
+    apostrophe — the fragments are concatenated with no separator.
+    Otherwise a single space is inserted (normal word boundary).
+
+    Physical examples this closes (Samsung SM-S918B / Android 16, build
+    1.0.47):
+        ["I don't w", "ant this."]      -> "I don't want this."
+        ["unde", "rstand"]              -> "understand"
+        ["isn", "'t"]                   -> "isn't"
+        ["ne", "ver"]                   -> "never"
+        ["y", "ou"]                     -> "you"
+
+    Empty and single-fragment inputs are handled safely.
+    """
+    if not fragments:
+        return ""
+    out = fragments[0] or ""
+    for nxt in fragments[1:]:
+        if not out:
+            out = nxt or ""
+            continue
+        if not nxt:
+            continue
+        looks_mid_word = (
+            (out[-1].isalpha() or out[-1] in "'-")
+            and (nxt[0].islower() or nxt[0] == "'")
+        )
+        out += nxt if looks_mid_word else " " + nxt
+    return out
+
+
 def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
     """Simple fallback parser for scripts"""
     lines_data = []
@@ -970,7 +1008,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             if current_character and current_text:
                 lines_data.append({
                     "character": current_character,
-                    "text": ' '.join(current_text),
+                    "text": _smart_join_dialogue(current_text),
                     "is_stage_direction": False
                 })
             current_character = potential_char
@@ -980,7 +1018,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             if current_character and current_text:
                 lines_data.append({
                     "character": current_character,
-                    "text": ' '.join(current_text),
+                    "text": _smart_join_dialogue(current_text),
                     "is_stage_direction": False
                 })
                 current_text = []
@@ -995,7 +1033,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
     if current_character and current_text:
         lines_data.append({
             "character": current_character,
-            "text": ' '.join(current_text),
+            "text": _smart_join_dialogue(current_text),
             "is_stage_direction": False
         })
     

@@ -205,6 +205,19 @@ export default function RehearsalScreen() {
 
   const scrollViewRef = useRef<ScrollView>(null);
 
+  /**
+   * Measured y-offset per rendered script line, populated lazily by
+   * each `<View onLayout>` in the ScrollView below. Replaces the old
+   * hardcoded `currentLineIndex * 80` scroll math which assumed a
+   * fixed 80 px per row — rendered lines are actually variable height
+   * (short single-line dialogue ≈ 51 px, long wrapped dialogue ≈ 83+
+   * px, stage direction ≈ 36 px), so the fixed-stride assumption
+   * cumulatively drifted the highlight off-screen after a handful of
+   * advances on the Samsung S23 Ultra QA runs. Measured y is the
+   * ground truth.
+   */
+  const lineYRef = useRef<Record<number, number>>({});
+
   // Pulse animation for listening indicator
   useEffect(() => {
     if (isListening) {
@@ -1053,13 +1066,17 @@ export default function RehearsalScreen() {
     }
   };
 
-  // Auto-scroll to current line
+  // Auto-scroll to current line using measured y positions.
+  // Skip safely if the line hasn't reported its layout yet — the next
+  // render pass will fire onLayout and this effect will re-run.
   useEffect(() => {
-    if (scrollViewRef.current && currentLineIndex > 0) {
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({ y: currentLineIndex * 80, animated: true });
-      }, 100);
-    }
+    if (!scrollViewRef.current || currentLineIndex <= 0) return;
+    const y = lineYRef.current[currentLineIndex];
+    if (typeof y !== 'number') return;
+    const target = Math.max(0, y - 80);
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: target, animated: true });
+    }, 100);
   }, [currentLineIndex]);
 
   if (loading) {
@@ -1415,6 +1432,10 @@ export default function RehearsalScreen() {
           {lines.map((line, index) => (
             <View
               key={line.id}
+              onLayout={(e) => {
+                // Ground truth for the auto-scroll effect above.
+                lineYRef.current[index] = e.nativeEvent.layout.y;
+              }}
               style={[
                 styles.scriptLine,
                 index === currentLineIndex && styles.scriptLineCurrent,
