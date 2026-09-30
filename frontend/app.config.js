@@ -22,9 +22,17 @@ const SENTRY_DSN =
   process.env.EXPO_PUBLIC_SENTRY_DSN ||
   'https://141660e463cc23c1c29fef7403bcb3d6@o4510914410840064.ingest.de.sentry.io/4510914414116944';
 
+// ElevenLabs API keys begin with `sk_`. A 64-char hex value is the
+// API-key ID (NOT the key) and produces HTTP 400 invalid_api_key on
+// every synthesis request. There is NO safe hard-coded fallback — if
+// EXPO_PUBLIC_ELEVENLABS_API_KEY is not exported to the prebuild
+// environment, we intentionally emit an empty string so the strict
+// validator in services/appConfig.ts + services/elevenLabsService.ts
+// treats ElevenLabs as UNAVAILABLE. The rehearsal falls back to
+// expo-speech cleanly and the on-device diagnostic reports the
+// misconfiguration precisely.
 const ELEVENLABS_API_KEY =
-  process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY ||
-  'c73f5731f01c8a7070b87d37254eaa611b68c803168c0d0999654b3bc1becbeb';
+  process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY || '';
 
 module.exports = ({ config }) => {
   // Log during prebuild so we can verify in the build logs
@@ -33,7 +41,16 @@ module.exports = ({ config }) => {
   console.log(`  RC_GOOGLE: ${REVENUECAT_GOOGLE_API_KEY.substring(0, 5)}***`);
   console.log(`  RC_APPLE: ${REVENUECAT_APPLE_API_KEY.substring(0, 5)}***`);
   console.log(`  SENTRY: ${SENTRY_DSN ? 'Set' : 'MISSING'}`);
-  console.log(`  ELEVENLABS: ${ELEVENLABS_API_KEY ? 'Set' : 'MISSING'}`);
+  // ElevenLabs credential shape check at prebuild time. Never logs
+  // the value itself. If the value is present but lacks the `sk_`
+  // prefix, this line prints INVALID_FORMAT so the build log flags
+  // the misconfiguration BEFORE the APK ships.
+  const elFormat = !ELEVENLABS_API_KEY
+    ? 'MISSING'
+    : ELEVENLABS_API_KEY.startsWith('sk_') && ELEVENLABS_API_KEY.length >= 20
+      ? `Set (sk_ ok, len=${ELEVENLABS_API_KEY.length})`
+      : `INVALID_FORMAT (len=${ELEVENLABS_API_KEY.length}, prefix ok=${ELEVENLABS_API_KEY.startsWith('sk_')})`;
+  console.log(`  ELEVENLABS: ${elFormat}`);
 
   return {
     ...config,
