@@ -8,7 +8,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+// SDK 54: `documentDirectory` / `EncodingType` moved to the legacy
+// submodule. The bare import returns undefined for those constants,
+// which broke every Voice Studio save on Android (see 2026-02 QA).
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -18,6 +21,7 @@ import {
   DemoReel, saveReel, getReels, deleteReel,
 } from '../services/voiceStudioStorage';
 import { WATERMARK_TEXT, WATERMARK_SUBTEXT } from '../services/watermarkService';
+import { useScriptStore, type Script } from '../store/scriptStore';
 
 import { API_BASE_URL } from '../services/apiConfig';
 
@@ -64,11 +68,26 @@ export default function VoiceStudioScreen() {
   // Error state
   const [loadError, setLoadError] = useState(false);
 
+  // Script material state — lets the actor read a saved script while
+  // recording. Purely optional; a bare voice-over is still supported.
+  // See services/voiceStudioStorage.ts::saveTake which already accepts
+  // scriptId / scriptTitle metadata — this UI wires them in.
+  const { scripts, fetchScripts } = useScriptStore();
+  const [selectedScript, setSelectedScript] = useState<Script | null>(null);
+  const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
+  const [showScriptPicker, setShowScriptPicker] = useState(false);
+  // Index of the "current" line the actor is on. Advanced manually with
+  // Prev/Next buttons; also used to visually highlight the active line.
+  const [activeLineIndex, setActiveLineIndex] = useState(0);
+
   // Animation refs
   const barAnims = useRef(new Array(BAR_COUNT).fill(0).map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
     loadData();
+    // Fetch the user's saved scripts so the picker has real material.
+    // Non-blocking: an empty scripts list is handled gracefully below.
+    fetchScripts().catch(() => { /* handled via store error state */ });
     return () => {
       try { sound?.unloadAsync(); } catch (_) { /* already unloaded */ }
     };
@@ -193,8 +212,17 @@ export default function VoiceStudioScreen() {
       }
 
       const takeNum = takes.length + 1;
-      const name = `Take ${takeNum}`;
-      const take = await saveTake(uri, name, recDuration);
+      const scriptSuffix = selectedScript
+        ? ` — ${selectedScript.title.slice(0, 30)}${selectedCharacter ? ` (${selectedCharacter})` : ''}`
+        : '';
+      const name = `Take ${takeNum}${scriptSuffix}`;
+      const take = await saveTake(
+        uri,
+        name,
+        recDuration,
+        selectedScript?.id,
+        selectedScript?.title,
+      );
       setTakes(prev => [take, ...prev]);
       setActiveTab('takes');
       Alert.alert('Saved!', `"${name}" saved (${formatDuration(recDuration)})`);
@@ -475,6 +503,166 @@ export default function VoiceStudioScreen() {
       {/* ====== RECORD TAB ====== */}
       {activeTab === 'record' && (
         <ScrollView contentContainerStyle={styles.tabContent}>
+          {/* Script material picker + on-screen script view.
+              Independent of recording — the actor can pick material,
+              start recording, and scroll/highlight lines while their
+              voice is being captured. Empty script list is handled
+              gracefully via the "Choose from library" affordance. */}
+          <View style={styles.scriptPickerRow} data-testid="script-picker-row">
+            {selectedScript ? (
+              <View style={{ flex: 1 }}>
+                <Text style={styles.scriptPickerLabel}>Reading</Text>
+                <Text style={styles.scriptPickerTitle} numberOfLines={1}>
+                  {selectedScript.title}
+                  {selectedCharacter ? ` — ${selectedCharacter}` : ''}
+                </Text>
+              </View>
+            ) : (
+              <View style={{ flex: 1 }}>
+                <Text style={styles.scriptPickerLabel}>Optional</Text>
+                <Text style={styles.scriptPickerTitle} numberOfLines={1}>
+                  No script selected
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.scriptPickerBtn}
+              onPress={() => setShowScriptPicker(true)}
+              data-testid="choose-script-btn"
+            >
+              <Ionicons name="library" size={16} color="#fff" />
+              <Text style={styles.scriptPickerBtnText}>
+                {selectedScript ? 'Change' : 'Choose Script'}
+              </Text>
+            </TouchableOpacity>
+            {selectedScript && (
+              <TouchableOpacity
+                style={styles.scriptClearBtn}
+                onPress={() => {
+                  setSelectedScript(null);
+                  setSelectedCharacter(null);
+                  setActiveLineIndex(0);
+                }}
+                data-testid="clear-script-btn"
+              >
+                <Ionicons name="close-circle" size={22} color="#6b7280" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Character chips — visible only when a script is selected
+              and it exposes characters (screenplay-parsed scripts do). */}
+          {selectedScript && selectedScript.characters && selectedScript.characters.length > 0 && (
+            <View style={styles.characterChips} data-testid="voice-studio-character-chips">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <TouchableOpacity
+                  style={[
+                    styles.charChip,
+                    selectedCharacter === null && styles.charChipActive,
+                  ]}
+                  onPress={() => setSelectedCharacter(null)}
+                  data-testid="char-chip-all"
+                >
+                  <Text style={[
+                    styles.charChipText,
+                    selectedCharacter === null && styles.charChipTextActive,
+                  ]}>All lines</Text>
+                </TouchableOpacity>
+                {selectedScript.characters.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[
+                      styles.charChip,
+                      selectedCharacter === c.name && styles.charChipActive,
+                    ]}
+                    onPress={() => { setSelectedCharacter(c.name); setActiveLineIndex(0); }}
+                    data-testid={`char-chip-${c.name}`}
+                  >
+                    <Text style={[
+                      styles.charChipText,
+                      selectedCharacter === c.name && styles.charChipTextActive,
+                    ]}>{c.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Script view — read-only, scrollable. Highlights the current
+              active line so the actor knows where they are. Only rendered
+              when a script is selected and has dialogue lines. */}
+          {selectedScript && selectedScript.lines && selectedScript.lines.length > 0 && (() => {
+            const displayLines = selectedCharacter
+              ? selectedScript.lines.filter(
+                  (ln) => ln.character === selectedCharacter && !ln.is_stage_direction,
+                )
+              : selectedScript.lines;
+            const safeIndex = Math.min(activeLineIndex, Math.max(0, displayLines.length - 1));
+            return (
+              <View style={styles.scriptPanel} data-testid="voice-studio-script-panel">
+                <ScrollView style={styles.scriptScroll} nestedScrollEnabled>
+                  {displayLines.map((line, i) => {
+                    const isActive = i === safeIndex;
+                    const isDirection = line.is_stage_direction;
+                    return (
+                      <View
+                        key={line.id}
+                        style={[
+                          styles.scriptLine,
+                          isActive && styles.scriptLineActive,
+                        ]}
+                        data-testid={isActive ? 'active-script-line' : undefined}
+                      >
+                        {!isDirection && (
+                          <Text style={[
+                            styles.scriptLineChar,
+                            isActive && styles.scriptLineCharActive,
+                          ]}>{line.character}</Text>
+                        )}
+                        <Text style={[
+                          styles.scriptLineText,
+                          isDirection && styles.scriptLineDirection,
+                          isActive && styles.scriptLineTextActive,
+                        ]}>{line.text}</Text>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+                <View style={styles.scriptNavRow}>
+                  <TouchableOpacity
+                    style={styles.scriptNavBtn}
+                    onPress={() => setActiveLineIndex((i) => Math.max(0, i - 1))}
+                    disabled={safeIndex === 0}
+                    data-testid="prev-line-btn"
+                  >
+                    <Ionicons name="chevron-back" size={18}
+                      color={safeIndex === 0 ? '#374151' : '#fff'} />
+                    <Text style={[
+                      styles.scriptNavText,
+                      safeIndex === 0 && { color: '#374151' },
+                    ]}>Prev</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.scriptNavCount}>
+                    Line {safeIndex + 1} / {displayLines.length}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.scriptNavBtn}
+                    onPress={() => setActiveLineIndex((i) => Math.min(displayLines.length - 1, i + 1))}
+                    disabled={safeIndex >= displayLines.length - 1}
+                    data-testid="next-line-btn"
+                  >
+                    <Text style={[
+                      styles.scriptNavText,
+                      safeIndex >= displayLines.length - 1 && { color: '#374151' },
+                    ]}>Next</Text>
+                    <Ionicons name="chevron-forward" size={18}
+                      color={safeIndex >= displayLines.length - 1 ? '#374151' : '#fff'} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })()}
+
           {/* Waveform */}
           <View style={styles.waveformContainer}>
             <View style={styles.waveformBars}>
@@ -903,6 +1091,80 @@ export default function VoiceStudioScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Script picker modal — lists user's saved scripts. Handles the
+          empty state ("no scripts yet") with a helpful CTA. */}
+      <Modal
+        visible={showScriptPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowScriptPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent} data-testid="script-picker-modal">
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Choose a script</Text>
+              <TouchableOpacity
+                onPress={() => setShowScriptPicker(false)}
+                data-testid="script-picker-close"
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            {scripts.length === 0 ? (
+              <View style={styles.emptyState} data-testid="script-picker-empty">
+                <Ionicons name="document-text-outline" size={40} color="#374151" />
+                <Text style={styles.emptyTitle}>No scripts yet</Text>
+                <Text style={styles.emptyDesc}>
+                  Import a script from the Library first, then come back to
+                  record with it on screen.
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyBtn}
+                  onPress={() => {
+                    setShowScriptPicker(false);
+                    router.push('/scripts');
+                  }}
+                  data-testid="script-picker-goto-library"
+                >
+                  <Ionicons name="library" size={18} color="#fff" />
+                  <Text style={styles.emptyBtnText}>Open Library</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <FlatList
+                data={scripts}
+                keyExtractor={(s) => s.id}
+                contentContainerStyle={{ paddingBottom: 24 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.scriptPickerItem}
+                    onPress={() => {
+                      setSelectedScript(item);
+                      setSelectedCharacter(null);
+                      setActiveLineIndex(0);
+                      setShowScriptPicker(false);
+                    }}
+                    data-testid={`script-picker-item-${item.id}`}
+                  >
+                    <Ionicons name="document-text" size={22} color="#6366f1" />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={styles.scriptPickerItemTitle} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.scriptPickerItemMeta}>
+                        {item.characters?.length ?? 0} characters ·{' '}
+                        {item.lines?.length ?? 0} lines
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1092,4 +1354,58 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: 'rgba(245, 158, 11, 0.2)',
   },
   errorBannerText: { fontSize: 13, color: '#f59e0b', fontWeight: '500' },
+
+  // Script material — picker row, character chips, on-screen script.
+  scriptPickerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14,
+    marginBottom: 12, borderWidth: 1, borderColor: '#2a2a3e',
+  },
+  scriptPickerLabel: { fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.4 },
+  scriptPickerTitle: { fontSize: 15, fontWeight: '600', color: '#fff', marginTop: 2 },
+  scriptPickerBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#6366f1', paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 10,
+  },
+  scriptPickerBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
+  scriptClearBtn: { paddingLeft: 4 },
+  characterChips: { marginBottom: 12 },
+  charChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: '#1a1a2e', borderWidth: 1, borderColor: '#2a2a3e',
+    marginRight: 8,
+  },
+  charChipActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
+  charChipText: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
+  charChipTextActive: { color: '#fff', fontWeight: '700' },
+  scriptPanel: {
+    backgroundColor: '#0f0f1a', borderRadius: 12, marginBottom: 16,
+    borderWidth: 1, borderColor: '#2a2a3e', overflow: 'hidden',
+  },
+  scriptScroll: { maxHeight: 220, padding: 12 },
+  scriptLine: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, marginBottom: 4 },
+  scriptLineActive: { backgroundColor: 'rgba(99, 102, 241, 0.15)', borderLeftWidth: 3, borderLeftColor: '#6366f1' },
+  scriptLineChar: { fontSize: 11, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  scriptLineCharActive: { color: '#818cf8' },
+  scriptLineText: { fontSize: 14, color: '#d1d5db', lineHeight: 20 },
+  scriptLineTextActive: { color: '#fff', fontWeight: '500' },
+  scriptLineDirection: { fontStyle: 'italic', color: '#6b7280' },
+  scriptNavRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: 10, borderTopWidth: 1, borderTopColor: '#2a2a3e', backgroundColor: '#151520',
+  },
+  scriptNavBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6,
+  },
+  scriptNavText: { fontSize: 13, color: '#fff', fontWeight: '600' },
+  scriptNavCount: { fontSize: 12, color: '#9ca3af' },
+  scriptPickerItem: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14, marginBottom: 8,
+    borderWidth: 1, borderColor: '#2a2a3e',
+  },
+  scriptPickerItemTitle: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  scriptPickerItemMeta: { fontSize: 12, color: '#6b7280', marginTop: 2 },
 });

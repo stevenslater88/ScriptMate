@@ -59,6 +59,52 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 
 ## Changelog
 
+### 2026-02 — Voice Studio: SDK 54 legacy-import fix + script-on-screen recording
+
+Physical QA build 1.0.57 reported Voice Studio failing on Android. Trace pinpointed the crash: SDK 54 moved `documentDirectory` and `EncodingType` to `expo-file-system/legacy`; the bare `import * as FileSystem from 'expo-file-system'` returned `undefined`, so `ensureDir()` immediately threw `"documentDirectory is not available"` the moment the actor tried to save any recording. The 5 pre-existing TypeScript baseline errors on `app/voice-studio.tsx:310/378/382` and `services/voiceStudioStorage.ts:4/30` were direct static-analysis evidence of the same regression.
+
+**Root-cause fix (2 files, 1 import change each):**
+- `frontend/services/voiceStudioStorage.ts` — `import * as FileSystem from 'expo-file-system'` → `import * as FileSystem from 'expo-file-system/legacy'`. All downstream calls (`documentDirectory`, `getInfoAsync`, `makeDirectoryAsync`, `copyAsync`, `deleteAsync`) present in the legacy module unchanged.
+- `frontend/app/voice-studio.tsx` — same import switch.
+
+**New capability — script-on-screen recording** (additive, per your requirements):
+- `frontend/app/voice-studio.tsx`:
+  - Consumes `useScriptStore` for the user's saved scripts (same source used by Library/Rehearsal — no duplication).
+  - On the Record tab: new **"Choose Script"** picker row (`testID=choose-script-btn`) + optional character chip strip (`char-chip-all`, `char-chip-<NAME>`) + on-screen script panel (`voice-studio-script-panel`) with active-line highlight (`active-script-line`) and Prev/Next navigation (`prev-line-btn`, `next-line-btn`).
+  - New picker Modal (`script-picker-modal`) listing saved scripts; empty state (`script-picker-empty`) offers a deep link to `/scripts` (Library).
+  - `saveTake(uri, name, recDuration, selectedScript?.id, selectedScript?.title)` — the storage API already accepted these optional fields; this UI now wires them in and augments the take name (`Take 3 — Hamlet Act I (JULIET)`).
+- Existing recording flow untouched: `start-record-btn`, `stop-record-btn`, `pause-resume-btn`, `play-take-<id>` all preserved.
+- **No new audio dependency** — continues to use `expo-av` `Audio.Recording`.
+- **No new premium gate** — entitlement is enforced upstream at the Library entry / RevenueCat layer; this screen change is orthogonal.
+- Empty script list handled gracefully; a bare voice-over (no script) still works exactly as before.
+
+**Regression tests — `backend/tests/test_voice_studio_script_on_screen_feb2026.py` (23 static assertions):**
+- Legacy import present in both files; the broken bare import removed.
+- `documentDirectory is not available` guard-rail preserved (any future SDK regression will fail loudly).
+- Route registered; mount-time `loadData()` and `fetchScripts()` invoked; error banner + retry present.
+- Script picker UI: `script-picker-row`, `choose-script-btn`, `script-picker-modal`, empty-state CTA to `/scripts`.
+- `useScriptStore` is the data source; per-character filter excludes stage directions.
+- Script panel appears BEFORE the waveform (additive, not replacing recording controls).
+- `saveTake` invoked with `selectedScript?.id + selectedScript?.title`; take name includes truncated title + character.
+- Entitlement/premium symbols NOT introduced in the screen (no bypass or duplicate gate).
+- Storage `VoiceTake` interface retains `scriptId? / scriptTitle?` fields; `saveTake` signature unchanged externally.
+- No new audio-recorder / voice-recognition dependency (`react-native-audio*`, `react-native-sound`, `@react-native-community/voice`, etc.); `expo-av` still the recording engine.
+- UI consistency check (SafeAreaView + Ionicons matching Rehearsal / Self-Tape).
+
+**Pre-build gate result (post-fix):**
+```
+Tests:             PASS — 671 passed, 0 failed, 0 errors   (+23 vs previous)
+Runtime smoke:     PASS — 18 ok, 0 fail
+TypeScript:        PASS — 31 baseline error(s), 0 new (was 37; -6 = the voice-studio ones)
+Lint regression:   PASS (baseline-only) — 327 baseline finding(s), 0 new
+Dependencies:      PASS
+Overall:           GREEN
+```
+
+**Scope guarantees:** no changes to Phase 3 / Phase 4 / Rehearsal / Learn / Recall / Daily Drill / RevenueCat / Sentry / DOCX parser. No `package.json` / `requirements.txt` / `yarn.lock` change. 18 baseline backend lint issues untouched.
+
+**APK required for physical validation:** YES — this is a runtime import path change that only takes effect on device after the next APK is installed.
+
 ### 2026-02 — "END OF SCREENPLAY" false-character fix (post-QA finding)
 
 Physical S23 Ultra QA reported the character list on `ScriptScreen` contained the terminator `END OF SCREENPLAY` alongside real characters (`JACK`, `DET. HARRIS`). This was a parser-side false positive.

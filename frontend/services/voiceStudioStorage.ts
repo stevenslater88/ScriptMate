@@ -1,4 +1,13 @@
-import * as FileSystem from 'expo-file-system';
+// expo-file-system SDK 54 split its API into a new module and a
+// `legacy` submodule. The top-level `import * as FileSystem from
+// 'expo-file-system'` no longer exposes `documentDirectory`,
+// `EncodingType`, `getInfoAsync`, `makeDirectoryAsync`, etc. — they
+// live under `expo-file-system/legacy`. On the physical device this
+// caused every Voice Studio save to fail with "documentDirectory is
+// not available" (see `ensureDir` below). Switching to the legacy
+// import restores the exact same API surface without a dependency
+// change or lockfile change.
+import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const VOICE_DIR = `${FileSystem.documentDirectory}voice-studio/`;
