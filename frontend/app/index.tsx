@@ -129,20 +129,29 @@ export default function HomeScreen() {
           <Text style={st.heroSub} numberOfLines={1}>{recent ? recent.title : 'Select a script to begin'}</Text>
         </TouchableOpacity>
 
-        {/* ─── 4-TOOL GRID — Self Tape, New Script, Recall, My Scripts ─── */}
+        {/* ─── 6-TOOL GRID (3 cols × 2 rows) — Self Tape, Voice Studio,
+                  New Script, My Scripts, Recall, Auditions ─── */}
         {/*
-          NOTE (2026-02): "Acting Coach" and "Dialect Coach" tiles were
-          removed from the primary grid because those features are now
-          part of the "ScriptMate AI · Coming Soon" roadmap section
-          below. The underlying routes (`/acting-coach`,
-          `/dialect-coach`) still exist for deeplinks and profile
-          entries, but they are no longer surfaced as primary CTAs.
+          NOTE (2026-02 reconciliation): Voice Studio + Auditions were
+          promoted OUT of the "More" section into the primary actor-tool
+          grid. Rationale: both are core acting workflows and were being
+          under-surfaced beneath the More header. The underlying routes
+          (`/voice-studio`, `/auditions`) are unchanged.
+
+          Earlier note (2026-02): "Acting Coach" and "Dialect Coach" tiles
+          were removed from the primary grid because those features are
+          now part of the "ScriptMate AI · Coming Soon" roadmap section
+          below. The underlying routes (`/acting-coach`, `/dialect-coach`)
+          still exist for deep-links and profile entries, but they are no
+          longer surfaced as primary CTAs.
         */}
-        <View style={st.grid4}>
-          <ToolCard icon="videocam"   color="#ef4444" label="Self Tape"     route="/selftape"        testId="selftape-btn" />
-          <ToolCard icon="add-circle" color="#10b981" label="New Script"    route="/script-parser"   testId="new-script-btn" />
-          <ToolCard icon="bulb"       color="#f59e0b" label="Recall"        route="/recall"          testId="recall-btn" />
-          <ToolCard icon="library"    color="#6366f1" label="My Scripts"    route="/scripts"         testId="my-scripts-btn" />
+        <View style={st.grid3x2}>
+          <ToolCard icon="videocam"    color="#ef4444" label="Self Tape"     route="/selftape"      testId="selftape-btn" />
+          <ToolCard icon="mic-circle"  color="#6366f1" label="Voice Studio"  route="/voice-studio"  testId="voice-studio-btn" />
+          <ToolCard icon="add-circle"  color="#10b981" label="New Script"    route="/script-parser" testId="new-script-btn" />
+          <ToolCard icon="library"     color="#8b5cf6" label="My Scripts"    route="/scripts"       testId="my-scripts-btn" />
+          <ToolCard icon="bulb"        color="#f59e0b" label="Recall"        route="/recall"        testId="recall-btn" />
+          <ToolCard icon="calendar"    color="#0ea5e9" label="Auditions"     route="/auditions"     testId="auditions-btn" />
         </View>
 
         {/* ─── DAILY DRILL ─── */}
@@ -160,16 +169,17 @@ export default function HomeScreen() {
         <AIComingSoonSection />
 
         {/* ─── MORE TOOLS ─── */}
-        {/* 2026-02 cleanup: the standalone "Upload Script" NavRow was
-            removed because script importing (PDF / DOCX / TXT) is
-            already available through the "New Script" tool tile above,
-            which routes to `/script-parser`. The `/upload` route +
-            `app/upload.tsx` are intentionally KEPT for deep-links and
-            programmatic navigation, so the underlying import/upload
-            functionality is unchanged. */}
+        {/*
+          2026-02 reconciliation: Voice Studio + Auditions were promoted
+          into the primary grid above (they are core acting workflows).
+          The standalone "Upload Script" NavRow was also removed here
+          because script importing (PDF / DOCX / TXT) is already
+          available through the "New Script" tool tile above, which
+          routes to `/script-parser`. The `/upload` route +
+          `app/upload.tsx` are intentionally KEPT for deep-links and
+          programmatic navigation, so the underlying import/upload
+          functionality is unchanged. */}
         <Text style={st.secLabel}>More</Text>
-        <NavRow icon="mic-circle"   color="#6366f1" title="Voice Studio"     sub="Record & build demo reels" route="/voice-studio" testId="voice-studio-row" />
-        <NavRow icon="calendar"     color="#f59e0b" title="Auditions"        sub="Track your submissions"   route="/auditions"    testId="auditions-row" />
         <NavRow icon="bar-chart"    color="#10b981" title="Dashboard"        sub="Progress & stats"         route="/dashboard"    testId="dashboard-row" />
         <NavRow icon="help-circle"  color="#6b7280" title="Support"          route="/support"               testId="support-row" />
 
@@ -250,8 +260,15 @@ const st = StyleSheet.create({
   heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
 
   // 4-tool grid
+  // 2026-02 reconciliation: 3-cols × 2-rows grid for the 6 primary
+  // actor tools (Self Tape · Voice Studio / New Script · My Scripts /
+  // Recall · Auditions). ~31% width lets three tiles sit per row with
+  // the same 10px gap the old 2×2 grid used. `toolCard` retains
+  // `flexGrow: 1` so the last row still stretches full-width if a
+  // reshuffle drops a tile.
+  grid3x2: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
   grid4: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
-  toolCard: { width: '48%', flexGrow: 1, backgroundColor: CARD_BG, borderRadius: 16, padding: 18, alignItems: 'center', borderWidth: 1, borderColor: BORDER },
+  toolCard: { width: '31%', flexGrow: 1, backgroundColor: CARD_BG, borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: BORDER },
   toolIc: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   toolLabel: { fontSize: 13, fontWeight: '700', color: '#fff', textAlign: 'center' },
 

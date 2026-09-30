@@ -59,6 +59,38 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 
 ## Changelog
 
+### 2026-02 — Home layout reconciliation + Voice Assignment functional lock
+
+Physical QA of APK 1110 (v1.0.59, versionCode 1095) confirmed all prior Feb-2026 code (Reader Style + Voice Speed + Multi-Voice wiring, Voice Studio SDK-54 fix + script picker, DOCX / END-OF-SCREENPLAY parser, Daily Drill UX, Home Upload removal, AI Coming Soon section) shipped correctly — but Voice Studio still appeared under "More" because the Home 3×2 grid change had never been implemented.
+
+**Root cause of the source/build mismatch:** the Home grid promotion of Voice Studio + Auditions was requested but never authored in a previous cycle. Reader Style + Voice Speed + Multi-Voice work committed in earlier prompts was correct and present; only the Home layout piece was missing.
+
+**Files changed (this reconciliation):**
+- `frontend/app/index.tsx`:
+  - Replaced `<View style={st.grid4}>` (4-tile 2×2) with `<View style={st.grid3x2}>` (6-tile 3×2). Order: `Self Tape · Voice Studio · New Script / My Scripts · Recall · Auditions`.
+  - Added `st.grid3x2` style (`width: '31%'` tiles, 10 px gap, same borders/padding as before).
+  - Kept `st.grid4` rule for stylistic parity (unreferenced by any JSX site now; a static test asserts this).
+  - Shrunk the More section from 4 rows → 2 (Dashboard, Support only). Voice Studio + Auditions promoted out of More; Upload Script stays removed from the previous cleanup.
+- `backend/tests/test_ai_coming_soon_ui.py`: `test_home_4_tool_grid_still_has_four_tools` renamed to `test_home_primary_grid_now_has_six_tools` and rewritten to assert the 3×2 shape.
+- `backend/tests/test_home_more_upload_removed_feb2026.py`: updated `REQUIRED_HOME_NAV_ENTRIES` to reflect the new grid; `test_more_section_now_contains_exactly_four_navrows` → `_two_navrows`.
+- `backend/tests/test_home_layout_reconciliation_feb2026.py` (**new** — 15 tests): full layout contract locker — Quick Rehearse hero, 3×2 grid with exact tile order, Voice Studio + Auditions promoted to `<ToolCard>`, More shrunk, AI Coming Soon rendered with all 5 items, `/upload` deep-link route preserved, Reader Style + Multi-Voice + Voice Studio picker still intact, Scene Partner untouched.
+- `backend/tests/test_voice_assignment_functional_feb2026.py` (**new** — 14 tests): locks the Voice Assignment / Change Voice functional contract — UI still lets users change per-character voices, `saveVoiceAssignments` persists to the unchanged `script_voice_settings` AsyncStorage key, preview button still uses `playSpeech`, rehearsal resolves each line's character against the map and calls `playSpeech(text, assignment.voiceId)` (never a hardcoded/global voice), catalogue fields `key/name/voiceId/gender/description` preserved, fallback to `Speech.speak(...)` when ElevenLabs isn't configured or a character has no assignment, and the `useElevenLabs` branch condition requires all three of `elevenLabsAvailable && !!assignment && !!assignment.voiceId`.
+- `scripts/prebuild_gate.py`: both new files registered in `STATIC_REGRESSION_TESTS`.
+
+**Zero diff on:** `backend/server.py`, `frontend/app/rehearsal/[id].tsx`, `frontend/app/script/[id].tsx`, `frontend/store/scriptStore.ts`, `frontend/services/elevenLabsService.ts`, `frontend/components/VoiceAssignment.tsx`, `frontend/services/voiceStudioStorage.ts`, `frontend/app/voice-studio.tsx`, `frontend/app/scene-partner.tsx` — the reconciliation is layout-only and leaves every earlier Feb-2026 wiring in place.
+
+**Pre-build gate result:**
+```
+Tests:             PASS — 745 passed, 0 failed, 0 errors   (+29 vs previous 716)
+Runtime smoke:     PASS — 18 ok, 0 fail
+TypeScript:        PASS — 31 baseline error(s), 0 new (baseline expects 37)
+Lint regression:   PASS (baseline-only) — 327 baseline finding(s), 0 new
+Dependencies:      PASS
+Overall:           GREEN, exit 0
+```
+
+**Confirmation:** all required Home, Voice Studio, Reader Style, Voice Speed, Multi-Voice, Voice Assignment, and Coming Soon changes are present together in the current `main` source. The 18 baseline backend lint issues remain untouched.
+
 ### 2026-02 — Reader Style + Multi-Voice wired into Rehearsal playback
 
 Physical QA audit proved two voice controls were UI-only. Fixed both with the minimum-scope wiring described below. Scene Partner Reader Style + Cue Timing (which the audit proved already worked) intentionally untouched.

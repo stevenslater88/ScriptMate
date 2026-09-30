@@ -142,16 +142,17 @@ def test_my_scripts_tile_present_and_routes_to_scripts():
 
 
 REQUIRED_HOME_NAV_ENTRIES = [
-    # 4-tool grid
-    ('testId="selftape-btn"',    'route="/selftape"'),
-    ('testId="new-script-btn"',  'route="/script-parser"'),
-    ('testId="recall-btn"',      'route="/recall"'),
-    ('testId="my-scripts-btn"',  'route="/scripts"'),
-    # More section (post-cleanup)
-    ('testId="voice-studio-row"', 'route="/voice-studio"'),
-    ('testId="auditions-row"',    'route="/auditions"'),
-    ('testId="dashboard-row"',    'route="/dashboard"'),
-    ('testId="support-row"',      'route="/support"'),
+    # 3×2 primary actor-tool grid (2026-02 reconciliation).
+    ('testId="selftape-btn"',      'route="/selftape"'),
+    ('testId="voice-studio-btn"',  'route="/voice-studio"'),
+    ('testId="new-script-btn"',    'route="/script-parser"'),
+    ('testId="my-scripts-btn"',    'route="/scripts"'),
+    ('testId="recall-btn"',        'route="/recall"'),
+    ('testId="auditions-btn"',     'route="/auditions"'),
+    # More section (post-reconciliation — Voice Studio + Auditions moved
+    # into the primary grid; only Dashboard + Support remain here).
+    ('testId="dashboard-row"',     'route="/dashboard"'),
+    ('testId="support-row"',       'route="/support"'),
 ]
 
 
@@ -183,20 +184,18 @@ def test_streak_pill_still_navigates_to_daily_drill():
 # ─── 6. STRUCTURAL GUARD — MORE SECTION HAS EXACTLY 4 ROWS ──────────────
 
 
-def test_more_section_now_contains_exactly_four_navrows():
-    """After removing the redundant upload entry, the More section
-    must contain exactly 4 NavRow entries: Voice Studio, Auditions,
-    Dashboard, Support. A stray 5th (e.g. an accidentally re-added
-    upload row) would fail this test."""
+def test_more_section_now_contains_exactly_two_navrows():
+    """After the 2026-02 reconciliation, Voice Studio + Auditions were
+    promoted into the primary 3×2 grid, so the More section must
+    contain exactly 2 NavRow entries: Dashboard, Support. A stray 3rd
+    (e.g. the accidentally re-added upload row, or a re-demoted Voice
+    Studio) would fail this test."""
     src = _index()
-    # Find the "More" section header and count NavRow occurrences after it.
     more_pos = src.find("─── MORE TOOLS ───")
     assert more_pos != -1, "'MORE TOOLS' section marker not found"
     after_more = src[more_pos:]
-    # Count NavRow entries in the tail (there are no other NavRow calls
-    # after the More section in this file).
     nav_rows = re.findall(r"<NavRow\b", after_more)
-    assert len(nav_rows) == 4, (
-        f"expected exactly 4 NavRow entries in the More section, "
+    assert len(nav_rows) == 2, (
+        f"expected exactly 2 NavRow entries in the More section, "
         f"found {len(nav_rows)}"
     )

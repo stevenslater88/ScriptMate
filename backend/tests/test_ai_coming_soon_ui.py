@@ -193,19 +193,20 @@ def test_home_no_longer_primary_ctas_to_ai_routes(index_src: str) -> None:
     ), "Home still routes a ToolCard to /dialect-coach — must be removed."
 
 
-def test_home_4_tool_grid_still_has_four_tools(index_src: str) -> None:
-    """Grid shape preserved: still exactly 4 ToolCards on the home
-    grid. This is UX continuity — we replaced Acting/Dialect Coach
-    with Recall + My Scripts (which were previously in a separate row)."""
+def test_home_primary_grid_now_has_six_tools(index_src: str) -> None:
+    """2026-02 reconciliation: the primary actor-tool grid was
+    expanded from 2×2 (4 tiles) to 3×2 (6 tiles) — Voice Studio and
+    Auditions were promoted out of More into the grid. This test
+    tracks the NEW authoritative shape."""
     m = re.search(
-        r"<View style=\{st\.grid4\}>([\s\S]*?)</View>",
+        r"<View style=\{st\.grid3x2\}>([\s\S]*?)</View>",
         index_src,
     )
-    assert m, "4-tool grid <View style={st.grid4}> not found on Home."
+    assert m, "3×2 primary grid <View style={st.grid3x2}> not found on Home."
     grid_body = m.group(1)
     tool_count = grid_body.count("<ToolCard")
-    assert tool_count == 4, (
-        f"Home 4-tool grid must contain exactly 4 ToolCards; found {tool_count}."
+    assert tool_count == 6, (
+        f"Home primary grid must contain exactly 6 ToolCards; found {tool_count}."
     )
 
 
