@@ -1,0 +1,22 @@
+{
+  "summary": "Backend-only contract verification for SCRIPT M8 voice pipeline fix. All 6 targeted tests passed: /api/health baseline, POST /api/scripts returns uppercase character names (JACK, DET. HARRIS, SARAH), parser DialogueLine.character matches Script.characters[].name case-sensitively for all speakers, POST /api/rehearsals persists reader_style='emotional'+voice_speed=0.9, defaults to 'neutral'/1.0 when omitted, and GET /api/rehearsals/{id} returns the persisted values.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_voice_pipeline_backend_contract_feb2026.py",
+    "/app/test_reports/pytest/voice_pipeline_backend_contract.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 3895 lines — should be split into routers/models/services modules (>700 line rule).",
+    "RehearsalCreate.voice_speed has no Field(ge=..., le=...) validation; a client sending voice_speed=100 or -5 would be persisted verbatim. Consider a Pydantic Field(ge=0.5, le=2.0) bound aligned with the frontend slider range.",
+    "reader_style is a free-form str — a Literal['neutral','emotional','aggressive'] or Enum would prevent typos from silently persisting and reaching TTS."
+  ],
+  "updated_files": ["/app/backend/tests/test_voice_pipeline_backend_contract_feb2026.py"],
+  "success_rate": {"backend": "100%", "frontend": "not_tested"},
+  "seed_data_creation": "One TEST_M8_voice_pipeline script + 3 rehearsals created via public API during test run (module-scoped fixtures). No manual DB seeding.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend contract for M8 voice pipeline (reader_style/voice_speed persistence + uppercase character-name parity between Script.characters[].name and DialogueLine.character) is green. Frontend voice-picker → TTS wiring, VOICE_PICKER_SELECTION / REHEARSAL_VOICE_ASSIGNMENTS / TTS_REQUEST / TTS_RESPONSE / AUDIO_PLAYBACK diagnostics, and audio-cache-keyed-by-voiceId invalidation are covered by static regression suites (test_voice_pipeline_hardening_feb2026.py, test_voice_assignment_functional_feb2026.py) and still require physical device validation on the next QA APK build.",
+  "rca of the issue": "N/A — backend already implements the persistence contract correctly (RehearsalCreate/RehearsalSession fields at server.py:637-646 / 614-635, wired at line ~2130). The M8 'voice: alloy override' bug is entirely a frontend voice-assignment-map lookup + TTS request-construction issue, not a backend contract gap."
+}

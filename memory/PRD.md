@@ -59,6 +59,50 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 
 ## Changelog
 
+### 2026-02 — SM8-1110 voice-pipeline diagnostic + cache hardening
+
+Physical QA of build 1110 reported the ElevenLabs picker showed Rachel selected for DET. HARRIS, but rehearsal playback did NOT use Rachel. The diagnostic showed `voice-assignments-loaded {count: 3, elevenLabsConfigured: true}` yet `createRehearsal {voice: "alloy"}`. Because failures in the ElevenLabs path silently fell through to expo-speech, we couldn't tell which stage broke.
+
+**Fixes (evidence-backed, minimal-scope):**
+
+- `frontend/components/VoiceAssignment.tsx`:
+  - Emit `VOICE_PICKER_SELECTION { character, displayName, provider, voiceKey, voiceId }` the moment a voice is picked. Uses stable voiceKey + ElevenLabs voiceId, not display name.
+- `frontend/app/script/[id].tsx::handleStartRehearsal`:
+  - Emit `CREATE_REHEARSAL_REQUEST { character, mode, globalFallbackVoice, readerStyle, voiceSpeed, voiceAssignments[], voiceAssignmentCount }` at rehearsal start. Loads the persisted assignments and includes the full per-character map — a missing character in this list is now the exact reason their line will fall back.
+- `frontend/app/rehearsal/[id].tsx`:
+  - `REHEARSAL_VOICE_ASSIGNMENTS { count, elevenLabsConfigured, assignments[] }` now lists each character + voiceKey + voiceId (previously logged count only).
+  - Assignment map stored under BOTH exact and upper-cased keys; `speakLine` looks up `voiceAssignmentsRef.current[lineCharacter] ?? voiceAssignmentsRef.current[lineCharacter.toUpperCase()]` — guards against picker/parser casing drift.
+  - `TTS_REQUEST { character, provider, voiceId, voiceKey, assignmentPresent, elevenLabsConfigured, globalFallbackVoiceType, readerStyle, voiceSpeed }` emitted BEFORE any provider call — proves which voice was chosen per line.
+  - `TTS_RESPONSE { character, provider, voiceId, voiceKey, success, error?, fallingBackTo? }` emitted after generation — success + failure paths both logged, so a silent fallback is impossible.
+  - `AUDIO_PLAYBACK { character, provider, voiceId, [reason] }` emitted for both ElevenLabs and expo-speech branches — `reason` distinguishes `no-assignment` / `no-elevenlabs-key` / `elevenlabs-generation-failed`.
+- `frontend/services/elevenLabsService.ts`:
+  - In-memory LRU audio cache (≤ 20 entries) keyed by `${voiceId}:${text.length}:${hash(text)}` — changing Rachel → Domi invalidates the cached audio because the key changes with the voiceId. Public `clearElevenLabsAudioCache()` exposed and included in the default export bag.
+- Guard: `playSpeech(text, ...)` is only ever called with `assignment.voiceId` — never with a global `voiceType`, `'alloy'`, or any hardcoded voice name. Static test asserts this.
+
+**Backend contract** — already correct; audited but not changed. Testing agent verified via `test_voice_pipeline_backend_contract_feb2026.py` (6/6 PASS): `POST /api/rehearsals` accepts and persists `reader_style` + `voice_speed`, defaults to `neutral`/`1.0` for legacy clients, `GET /api/rehearsals/{id}` returns the persisted values, script parser emits character names in uppercase matching `DialogueLine.character` case-sensitively.
+
+**Testing:**
+- **testing_agent report `/app/test_reports/iteration_35.json`**: backend contract 6/6 PASS. `success_rate: {"backend": "100%", "frontend": "not_tested"}`, `retest_needed: false`. RCA quote: *"backend already implements the persistence contract correctly. The M8 'voice: alloy override' bug is entirely a frontend voice-assignment-map lookup + TTS request-construction issue, not a backend contract gap."*
+- **New static regression suite** — 12 tests in `test_voice_pipeline_hardening_feb2026.py` locking every diagnostic breadcrumb, the case-insensitive lookup, the voiceId-scoped cache key, and the "no global-voice override" guard.
+- All 763 accumulated static tests PASS.
+
+**Non-blocking review comments from testing_agent (not acted per no-refactor rule):**
+- `server.py` at 3895 lines could be split into routers/models/services.
+- `RehearsalCreate.voice_speed` has no Field(ge=…, le=…) bounds.
+- `reader_style` could be `Literal['neutral','emotional','aggressive']`.
+
+**Pre-build gate result:**
+```
+Tests:             PASS — 763 passed, 0 failed, 0 errors   (+18 vs previous 745)
+Runtime smoke:     PASS — 18 ok, 0 fail
+TypeScript:        PASS — 31 baseline error(s), 0 new (baseline expects 37)
+Lint regression:   PASS (baseline-only) — 327 baseline finding(s), 0 new
+Dependencies:      PASS
+Overall:           GREEN, exit 0
+```
+
+**Scope guarantees:** Scene Partner untouched (zero diff). Voice Studio internals untouched. No dependency change, no lockfile change. 18 baseline backend lint issues untouched. Physical acceptance test (Rachel/DET. HARRIS → Domi/SARAH → change voice → re-rehearse) awaits the next QA APK — the new diagnostics will now surface the exact failing stage on-device if any regression remains.
+
 ### 2026-02 — Home layout reconciliation + Voice Assignment functional lock
 
 Physical QA of APK 1110 (v1.0.59, versionCode 1095) confirmed all prior Feb-2026 code (Reader Style + Voice Speed + Multi-Voice wiring, Voice Studio SDK-54 fix + script picker, DOCX / END-OF-SCREENPLAY parser, Daily Drill UX, Home Upload removal, AI Coming Soon section) shipped correctly — but Voice Studio still appeared under "More" because the Home 3×2 grid change had never been implemented.
