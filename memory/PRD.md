@@ -59,6 +59,35 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 
 ## Changelog
 
+### 2026-02 — Home / More cleanup: removed redundant "Upload Script" NavRow
+
+The Home screen's More section had a standalone `Upload Script` NavRow (`route="/upload"`) alongside the primary `New Script` tool tile (`route="/script-parser"`) — the two flows overlap for the PDF / DOCX / TXT import journey. The redundant NavRow was removed.
+
+**Preserved (per requirements):**
+- `frontend/app/upload.tsx` — kept intact for deep-links and programmatic navigation.
+- `/upload` Stack.Screen in `frontend/app/_layout.tsx` — still registered.
+- Backend endpoints `POST /api/scripts/upload` and `POST /api/scripts/upload-base64` — unchanged.
+- "New Script" tile (`testID="new-script-btn"` → `/script-parser`) remains the primary import entry point.
+- "My Scripts" tile (`testID="my-scripts-btn"` → `/scripts`) — unchanged.
+- Voice Studio, Auditions, Dashboard, Support NavRows — unchanged.
+
+**Files changed:**
+- `frontend/app/index.tsx` — removed the single `<NavRow … testId="upload-row" />` line; added a code comment explaining the cleanup rationale and confirming the underlying flow is preserved.
+- `backend/tests/test_home_more_upload_removed_feb2026.py` — new; 11 static regression assertions.
+- `scripts/prebuild_gate.py` — new test file registered in `STATIC_REGRESSION_TESTS`.
+
+**Pre-build gate result:**
+```
+Tests:             PASS — 682 passed, 0 failed, 0 errors (+11 vs previous 671)
+Runtime smoke:     PASS — 18 ok, 0 fail
+TypeScript:        PASS — 31 baseline, 0 new (baseline expects 37)
+Lint regression:   PASS (baseline-only) — 327 baseline, 0 new
+Dependencies:      PASS
+Overall:           GREEN, exit 0
+```
+
+**Scope guarantees:** no changes to Voice Studio, Rehearsal, Recall, Self-Tape, Learn, Daily Drill, Premium, or any backend endpoint. No dependency change; no `yarn.lock` authored by this task. 18 baseline backend lint issues untouched.
+
 ### 2026-02 — Voice Studio: SDK 54 legacy-import fix + script-on-screen recording
 
 Physical QA build 1.0.57 reported Voice Studio failing on Android. Trace pinpointed the crash: SDK 54 moved `documentDirectory` and `EncodingType` to `expo-file-system/legacy`; the bare `import * as FileSystem from 'expo-file-system'` returned `undefined`, so `ensureDir()` immediately threw `"documentDirectory is not available"` the moment the actor tried to save any recording. The 5 pre-existing TypeScript baseline errors on `app/voice-studio.tsx:310/378/382` and `services/voiceStudioStorage.ts:4/30` were direct static-analysis evidence of the same regression.

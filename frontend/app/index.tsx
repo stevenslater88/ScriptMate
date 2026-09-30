@@ -160,8 +160,14 @@ export default function HomeScreen() {
         <AIComingSoonSection />
 
         {/* ─── MORE TOOLS ─── */}
+        {/* 2026-02 cleanup: the standalone "Upload Script" NavRow was
+            removed because script importing (PDF / DOCX / TXT) is
+            already available through the "New Script" tool tile above,
+            which routes to `/script-parser`. The `/upload` route +
+            `app/upload.tsx` are intentionally KEPT for deep-links and
+            programmatic navigation, so the underlying import/upload
+            functionality is unchanged. */}
         <Text style={st.secLabel}>More</Text>
-        <NavRow icon="cloud-upload" color="#3b82f6" title="Upload Script"    sub="PDF, DOCX, TXT"          route="/upload"       testId="upload-row" />
         <NavRow icon="mic-circle"   color="#6366f1" title="Voice Studio"     sub="Record & build demo reels" route="/voice-studio" testId="voice-studio-row" />
         <NavRow icon="calendar"     color="#f59e0b" title="Auditions"        sub="Track your submissions"   route="/auditions"    testId="auditions-row" />
         <NavRow icon="bar-chart"    color="#10b981" title="Dashboard"        sub="Progress & stats"         route="/dashboard"    testId="dashboard-row" />
