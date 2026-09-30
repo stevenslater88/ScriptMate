@@ -84,6 +84,7 @@ STATIC_REGRESSION_TESTS = [
     "tests/test_end_of_screenplay_character_feb2026.py",
     "tests/test_voice_studio_script_on_screen_feb2026.py",
     "tests/test_home_more_upload_removed_feb2026.py",
+    "tests/test_voice_controls_investigation_feb2026.py",
 ]
 
 # Files required for the frontend/backend to build/run. Missing = RED.
