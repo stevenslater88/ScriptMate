@@ -18,6 +18,21 @@ import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { useScriptStore } from '../../store/scriptStore';
 import { DebugLog } from '../../services/debugLogService';
+// 2026-02: multi-voice + reader-style wiring. All three imports were
+// previously present only in components/VoiceAssignment.tsx (for the
+// preview button). The rehearsal path now consults the persisted
+// per-character voice map on mount and — if ElevenLabs is configured
+// AND a character has an explicit assignment — routes their line
+// through playSpeech() instead of the shared expo-speech fallback.
+// Every other character (and every scenario where ElevenLabs isn't
+// configured, or a character has no assignment) continues to use the
+// unchanged Speech.speak(...) code path below.
+import {
+  loadVoiceAssignments,
+  playSpeech,
+  isElevenLabsConfigured,
+  type CharacterVoiceAssignment,
+} from '../../services/elevenLabsService';
 
 // Safely import speech recognition - it may not be available on all devices
 let ExpoSpeechRecognitionModule: any = null;
@@ -488,6 +503,16 @@ export default function RehearsalScreen() {
       // guarded so a double-teardown or already-stopped state can never
       // escalate to an unhandled promise rejection / native SIGSEGV.
       try { Promise.resolve(Speech.stop()).catch(() => {}); } catch { /* ignore */ }
+      // 2026-02 — also tear down any ElevenLabs Audio.Sound in flight so
+      // it can't outlive the screen.
+      try {
+        const s = activeElevenLabsSoundRef.current;
+        activeElevenLabsSoundRef.current = null;
+        if (s) {
+          Promise.resolve(s.stopAsync()).catch(() => {});
+          Promise.resolve(s.unloadAsync()).catch(() => {});
+        }
+      } catch { /* ignore */ }
       isSpeakingRef.current = false;
       speakingLineIndexRef.current = null;
       if (speechTimeoutRef.current) {
@@ -519,19 +544,77 @@ export default function RehearsalScreen() {
   const userCharacter = currentRehearsal?.user_character || '';
   const voiceType = currentRehearsal?.voice_type || 'alloy';
   const mode = currentRehearsal?.mode || 'full_read';
+  // 2026-02 reader-style wiring. Persisted server-side; fetched via
+  // currentRehearsal. Fallbacks preserve pre-2026-02 behaviour bit-
+  // for-bit for legacy rehearsals that were saved without them.
+  const readerStyle = currentRehearsal?.reader_style || 'neutral';
+  const readerVoiceSpeed = currentRehearsal?.voice_speed ?? 1.0;
 
   const currentLine = lines[currentLineIndex];
   const isUserLine = currentLine?.character === userCharacter;
 
-  // Voice settings based on voice type
-  const getVoiceSettings = useCallback((voice: string) => {
+  // Voice settings based on voice type.
+  // 2026-02: `voiceSpeedMultiplier` composes with the per-voice `rate`
+  // rather than replacing it — Neutral (1.0) is a no-op, Emotional
+  // (0.9) is slightly slower, Intense/Aggressive (1.1) is slightly
+  // faster. This keeps the existing per-voice character intact while
+  // letting the reader style modulate pace.
+  const getVoiceSettings = useCallback((voice: string, voiceSpeedMultiplier: number = 1.0) => {
+    let base: { pitch: number; rate: number };
     switch (voice) {
-      case 'echo': return { pitch: 0.85, rate: 0.9 };
-      case 'onyx': return { pitch: 0.75, rate: 0.85 };
-      case 'nova': return { pitch: 1.15, rate: 1.0 };
-      case 'shimmer': return { pitch: 1.2, rate: 0.95 };
-      case 'fable': return { pitch: 1.0, rate: 0.95 };
-      default: return { pitch: 1.0, rate: 0.95 };
+      case 'echo': base = { pitch: 0.85, rate: 0.9 }; break;
+      case 'onyx': base = { pitch: 0.75, rate: 0.85 }; break;
+      case 'nova': base = { pitch: 1.15, rate: 1.0 }; break;
+      case 'shimmer': base = { pitch: 1.2, rate: 0.95 }; break;
+      case 'fable': base = { pitch: 1.0, rate: 0.95 }; break;
+      default: base = { pitch: 1.0, rate: 0.95 };
+    }
+    return { pitch: base.pitch, rate: base.rate * voiceSpeedMultiplier };
+  }, []);
+
+  // 2026-02 multi-voice wiring. Persistent map is loaded once on mount
+  // (see effect below) and read synchronously inside speakLine via a
+  // ref so we never re-render on every line.
+  const voiceAssignmentsRef = useRef<Record<string, CharacterVoiceAssignment>>({});
+  const elevenLabsAvailable = useRef<boolean>(false);
+  const activeElevenLabsSoundRef = useRef<Audio.Sound | null>(null);
+
+  useEffect(() => {
+    // Load once per script — the picker persists to AsyncStorage
+    // keyed by scriptId, so a fresh read is authoritative.
+    const scriptId = currentScript?.id || currentRehearsal?.script_id;
+    if (!scriptId) return;
+    elevenLabsAvailable.current = isElevenLabsConfigured();
+    (async () => {
+      try {
+        const list = await loadVoiceAssignments(scriptId);
+        const map: Record<string, CharacterVoiceAssignment> = {};
+        for (const a of list) {
+          if (a && a.characterName) {
+            map[a.characterName] = a;
+          }
+        }
+        voiceAssignmentsRef.current = map;
+        DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'voice-assignments-loaded', {
+          scriptId, count: list.length,
+          elevenLabsConfigured: elevenLabsAvailable.current,
+        });
+      } catch (e: any) {
+        // Non-fatal: fall through to the shared expo-speech path.
+        DebugLog.errorCaught('voice-assignments-load', e, { scriptId });
+        voiceAssignmentsRef.current = {};
+      }
+    })();
+  }, [currentScript?.id, currentRehearsal?.script_id]);
+
+  // Helper: safely tear down any active ElevenLabs sound. Called from
+  // pause/stop paths and before every new speakLine invocation.
+  const stopElevenLabsSound = useCallback(async () => {
+    const s = activeElevenLabsSoundRef.current;
+    activeElevenLabsSoundRef.current = null;
+    if (s) {
+      try { await s.stopAsync(); } catch { /* already stopped */ }
+      try { await s.unloadAsync(); } catch { /* already unloaded */ }
     }
   }, []);
 
@@ -578,7 +661,24 @@ export default function RehearsalScreen() {
       setSpeaking(true);
       setState('ai_speaking');
 
-      const voiceSettings = getVoiceSettings(voiceType);
+      // Compose the reader style speed multiplier into the base voice
+      // settings. See getVoiceSettings above.
+      const voiceSettings = getVoiceSettings(voiceType, readerVoiceSpeed);
+
+      // 2026-02 multi-voice branch selection. Uses the line's
+      // character (resolved at call time, not memoized) to look up the
+      // per-character assignment. If ElevenLabs is configured AND the
+      // character has an explicit voiceId, we route through
+      // playSpeech; otherwise we fall through to the pre-2026-02
+      // Speech.speak(...) path unchanged.
+      const lineCharacter = lines[targetLineIndex]?.character;
+      const assignment = lineCharacter
+        ? voiceAssignmentsRef.current[lineCharacter]
+        : undefined;
+      const useElevenLabs =
+        elevenLabsAvailable.current
+        && !!assignment
+        && !!assignment.voiceId;
 
       // Helper to safely advance once
       const safeAdvance = () => {
@@ -607,10 +707,46 @@ export default function RehearsalScreen() {
       try {
         // Stop any existing speech first
         await Speech.stop();
-        
+        await stopElevenLabsSound();
+
         // Small delay to ensure previous speech is fully stopped
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
+        if (useElevenLabs && assignment) {
+          // ─── Per-character ElevenLabs voice path ─────────────────
+          // Uses the existing playSpeech() from elevenLabsService.
+          // The returned Audio.Sound is wired to the same safeAdvance
+          // callback as the expo-speech path, so line-advancement and
+          // pause-handling are unchanged.
+          try {
+            const sound = await playSpeech(text, assignment.voiceId);
+            if (!sound) {
+              // Generation failed — fall back to expo-speech so the
+              // rehearsal never stalls.
+              throw new Error('playSpeech returned null');
+            }
+            activeElevenLabsSoundRef.current = sound;
+            let doneFired = false;
+            sound.setOnPlaybackStatusUpdate((status: any) => {
+              if (!status?.isLoaded) return;
+              if (status.didJustFinish && !doneFired) {
+                doneFired = true;
+                console.log('[Rehearsal] ElevenLabs playback finished for line:', targetLineIndex);
+                // Match the semantics of Speech onDone.
+                activeElevenLabsSoundRef.current = null;
+                safeAdvance();
+              }
+            });
+            return; // do not fall through to Speech.speak
+          } catch (e: any) {
+            console.warn('[Rehearsal] ElevenLabs path failed, falling back to expo-speech:', e?.message);
+            DebugLog.errorCaught('elevenlabs-playSpeech', e, {
+              character: lineCharacter, lineIndex: targetLineIndex,
+            });
+            // Intentional fall-through to the shared path below.
+          }
+        }
+
         Speech.speak(text, {
           language: 'en-US',
           pitch: voiceSettings.pitch,
@@ -635,7 +771,7 @@ export default function RehearsalScreen() {
         safeAdvance();
       }
     },
-    [voiceType, isPaused, getVoiceSettings]
+    [voiceType, isPaused, getVoiceSettings, readerVoiceSpeed, lines, stopElevenLabsSound]
   );
 
   // Save progress to backend
@@ -902,6 +1038,9 @@ export default function RehearsalScreen() {
     } else {
       setIsPaused(true);
       Speech.stop();
+      // 2026-02: also stop any active ElevenLabs playback so the pause
+      // button works uniformly across both speech engines.
+      stopElevenLabsSound();
       setSpeaking(false);
     }
   };

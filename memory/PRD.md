@@ -59,6 +59,53 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 
 ## Changelog
 
+### 2026-02 — Reader Style + Multi-Voice wired into Rehearsal playback
+
+Physical QA audit proved two voice controls were UI-only. Fixed both with the minimum-scope wiring described below. Scene Partner Reader Style + Cue Timing (which the audit proved already worked) intentionally untouched.
+
+**A) AI Reader Style — full end-to-end wiring**
+
+- `frontend/app/script/[id].tsx::handleStartRehearsal` — forwards `selectedReaderStyle` + `voiceSpeed` as the 5th/6th args to `createRehearsal(...)`.
+- `frontend/store/scriptStore.ts` — extended `createRehearsal` signature and `RehearsalSession` type with optional `readerStyle` / `reader_style` and `voiceSpeed` / `voice_speed` (defaults `'neutral'` / `1.0`; legacy 4-arg callers unchanged).
+- `backend/server.py::RehearsalCreate` and `RehearsalSession` — added `reader_style: str = "neutral"` and `voice_speed: float = 1.0`; the POST `/api/rehearsals` route persists them onto the session document.
+- `frontend/app/rehearsal/[id].tsx::speakLine` — reads `currentRehearsal?.reader_style / .voice_speed` and passes the speed as a *multiplier* into a reworked `getVoiceSettings(voice, voiceSpeedMultiplier = 1.0)`. The per-voice base `pitch/rate` is preserved and the multiplier composes with `rate` (`base.rate * voiceSpeedMultiplier`). Neutral (1.0) is a no-op, Emotional (0.9) slower, Intense/Aggressive (1.1) faster.
+
+**B) Multi-Voice — per-character ElevenLabs assignments now consumed at playback**
+
+- `frontend/app/rehearsal/[id].tsx`:
+  - Imports `loadVoiceAssignments`, `playSpeech`, `isElevenLabsConfigured`, `CharacterVoiceAssignment` from the existing `services/elevenLabsService` (no new dependency).
+  - On mount, loads assignments from AsyncStorage into `voiceAssignmentsRef` (`Record<characterName, assignment>`); flags `elevenLabsAvailable`.
+  - Inside `speakLine`, resolves the line's character to an assignment. Branch condition `useElevenLabs = elevenLabsAvailable && !!assignment && !!assignment.voiceId`.
+  - When true → `playSpeech(text, assignment.voiceId)`; wires `setOnPlaybackStatusUpdate` → `didJustFinish` to the same `safeAdvance()` callback the shared path uses, so line advancement is identical across both engines.
+  - **Fallback preserved bit-for-bit:** every other case — ElevenLabs unavailable, no assignment for the character, or a runtime failure inside the ElevenLabs branch — falls through to the pre-fix `Speech.speak(text, { pitch, rate })` call unchanged.
+  - Pause and unmount both stop the ElevenLabs sound.
+
+**Live backend verification (against local `POST /api/rehearsals`):**
+```
+With fields:    reader_style=emotional, voice_speed=0.9   → persisted on RehearsalSession
+Without fields: reader_style=neutral,   voice_speed=1.0   → defaults applied (legacy client compatibility)
+```
+
+**Tests:**
+- `backend/tests/test_voice_controls_fix_feb2026.py` — 20 static assertions (7 for A, 8 for B, 2 Scene Partner guards, 1 xfail-flip proof, 2 fallback preservation guards).
+- `backend/tests/test_voice_controls_investigation_feb2026.py` — the 6 strict xfails from the investigation have been **flipped to normal PASSing assertions**. Each now asserts the FIXED contract; any regression that re-breaks the wiring fails loudly.
+- Zero `@pytest.mark.xfail` markers remain across the audit contract.
+- Both files added to the pre-build gate's `STATIC_REGRESSION_TESTS` allowlist.
+
+**Pre-build gate result:**
+```
+Tests:             PASS — 716 passed, 0 failed, 0 errors   (+27 vs previous 689)
+Runtime smoke:     PASS — 18 ok, 0 fail
+TypeScript:        PASS — 31 baseline, 0 new (baseline expects 37)
+Lint regression:   PASS (baseline-only) — 327 baseline, 0 new
+Dependencies:      PASS
+Overall:           GREEN, exit 0
+```
+
+**Scope guarantees:** `frontend/app/scene-partner.tsx` and `frontend/app/voice-studio.tsx` unchanged (verified via `git diff --stat`). No dependency change, no `yarn.lock` change, no premium/entitlement change, no refactor. 18 baseline backend lint issues untouched.
+
+**Not yet in an APK.** Wire is complete + backend-verified; physical validation requires the next QA APK.
+
 ### 2026-02 — Home / More cleanup: removed redundant "Upload Script" NavRow
 
 The Home screen's More section had a standalone `Upload Script` NavRow (`route="/upload"`) alongside the primary `New Script` tool tile (`route="/script-parser"`) — the two flows overlap for the PDF / DOCX / TXT import journey. The redundant NavRow was removed.

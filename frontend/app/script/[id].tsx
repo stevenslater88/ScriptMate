@@ -189,9 +189,21 @@ export default function ScriptDetailScreen() {
     setStarting(true);
     try {
       DebugLog.log('API_REQUEST', 'ScriptScreen', 'createRehearsal', {
-        scriptId: id, character: selectedCharacter, mode: selectedMode, voice: selectedVoice,
+        scriptId: id, character: selectedCharacter, mode: selectedMode,
+        voice: selectedVoice, readerStyle: selectedReaderStyle,
+        voiceSpeed,
       });
-      const rehearsal = await createRehearsal(id!, selectedCharacter, selectedMode, selectedVoice);
+      const rehearsal = await createRehearsal(
+        id!,
+        selectedCharacter,
+        selectedMode,
+        selectedVoice,
+        // 2026-02 reader-style wiring — forward the local UI selection
+        // so it reaches the backend, is persisted on RehearsalSession,
+        // and is consumed by rehearsal/[id].tsx::speakLine.
+        selectedReaderStyle,
+        voiceSpeed,
+      );
       if (rehearsal) {
         DebugLog.log('API_RESPONSE', 'ScriptScreen', 'createRehearsal ok', { rehearsalId: rehearsal.id });
         try {

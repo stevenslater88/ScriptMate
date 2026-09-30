@@ -76,6 +76,12 @@ export interface RehearsalSession {
   total_lines: number;
   mode: string;
   voice_type: string;
+  // 2026-02: reader-style wiring. Optional on the type so any legacy
+  // rehearsal record fetched from Mongo (pre-migration) doesn't break
+  // TypeScript. Backend now always writes these; frontend reads them
+  // with `?? 'neutral'` / `?? 1.0` fallbacks.
+  reader_style?: string;
+  voice_speed?: number;
   created_at: string;
   updated_at: string;
 }
@@ -170,7 +176,14 @@ interface ScriptStore {
   deleteScript: (id: string) => Promise<void>;
   
   // Rehearsal Actions
-  createRehearsal: (scriptId: string, userCharacter: string, mode: string, voiceType: string) => Promise<RehearsalSession | null>;
+  createRehearsal: (
+    scriptId: string,
+    userCharacter: string,
+    mode: string,
+    voiceType: string,
+    readerStyle?: string,
+    voiceSpeed?: number,
+  ) => Promise<RehearsalSession | null>;
   fetchRehearsal: (id: string) => Promise<RehearsalSession | null>;
   updateRehearsal: (id: string, data: Partial<RehearsalSession>) => Promise<void>;
   
@@ -512,7 +525,14 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     }
   },
 
-  createRehearsal: async (scriptId: string, userCharacter: string, mode: string, voiceType: string) => {
+  createRehearsal: async (
+    scriptId: string,
+    userCharacter: string,
+    mode: string,
+    voiceType: string,
+    readerStyle: string = 'neutral',
+    voiceSpeed: number = 1.0,
+  ) => {
     const { deviceId } = get();
     set({ loading: true, error: null });
     try {
@@ -521,6 +541,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         user_character: userCharacter,
         mode,
         voice_type: voiceType,
+        // 2026-02 reader-style wiring. Backend defaults these to
+        // 'neutral' / 1.0 if omitted, preserving pre-2026-02
+        // client behaviour bit-for-bit.
+        reader_style: readerStyle,
+        voice_speed: voiceSpeed,
         user_id: deviceId || 'default',
       }, { timeout: API_TIMEOUT });
       set({ currentRehearsal: response.data, loading: false });

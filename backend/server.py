@@ -624,6 +624,13 @@ class RehearsalSession(BaseModel):
     total_lines: int = 0
     mode: str = "full_read"
     voice_type: str = "alloy"
+    # 2026-02: reader-style wiring. Persisted on the RehearsalSession so
+    # both the initial create-response and any later fetchRehearsal
+    # (device restart, deep-link resume) carry it through to
+    # rehearsal/[id].tsx::speakLine, which merges these into the
+    # per-voice pitch/rate.  Defaults keep pre-2026-02 behaviour intact.
+    reader_style: str = "neutral"     # 'neutral' | 'emotional' | 'aggressive'
+    voice_speed: float = 1.0          # multiplier applied to TTS rate
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -633,6 +640,10 @@ class RehearsalCreate(BaseModel):
     mode: str = "full_read"
     voice_type: str = "alloy"
     user_id: str = "default"
+    # Optional — pre-2026-02 clients that don't send these fall back to
+    # 'neutral' / 1.0 which is the same behaviour they had before.
+    reader_style: str = "neutral"
+    voice_speed: float = 1.0
 
 class UserProfile(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -2112,6 +2123,12 @@ async def create_rehearsal(rehearsal_data: RehearsalCreate):
         user_character=rehearsal_data.user_character,
         mode=rehearsal_data.mode,
         voice_type=rehearsal_data.voice_type,
+        # 2026-02 reader-style wiring — forwarded from the client and
+        # persisted so both the immediate create-response and any later
+        # /rehearsals/{id} GET (e.g. deep-link resume) carry it through
+        # to the rehearsal screen's speakLine merger.
+        reader_style=rehearsal_data.reader_style,
+        voice_speed=rehearsal_data.voice_speed,
         total_lines=total_lines
     )
     

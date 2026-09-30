@@ -1,35 +1,20 @@
-"""Investigation-only regression PROOFS for the Voice / Reader Controls
-audit (Feb 2026).
+"""LOCKED contract file for the Feb-2026 Voice / Reader Controls audit.
 
-These tests LOCK the current — as-of-audit — state of each control so
-that any subsequent fix (or accidental change) will register in the
-diff. They are static-source-inspection tests only; nothing here calls
-the network or a running app.
+Originally created as an INVESTIGATION-only file with 6 strict xfail
+markers documenting the broken paths (A + B). The fix has since
+landed (see `test_voice_controls_fix_feb2026.py`) so every xfail has
+been flipped to a normal passing assertion — each test now asserts
+the FIXED contract, so any future regression that re-breaks the wiring
+will fail loudly.
 
-Each test's docstring explains what it proves. A test that is expected
-to FAIL when the control is later fixed is marked `xfail(strict=True)`
-so the fix flip is automatic.
-
-CONTROLS AUDITED:
-A) AI Reader Style (script/[id].tsx: Neutral / Emotional / Intense)
-   - state variable exists                                      → PASS
-   - value is never sent to backend or persisted                → xfail
-   - rehearsal playback uses voice_type only (no reader style)  → xfail
-B) Multi-Voice (VoiceAssignment.tsx + elevenLabsService.ts)
-   - persists per-character assignments to AsyncStorage         → PASS
-   - rehearsal/[id].tsx does NOT load them                      → xfail
-   - rehearsal/[id].tsx uses a single global voice_type         → xfail
-C) Scene Partner Reader Style + Cue Timing (scene-partner.tsx)
-   - reader style values reach Speech.speak() (pitch / rate)    → PASS
-   - cue timing reaches setTimeout delay                         → PASS
+The Scene Partner (C) tests remained PASSing throughout — Reader Style
+and Cue Timing there were already correctly wired.
 """
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
-
-import pytest
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 BACKEND = Path(__file__).resolve().parents[1]
@@ -49,90 +34,57 @@ SERVER = BACKEND / "server.py"
 
 
 def test_A_reader_style_state_variable_exists_in_script_screen():
-    """PROVES the UI is wired. The `selectedReaderStyle` state and the
-    three READER_STYLES options exist in ScriptScreen."""
     src = SCRIPT_SCREEN.read_text()
     assert "selectedReaderStyle" in src
     assert "setSelectedReaderStyle" in src
     for name in ("Neutral", "Emotional", "Intense"):
-        assert f"name: '{name}'" in src, (
-            f"Reader style '{name}' option must exist in the UI"
-        )
+        assert f"name: '{name}'" in src
 
 
-@pytest.mark.xfail(
-    reason=(
-        "AUDIT FINDING A.1: `selectedReaderStyle` is component-local and "
-        "is never sent to createRehearsal(). Backend `RehearsalCreate` "
-        "has no `reader_style` field. When the fix lands (persist + "
-        "propagate), this xfail will flip to XPASS and the marker "
-        "must be removed."
-    ),
-    strict=True,
-)
 def test_A2_reader_style_is_sent_to_createRehearsal_call():
-    """Would-be true when fixed: the ScriptScreen's `handleStartRehearsal`
-    passes `selectedReaderStyle` (or `voiceSpeed`) into `createRehearsal`.
-    Currently it does not — only `selectedVoice` is forwarded."""
+    """After the fix: `selectedReaderStyle` and `voiceSpeed` are
+    forwarded into createRehearsal()."""
     src = SCRIPT_SCREEN.read_text()
     m = re.search(
-        r"createRehearsal\s*\(\s*id!\s*,\s*selectedCharacter\s*,\s*"
-        r"selectedMode\s*,\s*selectedVoice\s*,\s*"
-        r"(selectedReaderStyle|voiceSpeed)",
-        src,
+        r"createRehearsal\s*\(\s*"
+        r"id!\s*,\s*"
+        r"selectedCharacter\s*,\s*"
+        r"selectedMode\s*,\s*"
+        r"selectedVoice\s*,\s*"
+        r"(?:[^)]*//[^\n]*\n\s*)?"
+        r"selectedReaderStyle\s*,\s*"
+        r"voiceSpeed",
+        src, re.DOTALL,
     )
-    assert m, "reader style / voice speed must be forwarded to createRehearsal()"
+    assert m, "reader style + voice speed must be forwarded to createRehearsal"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "AUDIT FINDING A.2: `store/scriptStore.ts::createRehearsal` "
-        "posts only {script_id, user_character, mode, voice_type, "
-        "user_id}. No `reader_style` / `voice_speed` fields on the "
-        "wire. Fix will add them here + on the backend model."
-    ),
-    strict=True,
-)
 def test_A3_scriptStore_createRehearsal_sends_reader_style():
     src = SCRIPT_STORE.read_text()
-    assert "reader_style" in src or "voice_speed" in src
+    assert "reader_style: readerStyle" in src
+    assert "voice_speed: voiceSpeed" in src
 
 
-@pytest.mark.xfail(
-    reason=(
-        "AUDIT FINDING A.3: Backend `RehearsalCreate` Pydantic model "
-        "has no reader_style / voice_speed field, so even if the "
-        "client sent it, FastAPI would drop it. Fix must extend the "
-        "model + persist it on RehearsalSession."
-    ),
-    strict=True,
-)
 def test_A4_backend_rehearsal_create_model_accepts_reader_style():
     src = SERVER.read_text()
     m = re.search(
         r"class\s+RehearsalCreate\s*\(BaseModel\)\s*:\s*(.*?)\n\nclass",
         src, re.DOTALL,
     )
-    assert m, "RehearsalCreate model not found"
+    assert m, "RehearsalCreate class not found"
     body = m.group(1)
-    assert "reader_style" in body or "voice_speed" in body, (
-        "RehearsalCreate must accept reader_style / voice_speed"
-    )
+    assert "reader_style" in body
+    assert "voice_speed" in body
 
 
-@pytest.mark.xfail(
-    reason=(
-        "AUDIT FINDING A.4: rehearsal/[id].tsx::speakLine consumes only "
-        "voice_type (via getVoiceSettings()). It never reads a "
-        "reader_style / voice_speed from currentRehearsal, so the "
-        "setting has no effect at playback time."
-    ),
-    strict=True,
-)
 def test_A5_rehearsal_playback_consumes_reader_style():
+    """After the fix: currentRehearsal's reader_style / voice_speed
+    are read and passed into the composed getVoiceSettings()."""
     src = REHEARSAL.read_text()
-    assert "reader_style" in src or "readerStyle" in src, (
-        "rehearsal playback must consume the reader style setting"
+    assert "currentRehearsal?.reader_style" in src
+    assert "currentRehearsal?.voice_speed" in src
+    assert re.search(
+        r"getVoiceSettings\s*\(\s*voiceType\s*,\s*readerVoiceSpeed", src
     )
 
 
@@ -142,9 +94,6 @@ def test_A5_rehearsal_playback_consumes_reader_style():
 
 
 def test_B_multiVoice_persists_assignments_to_async_storage():
-    """PROVES the persistence half of the flow works: `saveVoiceAssignments`
-    / `loadVoiceAssignments` read+write the `script_voice_settings`
-    AsyncStorage key keyed by scriptId."""
     src = ELEVENLABS.read_text()
     assert "VOICE_STORAGE_KEY = 'script_voice_settings'" in src
     assert re.search(
@@ -153,136 +102,73 @@ def test_B_multiVoice_persists_assignments_to_async_storage():
     assert re.search(
         r"export\s+const\s+loadVoiceAssignments\s*=\s*async", src
     )
-    # Component invokes save on change (line ~118) and load on mount.
     va = VOICE_ASSIGN.read_text()
     assert "saveVoiceAssignments(scriptId" in va
     assert "loadVoiceAssignments(scriptId" in va
 
 
 def test_B2_multiVoice_UI_offers_voice_id_and_voice_key_mapping():
-    """Voice keys map to real ElevenLabs voiceIds inside PRESET_VOICES."""
     src = ELEVENLABS.read_text()
     assert "PRESET_VOICES" in src and "voiceId" in src
     va = VOICE_ASSIGN.read_text()
-    # UI stores voiceKey → voiceId in the persisted list.
     assert "voiceKey" in va and "voiceId" in va
 
 
-@pytest.mark.xfail(
-    reason=(
-        "AUDIT FINDING B.1: rehearsal/[id].tsx uses expo-speech "
-        "(Speech.speak) with a SINGLE voice_type for all non-user "
-        "lines. It never calls loadVoiceAssignments / "
-        "getCharacterVoiceId, so per-character voice assignments "
-        "saved in AsyncStorage are ignored at playback time. Fix: "
-        "load the map on mount and, for each non-user line, resolve "
-        "the character's voiceId and (if ElevenLabs configured) call "
-        "playSpeech(text, voiceId) instead of Speech.speak."
-    ),
-    strict=True,
-)
 def test_B3_rehearsal_playback_loads_per_character_voice_assignments():
+    """After the fix: rehearsal/[id].tsx calls loadVoiceAssignments on
+    mount and consults the map from inside speakLine."""
     src = REHEARSAL.read_text()
-    assert (
-        "loadVoiceAssignments" in src
-        or "getCharacterVoiceId" in src
-    ), (
-        "rehearsal playback must consult loaded voice assignments so "
-        "each character speaks with its selected voice"
-    )
+    assert "loadVoiceAssignments(scriptId)" in src
+    assert "voiceAssignmentsRef" in src
 
 
-@pytest.mark.xfail(
-    reason=(
-        "AUDIT FINDING B.2: rehearsal/[id].tsx only imports "
-        "expo-speech; it does not import playSpeech from "
-        "elevenLabsService. Fix will add an ElevenLabs code path "
-        "gated on isElevenLabsConfigured()."
-    ),
-    strict=True,
-)
 def test_B4_rehearsal_imports_elevenlabs_playSpeech():
     src = REHEARSAL.read_text()
-    assert (
-        "playSpeech" in src
-        or "from '../../services/elevenLabsService'" in src
-        or 'from "../../services/elevenLabsService"' in src
-    )
+    assert "playSpeech" in src
+    assert "elevenLabsService" in src
 
 
-def test_B5_only_voice_preview_currently_uses_elevenLabs_playSpeech():
-    """PROVES the current bounded scope: playSpeech is used only for
-    the in-picker preview, not at rehearsal time. Locks in the current
-    (broken) state so a future fix's diff shows the widening scope."""
-    va = VOICE_ASSIGN.read_text()
-    assert "playSpeech" in va, (
-        "VoiceAssignment.tsx uses playSpeech for its preview button"
-    )
-    rehearsal = REHEARSAL.read_text()
-    assert "playSpeech" not in rehearsal, (
-        "current audit state: rehearsal does NOT use playSpeech "
-        "(this locks the state; the xfail above will flip when fixed)"
-    )
+def test_B5_rehearsal_now_uses_elevenLabs_when_configured_with_assignment():
+    """Post-fix contract inversion of the original test: rehearsal
+    now DOES route through playSpeech when the character has an
+    assignment and ElevenLabs is configured. The pre-fix version of
+    this test asserted the opposite state; both would be a regression
+    warning now."""
+    src = REHEARSAL.read_text()
+    assert re.search(
+        r"playSpeech\s*\(\s*text\s*,\s*assignment\.voiceId\s*\)", src
+    ), "rehearsal must call playSpeech(text, assignment.voiceId)"
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# C) SCENE PARTNER — Reader Style + Cue Timing (audit says these WORK)
+# C) SCENE PARTNER — Reader Style + Cue Timing  (UNTOUCHED BY THE FIX)
 # ═══════════════════════════════════════════════════════════════════════
 
 
 def test_C1_scene_partner_reader_style_is_wired_into_Speech_speak():
-    """PROVES the reader style DOES reach Speech.speak in scene-partner.
-    Neutral/Calm/Serious/Aggressive/Fast Pace each have (rate, pitch)
-    values and `speakLine` passes them through."""
     src = SCENE_PARTNER.read_text()
-    # All 4 named styles requested by QA plus Fast Pace exist.
     for name in ("Neutral", "Calm", "Serious", "Aggressive"):
-        assert f"name: '{name}'" in src, (
-            f"scene-partner reader style '{name}' must be defined"
-        )
-    # style.rate / style.pitch are passed into Speech.speak
-    m = re.search(
+        assert f"name: '{name}'" in src
+    assert re.search(
         r"Speech\.speak\s*\([^)]*rate:\s*style\.rate[^)]*pitch:\s*style\.pitch",
-        src,
-        re.DOTALL,
-    )
-    assert m, (
-        "scene-partner speakLine() must pass style.rate + style.pitch "
-        "into Speech.speak (this is what makes the reader style actually work)"
+        src, re.DOTALL,
     )
 
 
 def test_C2_scene_partner_cue_timing_reaches_setTimeout_delay():
-    """PROVES cue timing controls the inter-line delay. CUE_TIMINGS list
-    has (0, 1000, 2000, 3000) ms; getDelay() returns the selected
-    entry; setTimeout(advanceTo, delay) fires between lines."""
     src = SCENE_PARTNER.read_text()
     assert "CUE_TIMINGS" in src
-    # All the requested delays exist.
     for delay_ms in (0, 1000, 2000, 3000):
-        assert f"delay: {delay_ms}" in src, (
-            f"cue timing value {delay_ms}ms must be in CUE_TIMINGS"
-        )
-    # getDelay() feeds setTimeout for the advance step.
+        assert f"delay: {delay_ms}" in src
     assert re.search(
         r"const\s+getDelay\s*=\s*\(\)\s*=>\s*CUE_TIMINGS\.find", src
     )
     assert re.search(
         r"setTimeout\(\s*\(\s*\)\s*=>\s*advanceTo\([^)]+\)\s*,\s*delay\s*\)",
         src,
-    ), (
-        "scene-partner advanceTo() must delay by getDelay() ms — "
-        "otherwise cue timing has no effect"
     )
 
 
 def test_C3_scene_partner_state_is_session_only_by_design():
-    """PROVES the intentional session-only persistence — no AsyncStorage
-    write for `selectedStyle` / `selectedTiming` in scene-partner. The
-    fact that they're not persisted is by design (session tool) and
-    NOT a defect; this test locks that in."""
     src = SCENE_PARTNER.read_text()
-    assert "AsyncStorage" not in src, (
-        "scene-partner is intentionally session-only; introducing "
-        "persistence needs a product-level decision, not a stealth diff"
-    )
+    assert "AsyncStorage" not in src
