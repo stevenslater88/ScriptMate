@@ -1516,3 +1516,100 @@ script import. Previously-imported scripts (including the current
 retroactive cleanup would need a separate one-off migration task
 (not part of this fix).
 
+
+---
+
+## 2026-02 — VOICE PIPELINE ANDROID PLAYBACK FIX (P0)
+
+### Physical symptom
+Build 1110 / v1.0.61 / VC1099 on Samsung S23 Ultra (Android 16):
+`voice-assignments-loaded { count: 3, elevenLabsConfigured: true }`
+was emitted but **NO REHEARSAL AUDIO** played. Prior fix had wired
+per-character voice assignments through the store; assignments
+resolved correctly, so the break was not in lookup — it was in the
+audio pipeline itself.
+
+### Root cause (three converging failures)
+1. **`response.blob()` + `FileReader.readAsDataURL()`** — this pattern
+   is broken on RN Android/Hermes. RN's fetch `Blob` is a native
+   reference (not a browser Blob); `readAsDataURL` on it commonly
+   returns empty / corrupted strings on Android
+   (facebook/react-native#35325, expo/expo#22916).
+2. **`data:audio/mpeg;base64,...` URI passed to `Audio.Sound.createAsync`**
+   — ExoPlayer (Android backing engine for expo-av) is documented to
+   silently fail on non-trivial `data:` audio URIs; MP3 payloads over
+   a few KB routinely fail to load.
+3. **`Audio.setAudioModeAsync` gated on `isPremium`** — Android
+   free-tier devices had NO playback audio session configured on
+   rehearsal entry, so the first ExoPlayer load could no-op silently
+   even if steps 1–2 worked.
+
+### Fix (files touched)
+- `frontend/services/elevenLabsService.ts` — replaced blob+FileReader
+  with `arrayBuffer()` + Hermes-safe manual base64 encoder + write to
+  temp file via `expo-file-system/legacy`, then pass `file://` URI to
+  `Audio.Sound.createAsync`. Added deterministic diagnostic events:
+  ELEVENLABS_REQUEST_START / ELEVENLABS_RESPONSE /
+  ELEVENLABS_AUDIO_READY / AUDIO_LOAD_START / AUDIO_LOAD_SUCCESS /
+  AUDIO_PLAY_START / AUDIO_PLAYING / AUDIO_PLAYBACK_COMPLETE /
+  AUDIO_PLAYBACK_ERROR / AUDIO_MODE_CONFIG_ERROR /
+  AUDIO_CACHE_HIT. Added `ensurePlaybackAudioMode()` with Android +
+  iOS keys.
+- `frontend/services/elevenLabsPure.ts` **(new)** — RN-free pure
+  seam: `resolveVoiceForCharacter`, `selectProvider`,
+  `uint8ArrayToBase64`, `makeAudioCacheKey`, `playCharacterLinePure`
+  (the exact E2E playback function the mocked smoke test exercises).
+- `frontend/app/rehearsal/[id].tsx` — unconditional
+  `ensurePlaybackAudioMode()` on mount (no longer gated on Premium),
+  emits VOICE_RESOLUTION + VOICE_PROVIDER_SELECTED +
+  FALLBACK_TO_EXPO_SPEECH per line. `useElevenLabs` now derives from
+  the `selectProvider(...)` helper.
+- `scripts/voice_pipeline_smoketest.js` **(new)** — 30-assertion
+  Node smoke test compiling `elevenLabsPure.ts` via `tsc` and
+  exercising the full mocked playback lifecycle with stubbed fetch /
+  file writer / audio loader.
+- `backend/tests/test_voice_pipeline_android_fix_feb2026.py` **(new)** —
+  16 pytest assertions locking the fix (no blob+FileReader, arrayBuffer
+  present, expo-file-system/legacy write, `file://` URI at createAsync,
+  Android audio session keys, unconditional useEffect, full diagnostic
+  breadcrumb set, pure seam has no RN imports, smoke test exit code).
+- `scripts/prebuild_gate.py` — voice smoke wired into the gate, new
+  test file added to the static suite.
+- Updated `test_voice_pipeline_hardening_feb2026.py` and
+  `test_voice_assignment_functional_feb2026.py` to accept the
+  semantically equivalent helper-based lookup form.
+
+### Diagnostic table before → after
+Before: `voice-assignments-loaded { count: 3, elevenLabsConfigured: true }`
+was the only signal, and it did not prove any audio actually played.
+
+After (per line):
+- VOICE_RESOLUTION → character, assignmentPresent, voiceKey, voiceIdPresent
+- VOICE_PROVIDER_SELECTED → provider, elevenLabsConfigured
+- ELEVENLABS_REQUEST_START → voiceId, textLength
+- ELEVENLABS_RESPONSE → httpStatus, byteLength, success/stage
+- ELEVENLABS_AUDIO_READY → fileUri suffix, byteLength
+- AUDIO_LOAD_START / AUDIO_LOAD_SUCCESS
+- AUDIO_PLAY_START / AUDIO_PLAYING (first isPlaying tick)
+- AUDIO_PLAYBACK_COMPLETE / AUDIO_PLAYBACK_ERROR
+- FALLBACK_TO_EXPO_SPEECH → voiceId, reason
+
+Never logs the ElevenLabs API key or the raw audio body.
+
+### Gate state after fix
+- Backend regression tests: **779 pass** (was 763; +16 new).
+- Voice pipeline smoke (Node E2E): **30 pass, 0 fail**.
+- Learn engine smoke: **18 pass**.
+- TypeScript baseline: **31 errors, 0 new** (untouched per directive).
+- Ruff lint baseline: **327 findings, 0 new** (untouched per directive).
+- Dependencies check: PASS.
+- **Overall: GREEN.**
+
+### Protected scope
+- Scene Partner: untouched.
+- Voice Studio: untouched.
+- Self-Tape: untouched.
+- Home layout: untouched.
+- 18 protected backend lint issues: untouched.
+- 31 protected TS baseline errors: untouched.
+- No APK built. No GitHub push. No deploy.

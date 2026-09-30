@@ -31,6 +31,9 @@ import {
   loadVoiceAssignments,
   playSpeech,
   isElevenLabsConfigured,
+  ensurePlaybackAudioMode,
+  resolveVoiceForCharacter,
+  selectProvider,
   type CharacterVoiceAssignment,
 } from '../../services/elevenLabsService';
 
@@ -526,7 +529,16 @@ export default function RehearsalScreen() {
     };
   }, [id]);
 
-  // Configure audio for recording
+  // Configure audio session for both recording (Premium) AND playback
+  // (all users). Prior to Feb-2026 this hook only fired for Premium
+  // users with iOS-only fields — Android free-tier devices therefore
+  // never had the playback session configured, and ExoPlayer's
+  // Audio.Sound could no-op silently on the first ElevenLabs file.
+  useEffect(() => {
+    // Fire once so free-tier Android users can hear rehearsal audio.
+    ensurePlaybackAudioMode().catch(() => {});
+  }, []);
+
   useEffect(() => {
     const configureAudio = async () => {
       await Audio.setAudioModeAsync({
@@ -683,22 +695,34 @@ export default function RehearsalScreen() {
 
       // 2026-02 multi-voice branch selection. Uses the line's
       // character (resolved at call time, not memoized) to look up the
-      // per-character assignment. If ElevenLabs is configured AND the
-      // character has an explicit voiceId, we route through
-      // playSpeech; otherwise we fall through to the pre-2026-02
-      // Speech.speak(...) path unchanged.
+      // per-character assignment via the shared helper (same code path
+      // exercised by the mocked end-to-end playback test).
       const lineCharacter = lines[targetLineIndex]?.character;
-      // 2026-02: case-insensitive lookup guards against picker/parser
-      // casing drift (see loader above — both exact and upper-cased
-      // keys are stored).
-      const assignment = lineCharacter
-        ? (voiceAssignmentsRef.current[lineCharacter]
-           ?? voiceAssignmentsRef.current[lineCharacter.toUpperCase()])
+      const resolution = resolveVoiceForCharacter(
+        voiceAssignmentsRef.current,
+        lineCharacter,
+      );
+      const provider = selectProvider(elevenLabsAvailable.current, resolution);
+      const useElevenLabs = provider === 'elevenlabs';
+      const assignment: CharacterVoiceAssignment | undefined = useElevenLabs
+        ? (voiceAssignmentsRef.current[lineCharacter as string]
+           ?? voiceAssignmentsRef.current[(lineCharacter as string).toUpperCase()])
         : undefined;
-      const useElevenLabs =
-        elevenLabsAvailable.current
-        && !!assignment
-        && !!assignment.voiceId;
+
+      // Per-line resolution + selection breadcrumbs.
+      DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'VOICE_RESOLUTION', {
+        lineIndex: targetLineIndex,
+        character: resolution.character || '(unknown)',
+        assignmentPresent: resolution.assignmentPresent,
+        voiceKey: resolution.voiceKey,
+        voiceIdPresent: !!resolution.voiceId,
+      });
+      DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'VOICE_PROVIDER_SELECTED', {
+        lineIndex: targetLineIndex,
+        character: resolution.character || '(unknown)',
+        provider,
+        elevenLabsConfigured: elevenLabsAvailable.current,
+      });
 
       // TTS_REQUEST diagnostic — emitted BEFORE any provider call so
       // we can see which provider + voiceId is actually being chosen
@@ -802,12 +826,29 @@ export default function RehearsalScreen() {
               error: e?.message || String(e),
               fallingBackTo: 'expo-speech',
             });
+            DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'FALLBACK_TO_EXPO_SPEECH', {
+              lineIndex: targetLineIndex,
+              character: lineCharacter,
+              reason: 'elevenlabs-exception',
+              error: e?.message || String(e),
+            });
             DebugLog.errorCaught('elevenlabs-playSpeech', e, {
               character: lineCharacter, lineIndex: targetLineIndex,
               voiceId: assignment.voiceId,
             });
             // Intentional fall-through to the shared path below.
           }
+        }
+
+        // If we intended ElevenLabs but playSpeech returned null (which
+        // now falls through here without throwing), emit the fallback
+        // diagnostic so it can never be silent.
+        if (useElevenLabs && !activeElevenLabsSoundRef.current) {
+          DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'FALLBACK_TO_EXPO_SPEECH', {
+            lineIndex: targetLineIndex,
+            character: lineCharacter,
+            reason: 'elevenlabs-generation-null',
+          });
         }
 
         DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'AUDIO_PLAYBACK', {

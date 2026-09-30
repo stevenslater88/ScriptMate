@@ -147,11 +147,18 @@ def test_rehearsal_looks_up_per_line_character_at_speak_time():
         "speakLine must resolve the current line's character via "
         "lines[targetLineIndex]?.character"
     )
-    # Look it up in the assignments ref map
-    assert re.search(
-        r"voiceAssignmentsRef\.current\[lineCharacter\]", src
-    ), (
-        "speakLine must consult voiceAssignmentsRef.current[lineCharacter]"
+    # Look it up in the assignments ref map — either inline via
+    # `voiceAssignmentsRef.current[lineCharacter]` or via the pure
+    # helper `resolveVoiceForCharacter(voiceAssignmentsRef.current, lineCharacter)`.
+    inline = re.search(r"voiceAssignmentsRef\.current\[lineCharacter\]", src)
+    helper = re.search(
+        r"resolveVoiceForCharacter\s*\(\s*voiceAssignmentsRef\.current\s*,\s*"
+        r"lineCharacter\s*,?\s*\)",
+        src,
+    )
+    assert inline or helper, (
+        "speakLine must consult voiceAssignmentsRef.current[lineCharacter] "
+        "either inline or via resolveVoiceForCharacter(...)"
     )
 
 
@@ -220,18 +227,25 @@ def test_fallback_used_when_no_assignment_or_elevenLabs_missing():
     """The branch condition `useElevenLabs = elevenLabsAvailable
     && !!assignment && !!assignment.voiceId` guarantees the fallback
     runs when the assignments map lookup returns undefined OR
-    ElevenLabs isn't configured."""
+    ElevenLabs isn't configured. May be expressed inline OR via the
+    pure `selectProvider(configured, resolution)` helper — both are
+    the same rule."""
     src = REHEARSAL.read_text()
-    m = re.search(
+    inline = re.search(
         r"const\s+useElevenLabs\s*=\s*"
         r"elevenLabsAvailable\.current\s*"
         r"&&\s*!!assignment\s*"
         r"&&\s*!!assignment\.voiceId",
         src,
     )
-    assert m, (
+    helper = re.search(
+        r"selectProvider\(\s*elevenLabsAvailable\.current\s*,\s*resolution\s*\)",
+        src,
+    )
+    assert inline or helper, (
         "the useElevenLabs branch condition must require BOTH the "
-        "module configured AND a per-character assignment with voiceId"
+        "module configured AND a per-character assignment with voiceId "
+        "— either inline or via the pure selectProvider() helper"
     )
 
 

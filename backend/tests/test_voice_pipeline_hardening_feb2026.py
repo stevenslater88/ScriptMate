@@ -168,15 +168,22 @@ def test_rehearsal_lookup_is_case_insensitive():
         "assignment map must be populated with both the exact and "
         "upper-cased character-name keys"
     )
-    # speakLine falls back to the upper-cased key.
-    m_lookup = re.search(
+    # speakLine may lookup inline OR via the pure resolveVoiceForCharacter
+    # helper — both routes go through the same exact-then-upper strategy.
+    inline_re = re.search(
         r"voiceAssignmentsRef\.current\[lineCharacter\][\s\S]{0,200}?"
         r"voiceAssignmentsRef\.current\[lineCharacter\.toUpperCase\(\)\]",
         src,
     )
-    assert m_lookup, (
-        "speakLine must try both exact and upper-cased character-name "
-        "keys against the assignment map"
+    helper_re = re.search(
+        r"resolveVoiceForCharacter\s*\(\s*voiceAssignmentsRef\.current\s*,\s*"
+        r"lineCharacter\s*,?\s*\)",
+        src,
+    )
+    assert inline_re or helper_re, (
+        "speakLine must resolve the character's assignment via the "
+        "exact-then-uppercase strategy — either inline or via the "
+        "resolveVoiceForCharacter helper"
     )
 
 
@@ -187,15 +194,21 @@ def test_audio_cache_key_includes_voiceId():
     """Regression against the reported cache pitfall: changing Rachel
     to Domi must not keep playing the previous voice. The cache key
     must include the ElevenLabs voice ID."""
-    src = ELEVENLABS.read_text()
-    assert "makeAudioCacheKey" in src, (
+    # The helper may live in elevenLabsService.ts or elevenLabsPure.ts —
+    # rehearsal imports the same symbol either way.
+    pure = FRONTEND / "services" / "elevenLabsPure.ts"
+    candidates = [ELEVENLABS.read_text()]
+    if pure.exists():
+        candidates.append(pure.read_text())
+    joined = "\n---\n".join(candidates)
+    assert "makeAudioCacheKey" in joined, (
         "audio cache key helper must exist"
     )
     m = re.search(
         r"function\s+makeAudioCacheKey\s*\(\s*voiceId:\s*string\s*,\s*"
         r"text:\s*string\s*\)[\s\S]{0,400}?"
         r"return\s+`\$\{voiceId\}",
-        src,
+        joined,
     )
     assert m, (
         "makeAudioCacheKey(voiceId, text) must return a string that "
@@ -203,7 +216,8 @@ def test_audio_cache_key_includes_voiceId():
         "audio from the previous voice"
     )
     # And playSpeech uses that key both for read and write.
-    play_src = src[src.find("export const playSpeech"):]
+    svc = ELEVENLABS.read_text()
+    play_src = svc[svc.find("export const playSpeech"):]
     assert "makeAudioCacheKey(voiceId, text)" in play_src
     assert "cacheGet" in play_src and "cachePut" in play_src
 
@@ -244,16 +258,27 @@ def test_useElevenLabs_branch_requires_explicit_assignment_voiceId():
     a global-voice code path when the user has explicitly assigned an
     ElevenLabs voice."""
     src = REHEARSAL.read_text()
-    m = re.search(
+    # Two equivalent code shapes are acceptable:
+    #  (a) inline conditional: `useElevenLabs = configured && !!assignment && !!assignment.voiceId`
+    #  (b) helper: `provider = selectProvider(configured, resolution)` then `useElevenLabs = provider === 'elevenlabs'`
+    inline = re.search(
         r"const\s+useElevenLabs\s*=\s*"
         r"elevenLabsAvailable\.current\s*"
         r"&&\s*!!assignment\s*"
         r"&&\s*!!assignment\.voiceId",
         src,
     )
-    assert m, (
+    helper = re.search(
+        r"selectProvider\(\s*elevenLabsAvailable\.current\s*,\s*resolution\s*\)",
+        src,
+    ) and re.search(
+        r"const\s+useElevenLabs\s*=\s*provider\s*===\s*['\"]elevenlabs['\"]",
+        src,
+    )
+    assert inline or helper, (
         "useElevenLabs branch must require all three: module "
-        "configured AND assignment present AND voiceId set"
+        "configured AND assignment present AND voiceId set — either "
+        "inline or via the selectProvider() helper"
     )
 
 

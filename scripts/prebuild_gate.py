@@ -46,6 +46,7 @@ BASELINE_DIR = ROOT / "scripts" / "prebuild_gate_baselines"
 RUFF_BASELINE = BASELINE_DIR / "ruff_baseline.json"
 TS_BASELINE = BASELINE_DIR / "ts_baseline.json"
 SMOKE_SCRIPT = ROOT / "scripts" / "learn_engine_smoketest.js"
+VOICE_SMOKE_SCRIPT = ROOT / "scripts" / "voice_pipeline_smoketest.js"
 
 RESULT_PASS = "PASS"
 RESULT_BASELINE = "PASS (baseline-only)"
@@ -90,6 +91,7 @@ STATIC_REGRESSION_TESTS = [
     "tests/test_voice_assignment_functional_feb2026.py",
     "tests/test_voice_pipeline_hardening_feb2026.py",
     "tests/test_voice_pipeline_backend_contract_feb2026.py",
+    "tests/test_voice_pipeline_android_fix_feb2026.py",
 ]
 
 # Files required for the frontend/backend to build/run. Missing = RED.
@@ -104,6 +106,7 @@ REQUIRED_FILES = [
     "frontend/services/learnEngine.ts",
     "frontend/.eas/workflows/qa-apk.yml",
     "scripts/learn_engine_smoketest.js",
+    "scripts/voice_pipeline_smoketest.js",
 ]
 
 
@@ -279,6 +282,41 @@ def check_runtime_smoke() -> CheckResult:
     status = RESULT_PASS if rc == 0 and failed == 0 else RESULT_FAIL
     return CheckResult(
         "Runtime smoke (learn engine)",
+        status,
+        f"{passed} ok, {failed} fail",
+        tail if status == RESULT_FAIL else [],
+        time.time() - start,
+    )
+
+
+def check_voice_pipeline_smoke() -> CheckResult:
+    """End-to-end mocked playback proof — character → voiceId → fetch
+    → base64 → file → load → play → complete → advance."""
+    start = time.time()
+    if not VOICE_SMOKE_SCRIPT.exists():
+        return CheckResult(
+            "Runtime smoke (voice pipeline)",
+            RESULT_FAIL,
+            "voice smoke script missing",
+            duration_s=time.time() - start,
+        )
+    try:
+        rc, out, err = _run(
+            ["node", str(VOICE_SMOKE_SCRIPT)], cwd=ROOT, timeout=300
+        )
+    except subprocess.TimeoutExpired:
+        return CheckResult(
+            "Runtime smoke (voice pipeline)",
+            RESULT_FAIL,
+            "voice smoke test timed out",
+            duration_s=time.time() - start,
+        )
+    tail = (out + err).splitlines()[-30:]
+    passed = sum(1 for ln in tail if ln.strip().startswith("ok "))
+    failed = sum(1 for ln in tail if "FAIL" in ln)
+    status = RESULT_PASS if rc == 0 and failed == 0 else RESULT_FAIL
+    return CheckResult(
+        "Runtime smoke (voice pipeline)",
         status,
         f"{passed} ok, {failed} fail",
         tail if status == RESULT_FAIL else [],
@@ -500,6 +538,7 @@ def check_dependencies() -> CheckResult:
 CHECKS: List[Tuple[str, Callable[..., CheckResult]]] = [
     ("tests", check_backend_tests),
     ("smoke", check_runtime_smoke),
+    ("voice_smoke", check_voice_pipeline_smoke),
     ("ts", check_typescript),
     ("ruff", check_ruff),
     ("deps", check_dependencies),
@@ -514,6 +553,7 @@ def render_report(results: List[CheckResult]) -> str:
     label_map = {
         "Backend regression tests": "Tests:            ",
         "Runtime smoke (learn engine)": "Runtime smoke:    ",
+        "Runtime smoke (voice pipeline)": "Voice smoke:      ",
         "TypeScript check": "TypeScript:       ",
         "Lint regression (ruff)": "Lint regression:  ",
         "Dependencies / config sanity": "Dependencies:     ",
@@ -554,6 +594,7 @@ def main() -> int:
     skip_map = {
         "tests": args.skip_tests,
         "smoke": args.skip_smoke,
+        "voice_smoke": args.skip_smoke,
         "ts": args.skip_ts,
         "ruff": args.skip_ruff,
         "deps": args.skip_deps,
@@ -562,6 +603,7 @@ def main() -> int:
     check_names = {
         "tests": "Backend regression tests",
         "smoke": "Runtime smoke (learn engine)",
+        "voice_smoke": "Runtime smoke (voice pipeline)",
         "ts": "TypeScript check",
         "ruff": "Lint regression (ruff)",
         "deps": "Dependencies / config sanity",

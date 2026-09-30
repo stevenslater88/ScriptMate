@@ -1,16 +1,78 @@
 /**
  * ElevenLabs Text-to-Speech Service
- * Client-side TTS generation for Multi-Voice feature
+ * ---------------------------------
+ * Client-side TTS generation + Multi-Voice playback for rehearsals.
+ *
+ * 2026-02 Android voice-pipeline break RCA
+ * ----------------------------------------
+ * Physical S23 Ultra QA (build 1110) reported NO REHEARSAL AUDIO despite
+ * `elevenLabsConfigured=true` and 3 assignments loaded. The break was
+ * NOT in assignment lookup — it was in the audio pipeline itself:
+ *
+ *   1. `generateSpeech()` used `response.blob()` + `FileReader.readAsDataURL()`.
+ *      React Native's `fetch` Blob is a native reference, not a browser
+ *      Blob. On Android/Hermes, `FileReader.readAsDataURL()` on a fetch
+ *      Blob is known to silently return empty / corrupted strings.
+ *      (see facebook/react-native#35325 and expo/expo#22916).
+ *
+ *   2. Even when step 1 returned a usable string, it produced a
+ *      `data:audio/mpeg;base64,...` URI. ExoPlayer (the Android backing
+ *      engine for `expo-av`'s `Audio.Sound`) is documented to fail on
+ *      non-trivial `data:` audio URIs — MP3 payloads over a few KB
+ *      routinely fail to load silently.
+ *
+ * Fix (this file):
+ *   - Use `response.arrayBuffer()` and encode bytes → base64 manually
+ *     with a Hermes-safe encoder (no `btoa`, no `Buffer`).
+ *   - Write the base64 to a temp file via `expo-file-system/legacy`
+ *     (SDK 54 legacy import path — same style as voiceStudioStorage.ts).
+ *   - Pass the resulting `file://` URI to `Audio.Sound.createAsync`.
+ *   - Emit deterministic diagnostics at every stage so a future silent
+ *     failure cannot be misdiagnosed as "voice loaded but silent".
+ *
+ * Diagnostics emitted (source: 'ElevenLabsService'):
+ *   VOICE_RESOLUTION            — character → voiceId lookup result
+ *   VOICE_PROVIDER_SELECTED     — 'elevenlabs' | 'expo-speech'
+ *   ELEVENLABS_REQUEST_START    — POST to /text-to-speech/{voiceId}
+ *   ELEVENLABS_RESPONSE         — HTTP status + byte length
+ *   ELEVENLABS_AUDIO_READY      — file:// URI written, ready to load
+ *   AUDIO_LOAD_START            — Audio.Sound.createAsync begins
+ *   AUDIO_LOAD_SUCCESS          — Sound loaded, playback about to start
+ *   AUDIO_PLAY_START            — playAsync() called
+ *   AUDIO_PLAYING               — first isPlaying=true status observed
+ *   AUDIO_PLAYBACK_COMPLETE     — didJustFinish
+ *   AUDIO_PLAYBACK_ERROR        — any failure inside the audio lifecycle
+ *   FALLBACK_TO_EXPO_SPEECH     — expo-speech fallback taken
+ *
+ * Never logs API keys, audio contents, or full text bodies.
  */
 
+import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppConfig } from './appConfig';
+import { DebugLog } from './debugLogService';
+import {
+  resolveVoiceForCharacter as _resolveVoiceForCharacter,
+  selectProvider as _selectProvider,
+  uint8ArrayToBase64 as _uint8ArrayToBase64,
+  makeAudioCacheKey as _makeAudioCacheKey,
+  type VoiceResolution,
+  type Provider,
+} from './elevenLabsPure';
+
+// Re-export the pure helpers so rehearsal (and tests) can keep the
+// existing import path.
+export const resolveVoiceForCharacter = _resolveVoiceForCharacter;
+export const selectProvider = _selectProvider;
+export const uint8ArrayToBase64 = _uint8ArrayToBase64;
+export const makeAudioCacheKey = _makeAudioCacheKey;
+export type { VoiceResolution, Provider };
 
 const ELEVENLABS_API_KEY = AppConfig.ELEVENLABS_API_KEY;
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1';
 
-// Preset voices with different accents and genders
+// ─── PRESET VOICES ─────────────────────────────────────────────────────
 export interface PresetVoice {
   key: string;
   id: string;
@@ -51,20 +113,15 @@ export const PRESET_VOICES: PresetVoice[] = [
   { key: 'ethan', id: 'g5CIjZEefAph4nQFvHAz', name: 'Ethan', accent: 'American', gender: 'Male', description: 'Bright, young' },
 ];
 
-// Get voices grouped by gender
-export const getVoicesByGender = () => {
-  return {
-    female: PRESET_VOICES.filter(v => v.gender === 'Female'),
-    male: PRESET_VOICES.filter(v => v.gender === 'Male'),
-  };
-};
+export const getVoicesByGender = () => ({
+  female: PRESET_VOICES.filter(v => v.gender === 'Female'),
+  male: PRESET_VOICES.filter(v => v.gender === 'Male'),
+});
 
-// Get a specific voice by key
-export const getVoiceByKey = (key: string): PresetVoice | undefined => {
-  return PRESET_VOICES.find(v => v.key === key);
-};
+export const getVoiceByKey = (key: string): PresetVoice | undefined =>
+  PRESET_VOICES.find(v => v.key === key);
 
-// Character voice assignment storage
+// ─── ASSIGNMENT PERSISTENCE ────────────────────────────────────────────
 export interface CharacterVoiceAssignment {
   characterName: string;
   voiceKey: string;
@@ -73,9 +130,8 @@ export interface CharacterVoiceAssignment {
 
 const VOICE_STORAGE_KEY = 'script_voice_settings';
 
-// Save voice assignments for a script
 export const saveVoiceAssignments = async (
-  scriptId: string, 
+  scriptId: string,
   assignments: CharacterVoiceAssignment[]
 ): Promise<void> => {
   try {
@@ -91,7 +147,6 @@ export const saveVoiceAssignments = async (
   }
 };
 
-// Load voice assignments for a script
 export const loadVoiceAssignments = async (
   scriptId: string
 ): Promise<CharacterVoiceAssignment[]> => {
@@ -106,7 +161,6 @@ export const loadVoiceAssignments = async (
   }
 };
 
-// Get voice ID for a character in a script
 export const getCharacterVoiceId = async (
   scriptId: string,
   characterName: string
@@ -118,8 +172,25 @@ export const getCharacterVoiceId = async (
   return assignment?.voiceId || null;
 };
 
-// Generate speech using ElevenLabs API
-export const generateSpeech = async (
+// ─── PLAYBACK-SEAM TYPES (moved to elevenLabsPure.ts) ────────────────
+// resolveVoiceForCharacter / selectProvider / VoiceResolution /
+// Provider are re-exported from elevenLabsPure.ts above.
+
+// ─── ELEVENLABS API ───────────────────────────────────────────────────
+export interface ElevenLabsGenerateResult {
+  fileUri: string;
+  byteLength: number;
+  httpStatus: number;
+}
+
+/**
+ * Generate speech via ElevenLabs and persist to a temp file. Returns
+ * the `file://` URI the Android/iOS audio engine can play.
+ *
+ * IMPORTANT: this function is exported for the automated mocked
+ * playback test. Real callers should use `playSpeech()`.
+ */
+export const generateSpeechToFile = async (
   text: string,
   voiceId: string,
   options: {
@@ -127,89 +198,192 @@ export const generateSpeech = async (
     similarityBoost?: number;
     style?: number;
     useSpeakerBoost?: boolean;
+    // Test hook — do not use in production callers.
+    _fetch?: typeof fetch;
+    _writeFile?: (uri: string, base64: string) => Promise<void>;
+    _tmpDir?: string;
   } = {}
-): Promise<{ audioBase64: string; audioUri: string } | null> => {
+): Promise<ElevenLabsGenerateResult | null> => {
   if (!ELEVENLABS_API_KEY) {
-    console.error('ElevenLabs API key not configured');
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_REQUEST_ABORT', {
+      reason: 'no-api-key',
+    });
     return null;
   }
 
-  const {
-    stability = 0.5,
-    similarityBoost = 0.75,
-    style = 0.0,
-    useSpeakerBoost = true,
-  } = options;
+  const stability = options.stability ?? 0.5;
+  const similarityBoost = options.similarityBoost ?? 0.75;
+  const style = options.style ?? 0.0;
+  const useSpeakerBoost = options.useSpeakerBoost ?? true;
+  const fetchFn = options._fetch ?? fetch;
 
+  const url = `${ELEVENLABS_API_URL}/text-to-speech/${voiceId}`;
+  DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_REQUEST_START', {
+    voiceId,
+    textLength: text.length,
+    endpoint: `/text-to-speech/${voiceId}`,
+  });
+
+  let response: Response;
   try {
-    const response = await fetch(
-      `${ELEVENLABS_API_URL}/text-to-speech/${voiceId}`,
-      {
-        method: 'POST',
-        headers: {
-          'Accept': 'audio/mpeg',
-          'Content-Type': 'application/json',
-          'xi-api-key': ELEVENLABS_API_KEY,
+    response = await fetchFn(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'audio/mpeg',
+        'Content-Type': 'application/json',
+        'xi-api-key': ELEVENLABS_API_KEY,
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability,
+          similarity_boost: similarityBoost,
+          style,
+          use_speaker_boost: useSpeakerBoost,
         },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: {
-            stability,
-            similarity_boost: similarityBoost,
-            style,
-            use_speaker_boost: useSpeakerBoost,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('ElevenLabs API error:', response.status, errorData);
-      throw new Error(errorData?.detail?.message || `API error: ${response.status}`);
-    }
-
-    // Get audio as blob and convert to base64
-    const audioBlob = await response.blob();
-    const reader = new FileReader();
-    
-    return new Promise((resolve, reject) => {
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        const audioBase64 = base64.split(',')[1]; // Remove data URL prefix
-        const audioUri = `data:audio/mpeg;base64,${audioBase64}`;
-        resolve({ audioBase64, audioUri });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(audioBlob);
+      }),
     });
-  } catch (error) {
-    console.error('Error generating speech:', error);
-    throw error;
+  } catch (netErr: any) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_RESPONSE', {
+      voiceId,
+      success: false,
+      httpStatus: 0,
+      error: netErr?.message || String(netErr),
+      stage: 'network',
+    });
+    return null;
   }
+
+  if (!response.ok) {
+    let bodyPreview = '';
+    try {
+      bodyPreview = (await response.text()).substring(0, 200);
+    } catch { /* ignore */ }
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_RESPONSE', {
+      voiceId,
+      success: false,
+      httpStatus: response.status,
+      bodyPreview,
+      stage: 'http-status',
+    });
+    return null;
+  }
+
+  let bytes: Uint8Array;
+  try {
+    const buf = await response.arrayBuffer();
+    bytes = new Uint8Array(buf);
+  } catch (bufErr: any) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_RESPONSE', {
+      voiceId,
+      success: false,
+      httpStatus: response.status,
+      error: bufErr?.message || String(bufErr),
+      stage: 'arraybuffer',
+    });
+    return null;
+  }
+
+  if (bytes.length === 0) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_RESPONSE', {
+      voiceId,
+      success: false,
+      httpStatus: response.status,
+      byteLength: 0,
+      stage: 'empty-body',
+    });
+    return null;
+  }
+
+  DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_RESPONSE', {
+    voiceId,
+    success: true,
+    httpStatus: response.status,
+    byteLength: bytes.length,
+  });
+
+  // Write to a temp file so Android's ExoPlayer can play a file:// URI
+  // (see file header for why we cannot use a data: URI on Android).
+  let base64: string;
+  try {
+    base64 = uint8ArrayToBase64(bytes);
+  } catch (encErr: any) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_AUDIO_READY', {
+      voiceId,
+      success: false,
+      error: encErr?.message || String(encErr),
+      stage: 'base64',
+    });
+    return null;
+  }
+
+  const tmpDir = options._tmpDir ?? (FileSystem.cacheDirectory ?? FileSystem.documentDirectory);
+  if (!tmpDir) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_AUDIO_READY', {
+      voiceId,
+      success: false,
+      stage: 'no-tmp-dir',
+    });
+    return null;
+  }
+  // Filename includes voiceId prefix so a stale cache file for a
+  // different voice can never be replayed by accident.
+  const fileUri = `${tmpDir}el_${voiceId.substring(0, 8)}_${Date.now()}_${Math.floor(Math.random() * 1e6)}.mp3`;
+  try {
+    if (options._writeFile) {
+      await options._writeFile(fileUri, base64);
+    } else {
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+    }
+  } catch (writeErr: any) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_AUDIO_READY', {
+      voiceId,
+      success: false,
+      error: writeErr?.message || String(writeErr),
+      stage: 'write-file',
+    });
+    return null;
+  }
+
+  DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_AUDIO_READY', {
+    voiceId,
+    success: true,
+    byteLength: bytes.length,
+    fileUriSuffix: fileUri.substring(Math.max(0, fileUri.length - 40)),
+  });
+
+  return { fileUri, byteLength: bytes.length, httpStatus: response.status };
 };
 
-// 2026-02 voice-pipeline hardening: cache generated ElevenLabs audio
-// keyed by (voiceId, text). The key MUST include voiceId so that
-// changing a character's voice (e.g. Rachel → Domi) invalidates the
-// cached audio — a text-only cache would keep playing the previous
-// voice. Small in-memory LRU (~20 entries) — plenty for a single
-// rehearsal session; nothing spills to disk (no PII / privacy risk).
+// ─── Deprecated shim ─────────────────────────────────────────────────
+// Retained for any external callers that still expect the pre-fix
+// signature. Not used by rehearsal anymore.
+export const generateSpeech = async (
+  text: string,
+  voiceId: string,
+  options?: {
+    stability?: number;
+    similarityBoost?: number;
+    style?: number;
+    useSpeakerBoost?: boolean;
+  }
+): Promise<{ audioBase64: string; audioUri: string } | null> => {
+  const result = await generateSpeechToFile(text, voiceId, options);
+  if (!result) return null;
+  return { audioBase64: '', audioUri: result.fileUri };
+};
+
+// ─── AUDIO CACHE (file-URI based) ────────────────────────────────────
+// Keyed by (voiceId, text). Cache stores the on-disk file:// URI so we
+// avoid regenerating (and re-billing) the same line twice within a
+// session. LRU capped so old files can be gc'd (we let the OS reap
+// them from the cache dir).
 const AUDIO_CACHE_MAX = 20;
 const audioCache = new Map<string, string>();
 
-function makeAudioCacheKey(voiceId: string, text: string): string {
-  // Simple non-cryptographic hash of text — collision probability is
-  // negligible for a per-rehearsal cache and it avoids a heavy
-  // dependency (WebCrypto isn't stable across all Expo runtimes).
-  let h = 0;
-  for (let i = 0; i < text.length; i++) {
-    h = ((h << 5) - h) + text.charCodeAt(i);
-    h |= 0;
-  }
-  return `${voiceId}:${text.length}:${h}`;
-}
 
 function cachePut(key: string, uri: string): void {
   if (audioCache.has(key)) audioCache.delete(key);
@@ -229,7 +403,38 @@ export function clearElevenLabsAudioCache(): void {
   audioCache.clear();
 }
 
-// Play speech using Expo AV
+// ─── AUDIO SESSION (Android + iOS) ────────────────────────────────────
+let audioModeConfigured = false;
+export async function ensurePlaybackAudioMode(): Promise<void> {
+  if (audioModeConfigured) return;
+  try {
+    // Explicit playback config — the previous rehearsal-side call only
+    // fired when `isPremium` was true AND used iOS-only fields, so on
+    // Android free-tier devices the audio session was never configured
+    // for playback of a downloaded MP3. Passing keys that expo-av
+    // ignores on the other platform is safe.
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
+    } as any);
+    audioModeConfigured = true;
+  } catch (e: any) {
+    // Non-fatal — Sound.createAsync will fail loudly if the audio
+    // session is actually unusable.
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_MODE_CONFIG_ERROR', {
+      error: e?.message || String(e),
+    });
+  }
+}
+
+/**
+ * Play a line via ElevenLabs. Returns the `Audio.Sound` if started, or
+ * `null` if any stage failed — in which case the caller must fall back
+ * to `expo-speech` so the rehearsal never stalls silently.
+ */
 export const playSpeech = async (
   text: string,
   voiceId: string,
@@ -238,33 +443,97 @@ export const playSpeech = async (
     similarityBoost?: number;
   }
 ): Promise<Audio.Sound | null> => {
+  await ensurePlaybackAudioMode();
+
+  const cacheKey = makeAudioCacheKey(voiceId, text);
+  let fileUri = cacheGet(cacheKey);
+  if (fileUri) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_CACHE_HIT', {
+      voiceId,
+      textLength: text.length,
+    });
+  } else {
+    const generated = await generateSpeechToFile(text, voiceId, options);
+    if (!generated) return null;
+    fileUri = generated.fileUri;
+    cachePut(cacheKey, fileUri);
+  }
+
+  DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_LOAD_START', {
+    voiceId,
+    fileUriSuffix: fileUri.substring(Math.max(0, fileUri.length - 40)),
+  });
+
+  let sound: Audio.Sound;
   try {
-    const cacheKey = makeAudioCacheKey(voiceId, text);
-    let audioUri = cacheGet(cacheKey);
-
-    if (!audioUri) {
-      const result = await generateSpeech(text, voiceId, options);
-      if (!result) return null;
-      audioUri = result.audioUri;
-      cachePut(cacheKey, audioUri);
-    }
-
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: audioUri },
-      { shouldPlay: true }
+    const created = await Audio.Sound.createAsync(
+      { uri: fileUri },
+      { shouldPlay: false },
     );
-
-    return sound;
-  } catch (error) {
-    console.error('Error playing speech:', error);
+    sound = created.sound;
+  } catch (loadErr: any) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_PLAYBACK_ERROR', {
+      voiceId,
+      stage: 'load',
+      error: loadErr?.message || String(loadErr),
+    });
     return null;
   }
+
+  DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_LOAD_SUCCESS', {
+    voiceId,
+    fileUriSuffix: fileUri.substring(Math.max(0, fileUri.length - 40)),
+  });
+
+  // Attach a status observer BEFORE playAsync so we can prove the
+  // audio actually starts and never gets torn down before the first
+  // isPlaying frame. The caller may add another observer on top of
+  // this one (e.g. rehearsal advance-on-finish); Audio.Sound supports
+  // a single observer so we chain by re-wrapping on the caller side.
+  let firstPlayingLogged = false;
+  sound.setOnPlaybackStatusUpdate((status: any) => {
+    if (!status?.isLoaded) return;
+    if (status.isPlaying && !firstPlayingLogged) {
+      firstPlayingLogged = true;
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_PLAYING', {
+        voiceId,
+        positionMs: status.positionMillis ?? 0,
+      });
+    }
+    if (status.didJustFinish) {
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_PLAYBACK_COMPLETE', {
+        voiceId,
+        durationMs: status.durationMillis ?? null,
+      });
+    }
+    if (status.error) {
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_PLAYBACK_ERROR', {
+        voiceId,
+        stage: 'runtime',
+        error: String(status.error),
+      });
+    }
+  });
+
+  DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_PLAY_START', { voiceId });
+
+  try {
+    await sound.playAsync();
+  } catch (playErr: any) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_PLAYBACK_ERROR', {
+      voiceId,
+      stage: 'play',
+      error: playErr?.message || String(playErr),
+    });
+    try { await sound.unloadAsync(); } catch { /* ignore */ }
+    return null;
+  }
+
+  return sound;
 };
 
-// Check if ElevenLabs is configured
-export const isElevenLabsConfigured = (): boolean => {
-  return !!ELEVENLABS_API_KEY;
-};
+// ─── CONFIG PROBE ─────────────────────────────────────────────────────
+export const isElevenLabsConfigured = (): boolean => !!ELEVENLABS_API_KEY;
 
 export default {
   PRESET_VOICES,
@@ -274,7 +543,13 @@ export default {
   loadVoiceAssignments,
   getCharacterVoiceId,
   generateSpeech,
+  generateSpeechToFile,
   playSpeech,
   isElevenLabsConfigured,
   clearElevenLabsAudioCache,
+  resolveVoiceForCharacter,
+  selectProvider,
+  uint8ArrayToBase64,
+  makeAudioCacheKey,
+  ensurePlaybackAudioMode,
 };
