@@ -240,9 +240,10 @@ def test_fallback_used_when_no_assignment_or_elevenLabs_missing():
 
 def test_debuglog_records_assignment_loading():
     """DebugLog emits a diagnostic breadcrumb when assignments load —
-    lets QA see on-device whether the map arrived."""
+    lets QA see on-device whether the map arrived. The canonical event
+    key is `REHEARSAL_VOICE_ASSIGNMENTS` (Feb-2026 hardening)."""
     src = REHEARSAL.read_text()
-    assert "voice-assignments-loaded" in src, (
-        "rehearsal must DebugLog a 'voice-assignments-loaded' event "
-        "so the on-device diagnostic surfaces the map state"
+    assert "REHEARSAL_VOICE_ASSIGNMENTS" in src, (
+        "rehearsal must DebugLog a 'REHEARSAL_VOICE_ASSIGNMENTS' event "
+        "so the on-device diagnostic surfaces the per-character map"
     )

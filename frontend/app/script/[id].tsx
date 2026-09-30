@@ -188,10 +188,35 @@ export default function ScriptDetailScreen() {
 
     setStarting(true);
     try {
-      DebugLog.log('API_REQUEST', 'ScriptScreen', 'createRehearsal', {
-        scriptId: id, character: selectedCharacter, mode: selectedMode,
-        voice: selectedVoice, readerStyle: selectedReaderStyle,
+      // 2026-02: Load per-character voice assignments so the
+      // CREATE_REHEARSAL_REQUEST diagnostic can prove which voices are
+      // in play at rehearsal start. Non-blocking — a load failure
+      // just yields an empty list and the diagnostic will show that.
+      let voiceAssignmentsForDiag: any[] = [];
+      try {
+        const { loadVoiceAssignments } = await import('../../services/elevenLabsService');
+        const list = await loadVoiceAssignments(id!);
+        voiceAssignmentsForDiag = list.map(a => ({
+          character: a.characterName,
+          provider: 'elevenlabs',
+          voiceKey: a.voiceKey,
+          voiceId: a.voiceId,
+        }));
+      } catch {
+        voiceAssignmentsForDiag = [];
+      }
+      DebugLog.log('DIAGNOSTIC', 'ScriptScreen', 'CREATE_REHEARSAL_REQUEST', {
+        scriptId: id,
+        character: selectedCharacter,
+        mode: selectedMode,
+        globalFallbackVoice: selectedVoice,
+        readerStyle: selectedReaderStyle,
         voiceSpeed,
+        // Per-character map is what the rehearsal screen will actually
+        // consume for playback. If a character is missing here, that's
+        // the exact reason their line will fall back to expo-speech.
+        voiceAssignments: voiceAssignmentsForDiag,
+        voiceAssignmentCount: voiceAssignmentsForDiag.length,
       });
       const rehearsal = await createRehearsal(
         id!,

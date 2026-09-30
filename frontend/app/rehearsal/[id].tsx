@@ -589,15 +589,31 @@ export default function RehearsalScreen() {
       try {
         const list = await loadVoiceAssignments(scriptId);
         const map: Record<string, CharacterVoiceAssignment> = {};
+        // 2026-02 voice-pipeline hardening. Store BOTH exact and
+        // upper-cased keys. Screenplay parsers emit character names in
+        // upper case ("DET. HARRIS"), but the picker may persist them
+        // in the parsed form ("Det. Harris") depending on the source
+        // metadata. Case-insensitive lookup guards against that drift
+        // without changing the storage format.
         for (const a of list) {
           if (a && a.characterName) {
             map[a.characterName] = a;
+            map[a.characterName.toUpperCase()] = a;
           }
         }
         voiceAssignmentsRef.current = map;
-        DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'voice-assignments-loaded', {
-          scriptId, count: list.length,
+        DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'REHEARSAL_VOICE_ASSIGNMENTS', {
+          scriptId,
+          count: list.length,
           elevenLabsConfigured: elevenLabsAvailable.current,
+          // Per-character breakdown makes it impossible to claim the
+          // voice is working "because elevenLabsConfigured=true".
+          assignments: list.map(a => ({
+            character: a.characterName,
+            provider: 'elevenlabs',
+            voiceKey: a.voiceKey,
+            voiceId: a.voiceId,
+          })),
         });
       } catch (e: any) {
         // Non-fatal: fall through to the shared expo-speech path.
@@ -672,13 +688,34 @@ export default function RehearsalScreen() {
       // playSpeech; otherwise we fall through to the pre-2026-02
       // Speech.speak(...) path unchanged.
       const lineCharacter = lines[targetLineIndex]?.character;
+      // 2026-02: case-insensitive lookup guards against picker/parser
+      // casing drift (see loader above — both exact and upper-cased
+      // keys are stored).
       const assignment = lineCharacter
-        ? voiceAssignmentsRef.current[lineCharacter]
+        ? (voiceAssignmentsRef.current[lineCharacter]
+           ?? voiceAssignmentsRef.current[lineCharacter.toUpperCase()])
         : undefined;
       const useElevenLabs =
         elevenLabsAvailable.current
         && !!assignment
         && !!assignment.voiceId;
+
+      // TTS_REQUEST diagnostic — emitted BEFORE any provider call so
+      // we can see which provider + voiceId is actually being chosen
+      // per line. This makes it impossible to claim the voice is
+      // working merely because elevenLabsConfigured=true.
+      DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'TTS_REQUEST', {
+        lineIndex: targetLineIndex,
+        character: lineCharacter || '(unknown)',
+        provider: useElevenLabs ? 'elevenlabs' : 'expo-speech',
+        voiceId: useElevenLabs ? assignment!.voiceId : null,
+        voiceKey: useElevenLabs ? assignment!.voiceKey : null,
+        globalFallbackVoiceType: voiceType,
+        readerStyle,
+        voiceSpeed: readerVoiceSpeed,
+        assignmentPresent: !!assignment,
+        elevenLabsConfigured: elevenLabsAvailable.current,
+      });
 
       // Helper to safely advance once
       const safeAdvance = () => {
@@ -725,6 +762,21 @@ export default function RehearsalScreen() {
               // rehearsal never stalls.
               throw new Error('playSpeech returned null');
             }
+            DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'TTS_RESPONSE', {
+              lineIndex: targetLineIndex,
+              character: lineCharacter,
+              provider: 'elevenlabs',
+              voiceId: assignment.voiceId,
+              voiceKey: assignment.voiceKey,
+              success: true,
+            });
+            DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'AUDIO_PLAYBACK', {
+              lineIndex: targetLineIndex,
+              character: lineCharacter,
+              provider: 'elevenlabs',
+              voiceId: assignment.voiceId,
+              voiceKey: assignment.voiceKey,
+            });
             activeElevenLabsSoundRef.current = sound;
             let doneFired = false;
             sound.setOnPlaybackStatusUpdate((status: any) => {
@@ -740,12 +792,34 @@ export default function RehearsalScreen() {
             return; // do not fall through to Speech.speak
           } catch (e: any) {
             console.warn('[Rehearsal] ElevenLabs path failed, falling back to expo-speech:', e?.message);
+            DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'TTS_RESPONSE', {
+              lineIndex: targetLineIndex,
+              character: lineCharacter,
+              provider: 'elevenlabs',
+              voiceId: assignment.voiceId,
+              voiceKey: assignment.voiceKey,
+              success: false,
+              error: e?.message || String(e),
+              fallingBackTo: 'expo-speech',
+            });
             DebugLog.errorCaught('elevenlabs-playSpeech', e, {
               character: lineCharacter, lineIndex: targetLineIndex,
+              voiceId: assignment.voiceId,
             });
             // Intentional fall-through to the shared path below.
           }
         }
+
+        DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'AUDIO_PLAYBACK', {
+          lineIndex: targetLineIndex,
+          character: lineCharacter || '(unknown)',
+          provider: 'expo-speech',
+          voiceId: null,
+          globalFallbackVoiceType: voiceType,
+          reason: useElevenLabs && assignment
+            ? 'elevenlabs-generation-failed'
+            : (assignment ? 'no-elevenlabs-key' : 'no-assignment'),
+        });
 
         Speech.speak(text, {
           language: 'en-US',

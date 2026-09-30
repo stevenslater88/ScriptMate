@@ -190,6 +190,45 @@ export const generateSpeech = async (
   }
 };
 
+// 2026-02 voice-pipeline hardening: cache generated ElevenLabs audio
+// keyed by (voiceId, text). The key MUST include voiceId so that
+// changing a character's voice (e.g. Rachel → Domi) invalidates the
+// cached audio — a text-only cache would keep playing the previous
+// voice. Small in-memory LRU (~20 entries) — plenty for a single
+// rehearsal session; nothing spills to disk (no PII / privacy risk).
+const AUDIO_CACHE_MAX = 20;
+const audioCache = new Map<string, string>();
+
+function makeAudioCacheKey(voiceId: string, text: string): string {
+  // Simple non-cryptographic hash of text — collision probability is
+  // negligible for a per-rehearsal cache and it avoids a heavy
+  // dependency (WebCrypto isn't stable across all Expo runtimes).
+  let h = 0;
+  for (let i = 0; i < text.length; i++) {
+    h = ((h << 5) - h) + text.charCodeAt(i);
+    h |= 0;
+  }
+  return `${voiceId}:${text.length}:${h}`;
+}
+
+function cachePut(key: string, uri: string): void {
+  if (audioCache.has(key)) audioCache.delete(key);
+  audioCache.set(key, uri);
+  while (audioCache.size > AUDIO_CACHE_MAX) {
+    const oldest = audioCache.keys().next().value;
+    if (oldest !== undefined) audioCache.delete(oldest);
+    else break;
+  }
+}
+
+function cacheGet(key: string): string | undefined {
+  return audioCache.get(key);
+}
+
+export function clearElevenLabsAudioCache(): void {
+  audioCache.clear();
+}
+
 // Play speech using Expo AV
 export const playSpeech = async (
   text: string,
@@ -200,11 +239,18 @@ export const playSpeech = async (
   }
 ): Promise<Audio.Sound | null> => {
   try {
-    const result = await generateSpeech(text, voiceId, options);
-    if (!result) return null;
+    const cacheKey = makeAudioCacheKey(voiceId, text);
+    let audioUri = cacheGet(cacheKey);
+
+    if (!audioUri) {
+      const result = await generateSpeech(text, voiceId, options);
+      if (!result) return null;
+      audioUri = result.audioUri;
+      cachePut(cacheKey, audioUri);
+    }
 
     const { sound } = await Audio.Sound.createAsync(
-      { uri: result.audioUri },
+      { uri: audioUri },
       { shouldPlay: true }
     );
 
@@ -230,4 +276,5 @@ export default {
   generateSpeech,
   playSpeech,
   isElevenLabsConfigured,
+  clearElevenLabsAudioCache,
 };

@@ -27,6 +27,7 @@ import {
   playSpeech,
   isElevenLabsConfigured,
 } from '../services/elevenLabsService';
+import { DebugLog } from '../services/debugLogService';
 
 interface Character {
   id: string;
@@ -135,9 +136,23 @@ export default function VoiceAssignment({
 
   const handleSelectVoice = async (voiceKey: string) => {
     if (!selectedCharacter) return;
-    
+
     const voice = getVoiceByKey(voiceKey);
     if (!voice) return;
+
+    // 2026-02: VOICE_PICKER_SELECTION diagnostic — proves which voice
+    // was chosen for which character (before any storage/rehearsal
+    // stage), so a downstream mismatch can be traced back to the exact
+    // pick. Uses the stable internal voiceKey + ElevenLabs voiceId
+    // rather than the display name.
+    DebugLog.log('DIAGNOSTIC', 'VoiceAssignment', 'VOICE_PICKER_SELECTION', {
+      scriptId,
+      character: selectedCharacter,
+      displayName: voice.name,
+      provider: 'elevenlabs',
+      voiceKey: voice.key,
+      voiceId: voice.id,
+    });
 
     // Update local state
     const newAssignments = {
