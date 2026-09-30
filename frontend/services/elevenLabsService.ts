@@ -50,7 +50,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppConfig } from './appConfig';
+import { AppConfig, classifyElevenLabsKey, isValidElevenLabsApiKey } from './appConfig';
 import { DebugLog } from './debugLogService';
 import {
   resolveVoiceForCharacter as _resolveVoiceForCharacter,
@@ -71,6 +71,94 @@ export type { VoiceResolution, Provider };
 
 const ELEVENLABS_API_KEY = AppConfig.ELEVENLABS_API_KEY;
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1';
+
+// ─── READER STYLE / SPEED → ELEVENLABS PARAMETERS ─────────────────────
+// Reader style must actually alter synthesis, not just appear in logs.
+// The pre-Feb-2026 code plumbed readerStyle through the store but the
+// rehearsal call site `playSpeech(text, voiceId)` passed no options,
+// so ElevenLabs always got stability=0.5 / similarity=0.75 / style=0
+// regardless of neutral vs emotional vs intense. This map lifts each
+// preset to a supported voice_settings tuple:
+//
+//   neutral   → low style, moderate stability (broadcast delivery)
+//   emotional → higher style + slightly lower stability (expressive)
+//   intense   → highest style + low stability (peak emotional range)
+//
+// All values are inside the ElevenLabs 0.0–1.0 range for the
+// eleven_multilingual_v2 model.
+export type ReaderStyle = 'neutral' | 'emotional' | 'intense' | 'aggressive';
+
+export interface ElevenLabsVoiceSettings {
+  stability: number;
+  similarity_boost: number;
+  style: number;
+  use_speaker_boost: boolean;
+  speed: number;
+}
+
+export function readerStyleToElevenLabsSettings(
+  readerStyle: string | undefined,
+  voiceSpeed: number | undefined,
+): ElevenLabsVoiceSettings {
+  const s = (readerStyle || 'neutral').toLowerCase();
+  let stability = 0.5;
+  let style = 0.0;
+  if (s === 'emotional') {
+    stability = 0.35;
+    style = 0.55;
+  } else if (s === 'intense' || s === 'aggressive') {
+    stability = 0.25;
+    style = 0.85;
+  }
+  // ElevenLabs supports 0.7–1.2 for voice_settings.speed on the
+  // eleven_multilingual_v2 model. Anything outside that window is
+  // clamped so a stale/legacy value cannot make the request fail.
+  const rawSpeed = typeof voiceSpeed === 'number' && Number.isFinite(voiceSpeed)
+    ? voiceSpeed
+    : 1.0;
+  const speed = Math.max(0.7, Math.min(1.2, rawSpeed));
+  return {
+    stability,
+    similarity_boost: 0.75,
+    style,
+    use_speaker_boost: true,
+    speed,
+  };
+}
+
+// ─── CONFIGURATION VALIDATION ─────────────────────────────────────────
+// Emitted at module load AND before every generateSpeechToFile call
+// so an invalid credential is impossible to miss in the diagnostic
+// report. The classifier lives in appConfig.ts.
+let _configLoggedOnce = false;
+function logElevenLabsConfigStatus(): { valid: boolean; classification: string } {
+  const classification = classifyElevenLabsKey(ELEVENLABS_API_KEY);
+  const valid = classification === 'valid';
+  if (!_configLoggedOnce) {
+    _configLoggedOnce = true;
+    if (!valid) {
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_CONFIG_INVALID', {
+        classification,
+        // Never log the value. Only its shape.
+        length: typeof ELEVENLABS_API_KEY === 'string' ? ELEVENLABS_API_KEY.length : 0,
+        hint: classification === 'looks-like-api-key-id'
+          ? 'A 64-char hex value is an ElevenLabs API KEY ID, not an API KEY. Real keys start with sk_ .'
+          : (classification === 'wrong-prefix'
+             ? 'Real ElevenLabs API keys start with sk_ .'
+             : classification),
+      });
+    } else {
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_CONFIG_VALID', {
+        prefix: 'sk_',
+        length: (ELEVENLABS_API_KEY as string).length,
+      });
+    }
+  }
+  return { valid, classification };
+}
+// Fire once at module load so the config verdict is always in the
+// diagnostic buffer even before the first rehearsal line.
+logElevenLabsConfigStatus();
 
 // ─── PRESET VOICES ─────────────────────────────────────────────────────
 export interface PresetVoice {
@@ -198,23 +286,38 @@ export const generateSpeechToFile = async (
     similarityBoost?: number;
     style?: number;
     useSpeakerBoost?: boolean;
+    // 2026-02: reader style + voice speed now actually reach the
+    // ElevenLabs request. Previous callers passed no options at all,
+    // so neutral vs emotional vs intense produced identical audio.
+    readerStyle?: string;
+    voiceSpeed?: number;
     // Test hook — do not use in production callers.
     _fetch?: typeof fetch;
     _writeFile?: (uri: string, base64: string) => Promise<void>;
     _tmpDir?: string;
   } = {}
 ): Promise<ElevenLabsGenerateResult | null> => {
-  if (!ELEVENLABS_API_KEY) {
+  // Strict-format gate: the ElevenLabs server rejects API key IDs
+  // with HTTP 400 "invalid_api_key". Reject up-front so the diagnostic
+  // pinpoints the config bug rather than a generic HTTP failure.
+  if (!isValidElevenLabsApiKey(ELEVENLABS_API_KEY)) {
     DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_REQUEST_ABORT', {
-      reason: 'no-api-key',
+      reason: 'invalid-api-key-format',
+      classification: classifyElevenLabsKey(ELEVENLABS_API_KEY),
     });
     return null;
   }
 
-  const stability = options.stability ?? 0.5;
-  const similarityBoost = options.similarityBoost ?? 0.75;
-  const style = options.style ?? 0.0;
-  const useSpeakerBoost = options.useSpeakerBoost ?? true;
+  const settings = readerStyleToElevenLabsSettings(
+    options.readerStyle,
+    options.voiceSpeed,
+  );
+  // Explicit overrides for tests / low-level callers still win.
+  const stability = options.stability ?? settings.stability;
+  const similarityBoost = options.similarityBoost ?? settings.similarity_boost;
+  const style = options.style ?? settings.style;
+  const useSpeakerBoost = options.useSpeakerBoost ?? settings.use_speaker_boost;
+  const speed = settings.speed;
   const fetchFn = options._fetch ?? fetch;
 
   const url = `${ELEVENLABS_API_URL}/text-to-speech/${voiceId}`;
@@ -222,6 +325,12 @@ export const generateSpeechToFile = async (
     voiceId,
     textLength: text.length,
     endpoint: `/text-to-speech/${voiceId}`,
+    readerStyle: options.readerStyle ?? 'neutral',
+    voiceSpeed: options.voiceSpeed ?? 1.0,
+    // Confirm the settings actually leaving the client — this is the
+    // single line the reviewer needs to prove emotion + speed reached
+    // the wire. Never includes the API key.
+    settings: { stability, similarity_boost: similarityBoost, style, speed },
   });
 
   let response: Response;
@@ -241,6 +350,7 @@ export const generateSpeechToFile = async (
           similarity_boost: similarityBoost,
           style,
           use_speaker_boost: useSpeakerBoost,
+          speed,
         },
       }),
     });
@@ -369,6 +479,8 @@ export const generateSpeech = async (
     similarityBoost?: number;
     style?: number;
     useSpeakerBoost?: boolean;
+    readerStyle?: string;
+    voiceSpeed?: number;
   }
 ): Promise<{ audioBase64: string; audioUri: string } | null> => {
   const result = await generateSpeechToFile(text, voiceId, options);
@@ -441,11 +553,18 @@ export const playSpeech = async (
   options?: {
     stability?: number;
     similarityBoost?: number;
+    readerStyle?: string;
+    voiceSpeed?: number;
   }
 ): Promise<Audio.Sound | null> => {
   await ensurePlaybackAudioMode();
 
-  const cacheKey = makeAudioCacheKey(voiceId, text);
+  // Cache key must include readerStyle + voiceSpeed — otherwise a
+  // neutral clip and an emotional clip for the same voice+text would
+  // collide and one would silently mask the other.
+  const styleKey = (options?.readerStyle ?? 'neutral').toLowerCase();
+  const speedKey = typeof options?.voiceSpeed === 'number' ? options!.voiceSpeed : 1.0;
+  const cacheKey = `${makeAudioCacheKey(voiceId, text)}|${styleKey}|${speedKey}`;
   let fileUri = cacheGet(cacheKey);
   if (fileUri) {
     DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_CACHE_HIT', {
@@ -533,7 +652,18 @@ export const playSpeech = async (
 };
 
 // ─── CONFIG PROBE ─────────────────────────────────────────────────────
-export const isElevenLabsConfigured = (): boolean => !!ELEVENLABS_API_KEY;
+// Strict-format probe — the Feb-2026 fix. A configured value that is
+// syntactically an API key ID (or otherwise malformed) is treated as
+// UNCONFIGURED so the caller never falsely reports
+// `elevenLabsConfigured: true` and never sends a request that is
+// guaranteed to 400.
+export const isElevenLabsConfigured = (): boolean =>
+  isValidElevenLabsApiKey(ELEVENLABS_API_KEY);
+
+export const elevenLabsConfigStatus = (): { valid: boolean; classification: string } => ({
+  valid: isValidElevenLabsApiKey(ELEVENLABS_API_KEY),
+  classification: classifyElevenLabsKey(ELEVENLABS_API_KEY),
+});
 
 export default {
   PRESET_VOICES,
@@ -546,6 +676,8 @@ export default {
   generateSpeechToFile,
   playSpeech,
   isElevenLabsConfigured,
+  elevenLabsConfigStatus,
+  readerStyleToElevenLabsSettings,
   clearElevenLabsAudioCache,
   resolveVoiceForCharacter,
   selectProvider,

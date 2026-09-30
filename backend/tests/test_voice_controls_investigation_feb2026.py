@@ -136,8 +136,8 @@ def test_B5_rehearsal_now_uses_elevenLabs_when_configured_with_assignment():
     warning now."""
     src = REHEARSAL.read_text()
     assert re.search(
-        r"playSpeech\s*\(\s*text\s*,\s*assignment\.voiceId\s*\)", src
-    ), "rehearsal must call playSpeech(text, assignment.voiceId)"
+        r"playSpeech\s*\(\s*text\s*,\s*assignment\.voiceId\s*[,)]", src
+    ), "rehearsal must call playSpeech(text, assignment.voiceId, ...)"
 
 
 # ═══════════════════════════════════════════════════════════════════════

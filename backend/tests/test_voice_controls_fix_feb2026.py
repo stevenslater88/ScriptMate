@@ -230,10 +230,10 @@ def test_B_rehearsal_checks_isElevenLabsConfigured_and_uses_elevenLabs_when_avai
 def test_B_rehearsal_calls_playSpeech_with_the_character_voiceId():
     src = REHEARSAL.read_text()
     assert re.search(
-        r"playSpeech\s*\(\s*text\s*,\s*assignment\.voiceId\s*\)",
+        r"playSpeech\s*\(\s*text\s*,\s*assignment\.voiceId\s*[,)]",
         src,
     ), (
-        "speakLine must call playSpeech(text, assignment.voiceId) for "
+        "speakLine must call playSpeech(text, assignment.voiceId, ...) for "
         "the character's assigned voice"
     )
 

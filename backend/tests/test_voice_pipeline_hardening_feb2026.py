@@ -250,7 +250,21 @@ def test_playSpeech_is_never_called_with_a_global_or_alloy_voice_id():
             f"OpenAI-style voice name"
         )
     # Explicit positive: only the assignment.voiceId form exists.
-    assert "playSpeech(text, assignment.voiceId)" in src
+    # The correct call site — accept either the 2-arg legacy form
+    # or the 3-arg form that also passes readerStyle+voiceSpeed.
+    assert (
+        "playSpeech(text, assignment.voiceId)" in src
+        or re.search(
+            r"playSpeech\(\s*text\s*,\s*assignment\.voiceId\s*,\s*\{[^}]*"
+            r"readerStyle[^}]*voiceSpeed[^}]*\}",
+            src,
+            re.DOTALL,
+        )
+    ), (
+        "playSpeech must be invoked with the resolved assignment.voiceId "
+        "— either the 2-arg legacy form or the 3-arg form that also "
+        "forwards readerStyle + voiceSpeed"
+    )
 
 
 def test_useElevenLabs_branch_requires_explicit_assignment_voiceId():

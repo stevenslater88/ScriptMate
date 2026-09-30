@@ -780,7 +780,16 @@ export default function RehearsalScreen() {
           // callback as the expo-speech path, so line-advancement and
           // pause-handling are unchanged.
           try {
-            const sound = await playSpeech(text, assignment.voiceId);
+            // 2026-02: pass readerStyle + voiceSpeed so emotion and
+            // speed actually reach the ElevenLabs synthesis params.
+            // The prior call was `playSpeech(text, voiceId)` with no
+            // options, so `readerStyle: emotional` and voiceSpeed=0.9
+            // appeared in the log but produced identical audio to
+            // neutral / speed=1.0.
+            const sound = await playSpeech(text, assignment.voiceId, {
+              readerStyle,
+              voiceSpeed: readerVoiceSpeed,
+            });
             if (!sound) {
               // Generation failed — fall back to expo-speech so the
               // rehearsal never stalls.
@@ -851,13 +860,26 @@ export default function RehearsalScreen() {
           });
         }
 
+        // 2026-02: enrich the AUDIO_PLAYBACK diagnostic when we fell
+        // back after INTENDING to use ElevenLabs. A silent voice
+        // substitution (Rachel → alloy) must be impossible to miss in
+        // the on-device diagnostic buffer.
+        const intendedElevenLabs = useElevenLabs && !!assignment;
         DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'AUDIO_PLAYBACK', {
           lineIndex: targetLineIndex,
           character: lineCharacter || '(unknown)',
+          // Actual provider/voice that produced audio.
           provider: 'expo-speech',
+          actualProvider: 'expo-speech',
+          actualVoice: voiceType,
           voiceId: null,
           globalFallbackVoiceType: voiceType,
-          reason: useElevenLabs && assignment
+          // Requested provider/voice — critical for physical QA to
+          // spot a silent substitution.
+          requestedProvider: intendedElevenLabs ? 'elevenlabs' : 'expo-speech',
+          requestedVoiceId: intendedElevenLabs ? assignment!.voiceId : null,
+          requestedVoiceKey: intendedElevenLabs ? assignment!.voiceKey : null,
+          reason: intendedElevenLabs
             ? 'elevenlabs-generation-failed'
             : (assignment ? 'no-elevenlabs-key' : 'no-assignment'),
         });

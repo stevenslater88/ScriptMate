@@ -168,9 +168,9 @@ def test_rehearsal_uses_elevenLabs_voice_for_correct_character():
     NOT the user's or a global voice."""
     src = REHEARSAL.read_text()
     assert re.search(
-        r"playSpeech\s*\(\s*text\s*,\s*assignment\.voiceId\s*\)", src
+        r"playSpeech\s*\(\s*text\s*,\s*assignment\.voiceId\s*[,)]", src
     ), (
-        "playSpeech(text, assignment.voiceId) is the exact call that "
+        "playSpeech(text, assignment.voiceId, ...) is the exact call that "
         "makes each character speak in their assigned voice"
     )
     # Guard: playSpeech is NOT called with a hardcoded / global voice.

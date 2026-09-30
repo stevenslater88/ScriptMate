@@ -12,11 +12,69 @@
  * platform-only module.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.readerStyleToElevenLabsSettingsPure = readerStyleToElevenLabsSettingsPure;
+exports.isValidElevenLabsApiKeyPure = isValidElevenLabsApiKeyPure;
+exports.classifyElevenLabsKeyPure = classifyElevenLabsKeyPure;
 exports.resolveVoiceForCharacter = resolveVoiceForCharacter;
 exports.selectProvider = selectProvider;
 exports.uint8ArrayToBase64 = uint8ArrayToBase64;
 exports.makeAudioCacheKey = makeAudioCacheKey;
 exports.playCharacterLinePure = playCharacterLinePure;
+function readerStyleToElevenLabsSettingsPure(readerStyle, voiceSpeed) {
+    const s = (readerStyle || 'neutral').toLowerCase();
+    let stability = 0.5;
+    let style = 0.0;
+    if (s === 'emotional') {
+        stability = 0.35;
+        style = 0.55;
+    }
+    else if (s === 'intense' || s === 'aggressive') {
+        stability = 0.25;
+        style = 0.85;
+    }
+    const rawSpeed = typeof voiceSpeed === 'number' && Number.isFinite(voiceSpeed)
+        ? voiceSpeed
+        : 1.0;
+    const speed = Math.max(0.7, Math.min(1.2, rawSpeed));
+    return {
+        stability,
+        similarity_boost: 0.75,
+        style,
+        use_speaker_boost: true,
+        speed,
+    };
+}
+// ─── API KEY VALIDATOR (pure) ─────────────────────────────────────
+// Mirrors appConfig.isValidElevenLabsApiKey — kept pure so the smoke
+// test can prove the classification without booting Expo Constants.
+function isValidElevenLabsApiKeyPure(key) {
+    if (typeof key !== 'string')
+        return false;
+    const trimmed = key.trim();
+    if (!trimmed)
+        return false;
+    if (!trimmed.startsWith('sk_'))
+        return false;
+    if (trimmed.length < 20)
+        return false;
+    return true;
+}
+function classifyElevenLabsKeyPure(key) {
+    if (key === undefined || key === null || key === '')
+        return 'missing';
+    if (typeof key !== 'string')
+        return 'not-a-string';
+    const trimmed = key.trim();
+    if (!trimmed)
+        return 'missing';
+    if (/^[0-9a-fA-F]{64}$/.test(trimmed))
+        return 'looks-like-api-key-id';
+    if (!trimmed.startsWith('sk_'))
+        return 'wrong-prefix';
+    if (trimmed.length < 20)
+        return 'too-short';
+    return 'valid';
+}
 /**
  * Resolve a line's character to a voice assignment. Tries the exact
  * key first, then the upper-cased key — matches the two forms the

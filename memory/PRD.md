@@ -1613,3 +1613,95 @@ Never logs the ElevenLabs API key or the raw audio body.
 - 18 protected backend lint issues: untouched.
 - 31 protected TS baseline errors: untouched.
 - No APK built. No GitHub push. No deploy.
+
+---
+
+## 2026-02 — VOICE + EMOTION + SPEED PIPELINE FIX (Script M8, P0)
+
+### Physical evidence (Build 1110 / v1.0.62 / VC1101 / S23 Ultra)
+```
+ELEVENLABS_RESPONSE  success=false  httpStatus=400
+bodyPreview: {"detail":{"type":"authentication_error",
+              "code":"invalid_api_key",
+              "message":"API key ID used as API key ..."}}
+```
+
+### Root cause — three converging bugs
+1. **Invalid credential format**: `frontend/services/appConfig.ts` hard-coded a
+   64-char hex value in `ELEVENLABS_API_KEY`. That value is an ElevenLabs
+   **API key ID**, not an API key. Real keys begin with `sk_` (per the 400
+   body itself). Every ElevenLabs request was rejected.
+2. **Emotion never reached ElevenLabs**: `readerStyle` was plumbed through
+   the store and printed in `TTS_REQUEST` but the rehearsal call site was
+   `playSpeech(text, voiceId)` — no options. The service therefore always
+   used the defaults `stability=0.5 / similarity=0.75 / style=0` regardless
+   of neutral vs emotional vs intense.
+3. **Voice speed never reached ElevenLabs**: same call-site problem — speed
+   only affected the expo-speech fallback `rate` multiplier; the ElevenLabs
+   request body did not include `voice_settings.speed`.
+
+### Fix (files touched)
+- `frontend/services/appConfig.ts` — hard-coded value removed; new
+  `isValidElevenLabsApiKey()` + `classifyElevenLabsKey()` exports that
+  require `sk_` prefix and reject 64-char hex API-key-IDs by name.
+- `frontend/services/elevenLabsService.ts` — `isElevenLabsConfigured()`
+  now delegates to the strict validator; new `readerStyleToElevenLabsSettings()`
+  maps neutral / emotional / intense to actual `stability` + `style` +
+  clamped `speed` (0.7–1.2, ElevenLabs supported range); request body
+  includes `voice_settings.speed`; `generateSpeechToFile` aborts before
+  fetch with `reason:'invalid-api-key-format'`; module-load `ELEVENLABS_CONFIG_INVALID`
+  diagnostic (never logs the value); playSpeech accepts and forwards
+  `readerStyle`/`voiceSpeed`; cache key now suffixed with `|style|speed`.
+- `frontend/services/elevenLabsPure.ts` — added
+  `readerStyleToElevenLabsSettingsPure`, `isValidElevenLabsApiKeyPure`,
+  `classifyElevenLabsKeyPure` so the Node smoke test can prove the fix
+  without booting React Native.
+- `frontend/app/rehearsal/[id].tsx` — `playSpeech(text, voiceId, { readerStyle, voiceSpeed })`;
+  `AUDIO_PLAYBACK` fallback payload now includes `requestedProvider`,
+  `requestedVoiceId`, `requestedVoiceKey`, `actualProvider`, `actualVoice`
+  so a silent Rachel→alloy substitution is impossible to miss.
+- `backend/tests/test_voice_emotion_speed_fix_feb2026.py` — 18 new tests
+  covering the credential validator, config diagnostic, emotion mapping,
+  speed clamping, cache key, request body, and the required vs actual
+  fallback diagnostic.
+- `scripts/voice_pipeline_smoketest.js` — 18 new pure-runtime tests
+  (F1–F5 emotion, G1–G7 speed, H1–H6 credential validator, I1 two-char
+  distinct voiceIds), 48 total pass.
+- 3 pre-existing tests updated to accept the 3-arg `playSpeech` call.
+
+### Voice routing before → after
+Before: `playSpeech(text, voiceId)` → server received `stability=0.5, style=0`
+regardless of readerStyle. Speed only affected expo-speech fallback.
+
+After: `playSpeech(text, voiceId, { readerStyle, voiceSpeed })` →
+`readerStyleToElevenLabsSettings(readerStyle, voiceSpeed)` →
+`voice_settings: { stability, similarity_boost, style, use_speaker_boost, speed }`
+in the ElevenLabs POST body. Verified via Node smoke tests F1–F5, G1–G7.
+
+### Emotion routing before → after
+Before: `readerStyle: 'emotional'` appeared in logs, produced no request
+change. After: emotional sets `stability=0.35, style=0.55`; intense sets
+`stability=0.25, style=0.85`. Neutral remains `stability=0.5, style=0`.
+
+### Speed routing before → after
+Before: `voice_settings.speed` field absent. After: clamped to 0.7–1.2
+per ElevenLabs API and included in the request body.
+
+### Deployment status
+- Pre-build gate: **GREEN**
+- Backend regression tests: **797 pass** (was 779, +18)
+- Voice pipeline smoke: **48 ok, 0 fail**
+- TypeScript baseline: 31 (unchanged, protected)
+- Lint baseline: 327 (unchanged, protected)
+- **NO APK built. NO GitHub push. NO deploy.**
+
+### What the user must do to make ElevenLabs actually play
+Because the client cannot ship a private key in a public repo, and the
+directive forbids pasting a key here, the real `sk_...` credential must
+be provided outside the codebase via one of:
+- `EXPO_PUBLIC_ELEVENLABS_API_KEY` env var (read by appConfig at build time), or
+- Configure it via EAS Secrets and expose through `Constants.expoConfig.extra`.
+Until that lands, `ELEVENLABS_CONFIG_INVALID { classification:'missing' }`
+will appear at rehearsal start and the app will play the expo-speech
+fallback loud with a `requestedProvider/actualProvider` mismatch in
+`AUDIO_PLAYBACK`.

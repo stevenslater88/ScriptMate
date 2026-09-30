@@ -39,7 +39,13 @@ const DEFAULTS = {
   REVENUECAT_GOOGLE_API_KEY: 'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT',
   REVENUECAT_APPLE_API_KEY: 'appl_YOUR_IOS_KEY_HERE',
   SENTRY_DSN: 'https://141660e463cc23c1c29fef7403bcb3d6@o4510914410840064.ingest.de.sentry.io/4510914414116944',
-  ELEVENLABS_API_KEY: 'c73f5731f01c8a7070b87d37254eaa611b68c803168c0d0999654b3bc1becbeb',
+  // ElevenLabs API keys start with 'sk_'. A 64-char hex value is an
+  // API-key ID, NOT a valid API key — the ElevenLabs server will reject
+  // it with HTTP 400 "invalid_api_key". We keep this field EMPTY here
+  // so the strict validator in isElevenLabsConfigured() treats
+  // ElevenLabs as unavailable unless a real sk_… key is supplied via
+  // Constants.expoConfig.extra or EXPO_PUBLIC_ELEVENLABS_API_KEY.
+  ELEVENLABS_API_KEY: '',
   PREMIUM_ENABLED: true,
   SHOW_LIFETIME: false,
   PAYWALL_VARIANT: 'A',
@@ -138,6 +144,56 @@ console.log('[AppConfig] ===== END AUDIT =====');
 
 // ─── Diagnostics export ────────────────────────────────────────────────────
 export type ConfigSource = 'env' | 'extra' | 'hardcoded';
+
+/**
+ * Strict format validator for ElevenLabs API keys.
+ *
+ * Real keys begin with the `sk_` prefix followed by a long token.
+ * The physical S23 Ultra QA build (Feb-2026) hit HTTP 400
+ * "authentication_error / invalid_api_key: API key ID used as API
+ * key" because a 64-char hex string (an API key ID, NOT the actual
+ * key) was configured. This validator rejects that class of value
+ * up-front so `isElevenLabsConfigured()` never lies about readiness.
+ *
+ * Format spec derived from the ElevenLabs API 400 error message
+ * itself: "API keys start with 'sk_'".
+ */
+export function isValidElevenLabsApiKey(key: unknown): boolean {
+  if (typeof key !== 'string') return false;
+  const trimmed = key.trim();
+  if (!trimmed) return false;
+  if (!trimmed.startsWith('sk_')) return false;
+  // A real key has token bytes after the prefix — a bare `sk_` or
+  // very short value is clearly a placeholder.
+  if (trimmed.length < 20) return false;
+  return true;
+}
+
+/**
+ * Classify why an ElevenLabs credential is invalid — used by the
+ * ELEVENLABS_CONFIG_INVALID diagnostic to give physical testers a
+ * precise, actionable reason without ever logging the value itself.
+ */
+export function classifyElevenLabsKey(key: unknown):
+  | 'missing'
+  | 'not-a-string'
+  | 'wrong-prefix'
+  | 'too-short'
+  | 'looks-like-api-key-id'
+  | 'valid' {
+  if (key === undefined || key === null || key === '') return 'missing';
+  if (typeof key !== 'string') return 'not-a-string';
+  const trimmed = key.trim();
+  if (!trimmed) return 'missing';
+  // A 64-char pure hex value is the ElevenLabs API key *ID* format.
+  // This is exactly the credential that produced the physical QA
+  // failure. Report it with a specific reason so the reader knows
+  // to fetch the actual key, not the ID.
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) return 'looks-like-api-key-id';
+  if (!trimmed.startsWith('sk_')) return 'wrong-prefix';
+  if (trimmed.length < 20) return 'too-short';
+  return 'valid';
+}
 
 export interface ConfigAudit {
   key: string;

@@ -225,9 +225,18 @@ def test_rehearsal_still_consumes_reader_style_and_voice_speed():
 
 
 def test_rehearsal_still_loads_multi_voice_assignments():
+    import re
     src = (FRONTEND / "app" / "rehearsal" / "[id].tsx").read_text()
     assert "loadVoiceAssignments(scriptId)" in src
-    assert "playSpeech(text, assignment.voiceId)" in src
+    # Accept either the 2-arg legacy form or the 3-arg form that also
+    # forwards readerStyle + voiceSpeed (Feb-2026 emotion/speed fix).
+    assert (
+        "playSpeech(text, assignment.voiceId)" in src
+        or re.search(
+            r"playSpeech\(\s*text\s*,\s*assignment\.voiceId\s*,\s*\{",
+            src,
+        )
+    )
 
 
 def test_voice_studio_script_picker_intact_after_promotion():

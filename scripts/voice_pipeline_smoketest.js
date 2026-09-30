@@ -323,6 +323,105 @@ tAsync('E11: audio loader reports started=false => fallback', async () => {
   assertTrue(r.result.fellBackToExpoSpeech, 'fell back');
 });
 
+// ─── F. READER STYLE → ELEVENLABS SETTINGS ────────────────────────
+t('F1: neutral produces style=0 and stability=0.5', () => {
+  const s = pure.readerStyleToElevenLabsSettingsPure('neutral', 1.0);
+  assertEq(s.style, 0.0, 'neutral style');
+  assertEq(s.stability, 0.5, 'neutral stability');
+  assertEq(s.speed, 1.0, 'neutral speed');
+});
+t('F2: emotional raises style above neutral', () => {
+  const n = pure.readerStyleToElevenLabsSettingsPure('neutral', 1.0);
+  const e = pure.readerStyleToElevenLabsSettingsPure('emotional', 1.0);
+  assertTrue(e.style > n.style, `emotional.style (${e.style}) must exceed neutral (${n.style})`);
+  assertTrue(e.stability < n.stability, 'emotional lowers stability for expressiveness');
+});
+t('F3: intense raises style above emotional', () => {
+  const e = pure.readerStyleToElevenLabsSettingsPure('emotional', 1.0);
+  const i = pure.readerStyleToElevenLabsSettingsPure('intense', 1.0);
+  assertTrue(i.style > e.style, `intense.style (${i.style}) must exceed emotional (${e.style})`);
+});
+t('F4: aggressive maps to same tier as intense', () => {
+  const i = pure.readerStyleToElevenLabsSettingsPure('intense', 1.0);
+  const a = pure.readerStyleToElevenLabsSettingsPure('aggressive', 1.0);
+  assertEq(a.style, i.style, 'aggressive style');
+});
+t('F5: unknown reader style falls back to neutral tuple', () => {
+  const u = pure.readerStyleToElevenLabsSettingsPure('mystery', 1.0);
+  const n = pure.readerStyleToElevenLabsSettingsPure('neutral', 1.0);
+  assertEq(u.style, n.style, 'unknown style falls back to neutral');
+  assertEq(u.stability, n.stability, 'unknown stability falls back to neutral');
+});
+
+// ─── G. VOICE SPEED CLAMP ─────────────────────────────────────────
+t('G1: speed 0.9 reaches settings unchanged', () => {
+  const s = pure.readerStyleToElevenLabsSettingsPure('neutral', 0.9);
+  assertEq(s.speed, 0.9, 'speed 0.9');
+});
+t('G2: speed 1.0 reaches settings unchanged', () => {
+  const s = pure.readerStyleToElevenLabsSettingsPure('neutral', 1.0);
+  assertEq(s.speed, 1.0, 'speed 1.0');
+});
+t('G3: speed 1.1 reaches settings unchanged', () => {
+  const s = pure.readerStyleToElevenLabsSettingsPure('neutral', 1.1);
+  assertEq(s.speed, 1.1, 'speed 1.1');
+});
+t('G4: speed above ElevenLabs max (1.2) is clamped', () => {
+  const s = pure.readerStyleToElevenLabsSettingsPure('neutral', 5.0);
+  assertEq(s.speed, 1.2, 'speed clamped to max 1.2');
+});
+t('G5: speed below ElevenLabs min (0.7) is clamped', () => {
+  const s = pure.readerStyleToElevenLabsSettingsPure('neutral', 0.1);
+  assertEq(s.speed, 0.7, 'speed clamped to min 0.7');
+});
+t('G6: undefined speed defaults to 1.0', () => {
+  const s = pure.readerStyleToElevenLabsSettingsPure('neutral', undefined);
+  assertEq(s.speed, 1.0, 'default speed');
+});
+t('G7: NaN speed defaults to 1.0', () => {
+  const s = pure.readerStyleToElevenLabsSettingsPure('neutral', NaN);
+  assertEq(s.speed, 1.0, 'NaN default');
+});
+
+// ─── H. API KEY FORMAT VALIDATOR (mirrors appConfig) ──────────────
+t('H1: rejects a 64-char hex API key ID', () => {
+  const keyId = 'c73f5731f01c8a7070b87d37254eaa611b68c803168c0d0999654b3bc1becbeb';
+  assertFalse(pure.isValidElevenLabsApiKeyPure(keyId), 'must reject the exact physical-QA credential');
+  assertEq(pure.classifyElevenLabsKeyPure(keyId), 'looks-like-api-key-id', 'classification');
+});
+t('H2: rejects empty string', () => {
+  assertFalse(pure.isValidElevenLabsApiKeyPure(''), 'empty');
+  assertEq(pure.classifyElevenLabsKeyPure(''), 'missing', 'classification');
+});
+t('H3: rejects undefined', () => {
+  assertFalse(pure.isValidElevenLabsApiKeyPure(undefined), 'undefined');
+  assertEq(pure.classifyElevenLabsKeyPure(undefined), 'missing', 'classification');
+});
+t('H4: rejects wrong prefix (xi-…)', () => {
+  const xi = 'xi-1234567890abcdefghij';
+  assertFalse(pure.isValidElevenLabsApiKeyPure(xi), 'xi- prefix');
+  assertEq(pure.classifyElevenLabsKeyPure(xi), 'wrong-prefix', 'classification');
+});
+t('H5: rejects too-short sk_ value', () => {
+  assertFalse(pure.isValidElevenLabsApiKeyPure('sk_short'), 'too short');
+  assertEq(pure.classifyElevenLabsKeyPure('sk_short'), 'too-short', 'classification');
+});
+t('H6: accepts a well-formed sk_ key', () => {
+  const good = 'sk_' + 'a'.repeat(40);
+  assertTrue(pure.isValidElevenLabsApiKeyPure(good), 'well-formed sk_ key');
+  assertEq(pure.classifyElevenLabsKeyPure(good), 'valid', 'classification');
+});
+
+// ─── I. TEST-A EQUIVALENT — two characters, two voiceIds ─────────
+tAsync('I1: DET. HARRIS and SARAH resolve to distinct voice IDs on wire', async () => {
+  const rHarris = await runPlaybackForCharacter('DET. HARRIS');
+  const rSarah  = await runPlaybackForCharacter('SARAH');
+  assertTrue(rHarris.fetchCalledWith.voiceId !== rSarah.fetchCalledWith.voiceId,
+    'two characters must produce two distinct ElevenLabs voice IDs on the wire');
+  assertEq(rHarris.fetchCalledWith.voiceId, '2EiwWnXFnvU5JabPnv8n', 'Harris → Clyde voiceId');
+  assertEq(rSarah.fetchCalledWith.voiceId, 'EXAVITQu4vr4xnSDxMaL', 'Sarah → Sarah voiceId');
+});
+
 // ─── SUMMARY ──────────────────────────────────────────────────────
 Promise.resolve().then(async () => {
   // Await all async tests scheduled — they use setImmediate flush.

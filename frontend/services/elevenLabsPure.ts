@@ -11,7 +11,72 @@
  * platform-only module.
  */
 
-// ─── ASSIGNMENT + PROVIDER MODEL ─────────────────────────────────────
+// ─── READER STYLE / VOICE SPEED → SETTINGS (pure) ─────────────────
+// Duplicated verbatim into elevenLabsService so the Feb-2026 Node
+// smoke test can prove emotion/speed reach the request body without
+// booting React Native. Any change here must be mirrored there.
+export type ReaderStyleLite = 'neutral' | 'emotional' | 'intense' | 'aggressive';
+
+export interface ElevenLabsSettingsLite {
+  stability: number;
+  similarity_boost: number;
+  style: number;
+  use_speaker_boost: boolean;
+  speed: number;
+}
+
+export function readerStyleToElevenLabsSettingsPure(
+  readerStyle: string | undefined,
+  voiceSpeed: number | undefined,
+): ElevenLabsSettingsLite {
+  const s = (readerStyle || 'neutral').toLowerCase();
+  let stability = 0.5;
+  let style = 0.0;
+  if (s === 'emotional') {
+    stability = 0.35;
+    style = 0.55;
+  } else if (s === 'intense' || s === 'aggressive') {
+    stability = 0.25;
+    style = 0.85;
+  }
+  const rawSpeed = typeof voiceSpeed === 'number' && Number.isFinite(voiceSpeed)
+    ? voiceSpeed
+    : 1.0;
+  const speed = Math.max(0.7, Math.min(1.2, rawSpeed));
+  return {
+    stability,
+    similarity_boost: 0.75,
+    style,
+    use_speaker_boost: true,
+    speed,
+  };
+}
+
+// ─── API KEY VALIDATOR (pure) ─────────────────────────────────────
+// Mirrors appConfig.isValidElevenLabsApiKey — kept pure so the smoke
+// test can prove the classification without booting Expo Constants.
+export function isValidElevenLabsApiKeyPure(key: unknown): boolean {
+  if (typeof key !== 'string') return false;
+  const trimmed = key.trim();
+  if (!trimmed) return false;
+  if (!trimmed.startsWith('sk_')) return false;
+  if (trimmed.length < 20) return false;
+  return true;
+}
+
+export function classifyElevenLabsKeyPure(key: unknown):
+  | 'missing' | 'not-a-string' | 'wrong-prefix'
+  | 'too-short' | 'looks-like-api-key-id' | 'valid' {
+  if (key === undefined || key === null || key === '') return 'missing';
+  if (typeof key !== 'string') return 'not-a-string';
+  const trimmed = key.trim();
+  if (!trimmed) return 'missing';
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) return 'looks-like-api-key-id';
+  if (!trimmed.startsWith('sk_')) return 'wrong-prefix';
+  if (trimmed.length < 20) return 'too-short';
+  return 'valid';
+}
+
 
 export interface CharacterVoiceAssignmentLite {
   characterName: string;
