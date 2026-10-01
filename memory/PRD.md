@@ -1759,3 +1759,28 @@ report "configured" was NEVER proof of playback.
 - SEC-003 (QA_PREMIUM payment bypass)
 - Live `ELEVENLABS_API_KEY` configuration out-of-band
 - Daily Drill DebugLog instrumentation
+
+## 2026-02 — SEC-001 Google / Apple ID-token verification (REMEDIATED)
+
+### Weakness fixed (both account-takeover grade)
+- `/api/auth/apple` previously accepted `user_identifier` from the request body with ZERO cryptographic proof — code comment: *"For now, we trust the client-side verification and use the user_identifier"*. Any caller could POST any Apple user_id and receive a 64-hex session token for that account.
+- `/api/auth/google` previously base64-decoded the JWT payload WITHOUT signature verification, no `iss`/`aud`/`exp`/`email_verified` check. Any forged JWT with any `sub` granted a session.
+
+### Fix (smallest safe)
+New module `backend/identity_tokens.py` with provider-specific verifiers:
+- Google: RS256 only, JWKS at `googleapis.com/oauth2/v3/certs`, `aud` ∈ `GOOGLE_OAUTH_CLIENT_IDS`, `iss` ∈ `{accounts.google.com, https://accounts.google.com}`, `exp` + 60s leeway, `email_verified` must be True.
+- Apple: ES256 only, JWKS at `appleid.apple.com/auth/keys`, `aud == APPLE_BUNDLE_ID`, `iss == https://appleid.apple.com`, `exp` + 60s leeway.
+- `sub` always required and non-empty; algorithm is hard-coded per provider (never read from token header); JWKS cached 5 min per worker; key-resolution failures mapped to `IdentityTokenInvalid` (401) to avoid leaking provider availability.
+- Endpoints `/auth/google` and `/auth/apple` now call these verifiers and build the session ONLY on verified `claims["sub"]`. Apple's `user_identifier` from the body is IGNORED.
+- SEC-004 bearer gate / `db.auth_tokens` model UNCHANGED. No new dependency (PyJWT 2.11.0 + cryptography already present).
+
+### New env vars required for the sign-in endpoints to accept any request
+- `GOOGLE_OAUTH_CLIENT_IDS` — comma-separated allowlist (iOS, Android, web client IDs)
+- `APPLE_BUNDLE_ID` — Apple `aud` value
+- Optional: `JWT_CLOCK_SKEW_SECONDS` (default 60), `JWKS_CACHE_SECONDS` (default 300)
+
+Without these set, the endpoints return 503 "not configured" rather than silently accepting anything.
+
+### Still OPEN / DEFERRED
+- SEC-002 — session enforcement on protected routes
+- SEC-003 — `QA_PREMIUM` payment bypass

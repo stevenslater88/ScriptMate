@@ -2457,99 +2457,141 @@ async def find_or_create_user_by_auth(provider: str, provider_user_id: str, emai
 
 @api_router.post("/auth/apple", response_model=AuthResponse)
 async def apple_sign_in(request: AppleAuthRequest):
-    """Authenticate with Apple Sign-In"""
+    """Authenticate with Apple Sign In.
+
+    SEC-001 remediation (2026-02): the server now cryptographically
+    verifies `request.identity_token` against Apple's JWKS, enforces
+    `iss`, `aud` (== APPLE_BUNDLE_ID), `exp`, and uses `claims["sub"]`
+    as the stable identity. The client-supplied `user_identifier` is
+    IGNORED — it was previously trusted and gave any caller a session
+    for any Apple account id they supplied.
+    """
+    from identity_tokens import (
+        IdentityProviderNotConfigured,
+        IdentityTokenInvalid,
+        IdentityTokenUnavailable,
+        verify_apple_id_token,
+    )
     try:
-        # In production, you'd verify the identity_token with Apple's servers
-        # For now, we trust the client-side verification and use the user_identifier
-        
+        claims = verify_apple_id_token(request.identity_token)
+    except IdentityProviderNotConfigured:
+        logger.error("SEC-001: Apple sign-in attempted but APPLE_BUNDLE_ID is unset")
+        raise HTTPException(
+            status_code=503,
+            detail="Apple Sign-In is not configured on this server",
+        )
+    except IdentityTokenUnavailable:
+        raise HTTPException(
+            status_code=503,
+            detail="Apple identity provider unreachable; try again",
+        )
+    except IdentityTokenInvalid:
+        # Generic 401 — do not leak which claim failed.
+        raise HTTPException(status_code=401, detail="Invalid Apple identity token")
+
+    # Verified. Trust ONLY claims["sub"] as identity. Email is only
+    # used as profile metadata if Apple actually included it.
+    apple_sub = claims["sub"]
+    verified_email = claims.get("email") if isinstance(claims.get("email"), str) else None
+
+    try:
         user, is_new = await find_or_create_user_by_auth(
             provider="apple",
-            provider_user_id=request.user_identifier,
-            email=request.email,
+            provider_user_id=apple_sub,
+            email=verified_email or request.email,
             name=request.full_name,
-            device_id=request.device_id
+            device_id=request.device_id,
         )
-        
+
         access_token = generate_access_token(user["id"])
-        
+
         # Store the token
         await db.auth_tokens.update_one(
             {"user_id": user["id"]},
             {
                 "$set": {
                     "token": access_token,
-                    "created_at": datetime.utcnow(),
-                    "expires_at": datetime.utcnow() + timedelta(days=30)
+                    "created_at": datetime.utcnow(),  # noqa: DTZ003 — matches existing sign-in writes
+                    "expires_at": datetime.utcnow() + timedelta(days=30),  # noqa: DTZ003
                 }
             },
-            upsert=True
+            upsert=True,
         )
-        
+
         return AuthResponse(
             user_id=user["id"],
             email=user.get("email"),
             name=user.get("name"),
             is_new_user=is_new,
             subscription_tier=user.get("subscription_tier", "free"),
-            access_token=access_token
+            access_token=access_token,
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Apple Sign-In error: {e}")
+        logger.error(f"Apple Sign-In post-verification error: {e}")
         raise HTTPException(status_code=500, detail="Authentication failed. Please try again.")
 
 @api_router.post("/auth/google", response_model=AuthResponse)
 async def google_sign_in(request: GoogleAuthRequest):
-    """Authenticate with Google Sign-In"""
+    """Authenticate with Google Sign-In.
+
+    SEC-001 remediation (2026-02): the server now verifies the JWT
+    signature against Google's JWKS, enforces `iss`, `aud` (one of
+    GOOGLE_OAUTH_CLIENT_IDS), `exp`, and requires `email_verified`.
+    The previous payload-only base64 decode accepted any forged JWT
+    with any `sub` and granted a session for that account.
+    """
+    from identity_tokens import (
+        IdentityProviderNotConfigured,
+        IdentityTokenInvalid,
+        IdentityTokenUnavailable,
+        verify_google_id_token,
+    )
     try:
-        # Decode the Google ID token to get user info
-        # In production, verify with Google's servers
-        import base64
-        import json
-        
-        # Decode JWT payload (middle part)
-        parts = request.id_token.split('.')
-        if len(parts) != 3:
-            raise HTTPException(status_code=400, detail="Invalid token format")
-        
-        # Add padding if needed
-        payload = parts[1]
-        padding = 4 - len(payload) % 4
-        if padding != 4:
-            payload += '=' * padding
-        
-        try:
-            decoded = json.loads(base64.urlsafe_b64decode(payload))
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid token")
-        
-        google_user_id = decoded.get("sub")
-        email = decoded.get("email")
-        name = decoded.get("name")
-        
-        if not google_user_id:
-            raise HTTPException(status_code=400, detail="Invalid token: missing user ID")
-        
+        claims = verify_google_id_token(request.id_token)
+    except IdentityProviderNotConfigured:
+        logger.error(
+            "SEC-001: Google sign-in attempted but GOOGLE_OAUTH_CLIENT_IDS is unset"
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Google Sign-In is not configured on this server",
+        )
+    except IdentityTokenUnavailable:
+        raise HTTPException(
+            status_code=503,
+            detail="Google identity provider unreachable; try again",
+        )
+    except IdentityTokenInvalid:
+        raise HTTPException(status_code=401, detail="Invalid Google identity token")
+
+    google_user_id = claims["sub"]
+    email = claims.get("email") if isinstance(claims.get("email"), str) else None
+    name = claims.get("name") if isinstance(claims.get("name"), str) else None
+
+    try:
         user, is_new = await find_or_create_user_by_auth(
             provider="google",
             provider_user_id=google_user_id,
             email=email,
             name=name,
-            device_id=request.device_id
+            device_id=request.device_id,
         )
-        
+
         access_token = generate_access_token(user["id"])
-        
+
         # Store the token
         await db.auth_tokens.update_one(
             {"user_id": user["id"]},
             {
                 "$set": {
                     "token": access_token,
-                    "created_at": datetime.utcnow(),
-                    "expires_at": datetime.utcnow() + timedelta(days=30)
+                    "created_at": datetime.utcnow(),  # noqa: DTZ003 — matches existing sign-in writes
+                    "expires_at": datetime.utcnow() + timedelta(days=30),  # noqa: DTZ003
                 }
             },
-            upsert=True
+            upsert=True,
         )
         
         return AuthResponse(
