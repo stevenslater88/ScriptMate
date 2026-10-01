@@ -96,6 +96,7 @@ STATIC_REGRESSION_TESTS = [
     "tests/test_voice_backend_proxy_refactor_feb2026.py",
     "tests/test_sec004_tts_hardening.py",
     "tests/test_device_session_and_tts_e2e_feb2026.py",
+    "tests/test_front_matter_and_inline_cue_feb2026.py",
 ]
 
 # Files required for the frontend/backend to build/run. Missing = RED.

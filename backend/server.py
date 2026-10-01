@@ -1396,6 +1396,36 @@ def _strip_character_cue_extension(name: str) -> str:
     return stripped or name
 
 
+# Front-matter / cast-list / section-header labels that appear in
+# user-authored scripts (stage plays, Fountain-style drafts, "my first
+# screenplay" templates). All-uppercase prefixes that must NEVER be
+# classified as character cues, even when followed by a colon.
+# Routed into the stage-direction/action path by `fallback_parse_script`.
+_HEADER_KEYWORDS = frozenset({
+    "TITLE",
+    "AUTHOR",
+    "BY",
+    "WRITTEN BY",
+    "CHARACTERS",
+    "CAST",
+    "DRAMATIS PERSONAE",
+    "SETTING",
+    "TIME",
+    "PLACE",
+    "SYNOPSIS",
+    "LOGLINE",
+})
+
+# Inline-cue dialogue (`NAME: dialogue text on the same line`). Common
+# in stage plays and Fountain drafts. Captures the cue name (upper /
+# digit / dot / apostrophe / hyphen, 1..31 chars) and the dialogue.
+# The pre-colon segment is further validated by the existing
+# character-cue constraints (<=3 words, not a scene heading, not a
+# header keyword) before being accepted — this regex is a shape test,
+# not the full decision.
+_INLINE_CUE_RE = re.compile(r"^([A-Z][A-Z0-9 .'\-]{0,30}):\s+(.+)$")
+
+
 def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
     """Simple fallback parser for scripts"""
     lines_data = []
@@ -1416,6 +1446,39 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             continue
             
         potential_char = line.replace(':', '').strip()
+        # Header keyword — front-matter / cast-list labels (TITLE,
+        # CHARACTERS, DRAMATIS PERSONAE, etc.) must NEVER be treated as
+        # character cues even though they are all-uppercase and short.
+        # Route into the stage-direction path, closing any in-progress
+        # dialogue block first. Matches either the bare keyword
+        # (`CHARACTERS:`) or the keyword followed by content on the
+        # same line (`TITLE: THE CALL`, `AUTHOR: Jane Doe`).
+        _line_upper = line.upper()
+        _is_header_line = False
+        for _hk in _HEADER_KEYWORDS:
+            if _line_upper == _hk or _line_upper == _hk + ":":
+                _is_header_line = True
+                break
+            # `TITLE: THE CALL` / `WRITTEN BY: Jane Doe` — the keyword
+            # starts the line and is terminated by `:` or whitespace.
+            if _line_upper.startswith((_hk + ":", _hk + " ")):
+                _is_header_line = True
+                break
+        if _is_header_line:
+            if current_character and current_text:
+                lines_data.append({
+                    "character": current_character,
+                    "text": _repair(_smart_join_dialogue(current_text)),
+                    "is_stage_direction": False
+                })
+                current_text = []
+            current_character = ""   # header keyword breaks the block
+            lines_data.append({
+                "character": "",
+                "text": _repair(line),
+                "is_stage_direction": True
+            })
+            continue
         # Scene-heading / transition / structural-heading — terminates any
         # in-progress dialogue block and is stored as its own stage-direction
         # line. This prevents Feb-2026 physical bug where SARAH's dialogue
@@ -1436,6 +1499,42 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                 "is_stage_direction": True
             })
             continue
+        # Inline-cue dialogue (`NAME: dialogue text`). Common in stage
+        # plays and Fountain-style drafts. The cue name must still
+        # satisfy the standard character-cue constraints (uppercase,
+        # <=3 words, >1 char, not a scene heading, not a header
+        # keyword). The right-hand side becomes a single dialogue line
+        # attributed to that cue — the "NAME:" prefix is NOT retained.
+        _inline_match = _INLINE_CUE_RE.match(line)
+        if _inline_match:
+            cue_raw = _inline_match.group(1).strip()
+            dialogue_text = _inline_match.group(2).strip()
+            cue_upper = cue_raw.upper()
+            if (
+                cue_raw.isupper()
+                and len(cue_raw.split()) <= 3
+                and len(cue_raw) > 1
+                and cue_upper not in _HEADER_KEYWORDS
+                and not _looks_like_scene_heading(cue_raw)
+                and dialogue_text
+            ):
+                # Flush any in-progress two-line-style dialogue block.
+                if current_character and current_text:
+                    lines_data.append({
+                        "character": current_character,
+                        "text": _repair(_smart_join_dialogue(current_text)),
+                        "is_stage_direction": False
+                    })
+                    current_text = []
+                cue_name = _strip_character_cue_extension(cue_raw)
+                characters.add(cue_name)
+                current_character = cue_name
+                lines_data.append({
+                    "character": cue_name,
+                    "text": _repair(dialogue_text),
+                    "is_stage_direction": False
+                })
+                continue
         # Character-cue detection: uppercase, short, non-empty, and NOT
         # a screenplay scene/transition heading, and NOT a bare
         # parenthetical (which belongs to the stage-direction path).
