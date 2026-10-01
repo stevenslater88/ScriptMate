@@ -73,7 +73,7 @@ export type { VoiceResolution, Provider };
 // -------------------------------------------------------------------
 // The Android app NO LONGER carries an ElevenLabs API credential.
 // All rehearsal audio is proxied through the ScriptMate backend at
-// POST /api/tts/elevenlabs/generate. The `xi-api-key` header lives
+// POST /api/tts/elevenlabs/generate. The ElevenLabs auth header lives
 // only in backend/.env and never enters the mobile bundle, the JS,
 // the git tree, the diagnostics, or the on-device logs.
 const BACKEND_URL = (AppConfig as any).BACKEND_URL || '';

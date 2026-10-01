@@ -1,29 +1,41 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request
-from fastapi.responses import Response, HTMLResponse
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+import base64
+import html as html_escape
+import io
+import json
+import logging
 import os
 import re
-import logging
-from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+import tempfile
 import uuid
 from datetime import datetime, timedelta
-import json
-import base64
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import httpx
 import PyPDF2
-import io
-import tempfile
 from docx import Document
-from common_english_words import COMMON_ENGLISH_WORDS
-from emergentintegrations.llm.chat import LlmChat, UserMessage
-import html as html_escape
-from emergentintegrations.llm.openai import OpenAISpeechToText
+from dotenv import load_dotenv
 from elevenlabs import ElevenLabs
 from elevenlabs.types import VoiceSettings
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.openai import OpenAISpeechToText
+from fastapi import (
+    APIRouter,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import HTMLResponse, Response
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, Field
+from starlette.middleware.cors import CORSMiddleware
+
+from common_english_words import COMMON_ENGLISH_WORDS
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -772,16 +784,19 @@ class TTSRequest(BaseModel):
 
 class ElevenLabsTTSRequest(BaseModel):
     """Request for ElevenLabs TTS generation"""
-    text: str
-    voice_id: str  # ElevenLabs voice ID or preset key
-    stability: float = 0.5
-    similarity_boost: float = 0.75
-    style: float = 0.0
+    text: str = Field(..., min_length=1, max_length=2000)
+    voice_id: str = Field(..., min_length=1, max_length=64)
+    stability: float = Field(0.5, ge=0.0, le=1.0)
+    similarity_boost: float = Field(0.75, ge=0.0, le=1.0)
+    style: float = Field(0.0, ge=0.0, le=1.0)
     use_speaker_boost: bool = True
     # 2026-02 SCRIPT M8: speed reaches the ElevenLabs synthesis
     # request via voice_settings.speed. Clamped server-side to the
     # ElevenLabs supported range 0.7-1.2 before the SDK call.
-    speed: float = 1.0
+    speed: float = Field(1.0, ge=0.1, le=5.0)
+
+    class Config:
+        extra = "forbid"
 
 class CharacterVoiceAssignment(BaseModel):
     """Voice assignment for a character in a script"""
@@ -2709,20 +2724,94 @@ async def get_preset_voices():
         "total": len(voices_list)
     }
 
+# ─── 2026-02 SCRIPT M8 — TTS endpoint hardening (SEC-004) ──────────────
+# Minimal GENUINE authentication for the ElevenLabs proxy. Uses the
+# session tokens already issued by the Google/Apple sign-in flow and
+# stored in db.auth_tokens — the token is a sha256 of
+# `user_id:timestamp:uuid`, 30-day TTL, upserted per user.
+#
+# NOTE (dependency on SEC-002): the existing session mechanism IS
+# used here, but the broader SEC-002 finding (that MOST protected
+# routes never check the token) is NOT fixed by this ticket — that
+# requires wiring this same dependency across every /scripts /notes
+# /stats route and is scoped as a separate remediation.
+#
+# The guard here closes the TTS cost-abuse hole: an anonymous caller
+# cannot invent a UUID and burn ElevenLabs budget. Breaking it would
+# require either (a) stealing a real sign-in token, or (b) first
+# fixing SEC-001 so a forged Google/Apple token no longer yields a
+# usable session.
+async def get_authenticated_user_id(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> str:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+    token = authorization.split(" ", 1)[1].strip()
+    if not token or len(token) < 32:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    record = await db.auth_tokens.find_one({"token": token})
+    if not record:
+        raise HTTPException(status_code=401, detail="Unknown token")
+    expires_at = record.get("expires_at")
+    if expires_at and isinstance(expires_at, datetime):
+        # expires_at stored by sign-in flow was `datetime.utcnow() + …`,
+        # which is naive. Compare without a tz to stay consistent.
+        now_naive = datetime.utcnow()  # noqa: DTZ003 — matches sign-in writes
+        if expires_at < now_naive:
+            raise HTTPException(status_code=401, detail="Expired token")
+    user_id = record.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Malformed session")
+    return user_id
+
+
+# In-memory sliding-window rate limiter for the TTS proxy. Keyed by
+# the authenticated user_id (NOT by any client-supplied UUID/device_id).
+# Window: 60 calls per 10 minutes per user. Rejected with 429 and the
+# retry window echoed in headers.
+import threading as _tts_rl_thread  # local alias to avoid collision
+
+_tts_rl_lock = _tts_rl_thread.Lock()
+_tts_rl_state: dict[str, list] = {}
+TTS_RATE_LIMIT_MAX = 60
+TTS_RATE_LIMIT_WINDOW_SECONDS = 600  # 10 minutes
+
+
+def _tts_check_rate_limit(user_id: str) -> None:
+    """Raises HTTPException(429) if the authenticated user exceeded
+    the sliding window. Side-effect: records the current call."""
+    import time as _t
+    now = _t.time()
+    cutoff = now - TTS_RATE_LIMIT_WINDOW_SECONDS
+    with _tts_rl_lock:
+        history = _tts_rl_state.get(user_id, [])
+        # Drop timestamps outside the window.
+        history = [t for t in history if t >= cutoff]
+        if len(history) >= TTS_RATE_LIMIT_MAX:
+            retry_after = max(1, int(TTS_RATE_LIMIT_WINDOW_SECONDS - (now - history[0])))
+            raise HTTPException(
+                status_code=429,
+                detail=f"TTS rate limit exceeded: {TTS_RATE_LIMIT_MAX} per {TTS_RATE_LIMIT_WINDOW_SECONDS // 60} min",
+                headers={
+                    "Retry-After": str(retry_after),
+                    "X-RateLimit-Limit": str(TTS_RATE_LIMIT_MAX),
+                    "X-RateLimit-Window-Seconds": str(TTS_RATE_LIMIT_WINDOW_SECONDS),
+                },
+            )
+        history.append(now)
+        _tts_rl_state[user_id] = history
+
+
 @api_router.get("/tts/elevenlabs/health")
 async def elevenlabs_health():
     """Report whether the backend has a usable ElevenLabs credential.
 
-    Returns a shape-only verdict — never the key value or any prefix
-    of it. Used by the mobile client (which no longer ships an
-    ElevenLabs credential) to decide whether to route rehearsal audio
-    through this proxy or fall back to on-device expo-speech.
-
-    2026-02 SCRIPT M8 backend-proxy refactor.
+    Returns a BINARY verdict with no credential-derived metadata. The
+    pre-Feb-2026 version also echoed `key_length`, which the security
+    audit flagged (SEC-004 hardening) as a secret-derived leak — now
+    removed. Never logs or echoes the key value, prefix, or length.
     """
     configured = bool(ELEVENLABS_API_KEY) and eleven_client is not None
-    # `classification` mirrors the frontend validator vocabulary so
-    # diagnostics on the device match what the server reports.
     if not ELEVENLABS_API_KEY:
         classification = "missing"
     elif not ELEVENLABS_API_KEY.startswith("sk_"):
@@ -2731,24 +2820,32 @@ async def elevenlabs_health():
         classification = "too-short"
     else:
         classification = "valid" if configured else "sdk-unavailable"
+    # Binary + category only. Never leaks any portion of the secret.
     return {
         "configured": configured,
         "classification": classification,
-        # A safe length echo — cannot reconstruct the value.
-        "key_length": len(ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else 0,
     }
 
 
 @api_router.post("/tts/elevenlabs/generate")
-async def generate_elevenlabs_tts(request: ElevenLabsTTSRequest):
+async def generate_elevenlabs_tts(
+    request: ElevenLabsTTSRequest,
+    user_id: str = Depends(get_authenticated_user_id),
+):
     """Generate TTS audio using ElevenLabs (Premium feature).
 
-    2026-02 SCRIPT M8: returns raw MP3 with Content-Type audio/mpeg
-    so the mobile client can write directly to a file and hand it to
-    Audio.Sound (Android ExoPlayer). Previously returned a
-    data:audio/mpeg;base64,... URL which is documented to fail on
-    Android's ExoPlayer for non-trivial payloads.
+    2026-02 SCRIPT M8 — SEC-004 hardening:
+      * Requires a GENUINE bearer token (`Depends(get_authenticated_user_id)`).
+        Anonymous callers and arbitrary user_id/device_id values are
+        rejected 401 BEFORE any ElevenLabs cost is incurred.
+      * Request text is capped at 2000 chars by the Pydantic model;
+        oversized or empty bodies produce a 422.
+      * Per-user sliding-window rate limit (60 calls / 10 min).
+      * Response is raw MP3 (audio/mpeg) — the client writes the
+        bytes directly to a file for Android ExoPlayer playback.
     """
+    _tts_check_rate_limit(user_id)
+
     if not eleven_client:
         raise HTTPException(status_code=503, detail="ElevenLabs service not configured")
 
@@ -2805,7 +2902,14 @@ async def generate_elevenlabs_tts(request: ElevenLabsTTSRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"ElevenLabs TTS error: {str(e)}")
+        # Never surface the SDK exception text to the client — it may
+        # contain the ElevenLabs key when the SDK echoes the bad
+        # Authorization header. Log server-side scrubbed, return a
+        # generic client message.
+        safe_err = str(e)
+        if ELEVENLABS_API_KEY and ELEVENLABS_API_KEY in safe_err:
+            safe_err = safe_err.replace(ELEVENLABS_API_KEY, "***REDACTED***")
+        logger.error(f"ElevenLabs TTS error: {safe_err}")
         raise HTTPException(status_code=500, detail="Voice generation failed. Please try again.")
 
 @api_router.get("/scripts/{script_id}/voices")

@@ -26,8 +26,7 @@ const SENTRY_DSN =
 // ONLY server-side (backend/.env → ELEVENLABS_API_KEY). The mobile
 // client contacts the ScriptMate backend proxy at
 // POST /api/tts/elevenlabs/generate instead. The client MUST NOT
-// carry an ElevenLabs credential — no EXPO_PUBLIC_ELEVENLABS_API_KEY
-// is emitted here on purpose.
+// carry an ElevenLabs credential of any kind.
 
 module.exports = ({ config }) => {
   // Log during prebuild so we can verify in the build logs
