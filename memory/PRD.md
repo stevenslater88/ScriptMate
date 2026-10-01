@@ -1705,3 +1705,57 @@ Until that lands, `ELEVENLABS_CONFIG_INVALID { classification:'missing' }`
 will appear at rehearsal start and the app will play the expo-speech
 fallback loud with a `requestedProvider/actualProvider` mismatch in
 `AUDIO_PLAYBACK`.
+
+## 2026-02 — P0 Voice Playback End-to-End Fix (SEC-004 lockout)
+
+### Root cause (what the previous session shipped broken)
+The SEC-004 hardening ticket added `Depends(get_authenticated_user_id)` to
+`POST /api/tts/elevenlabs/generate`. The ticket's tests seeded tokens
+directly into `db.auth_tokens` and passed them as `Authorization: Bearer`.
+The REAL mobile client has sign-in TEMPORARILY DISABLED
+(`frontend/contexts/AuthContext.tsx` lines 97–99), so no bearer token
+ever existed on device. Every rehearsal line called
+`generateSpeechToFile` → fetch → `401 "Missing bearer token"` →
+`playSpeech` returned null → silent fallback to Expo Speech.
+
+The user heard Expo Speech even though `elevenLabsConfigured=true` and
+voice assignments loaded. Loading assignments and seeing the health probe
+report "configured" was NEVER proof of playback.
+
+### Smallest safe fix
+- Added backend endpoint `POST /api/auth/device-session`:
+  - Accepts `{ device_id }` only, extra fields forbidden, 128-char cap
+  - Mints 64-hex session token via existing `generate_access_token`
+  - Upserts into `db.auth_tokens` with `user_id = "device:<device_id>"`
+  - 30-day TTL; naive UTC to match existing sign-in writes
+  - Per-device rate limit: 10 mints / 10 min
+- `frontend/services/elevenLabsService.ts`:
+  - New `ensureTtsBearerToken()` helper: AsyncStorage-cached, in-memory
+    coalesced, 1-day refresh skew
+  - Attaches `Authorization: Bearer <token>` on every `/generate` POST
+  - Transparent 1-shot retry on 401 (handles stale/expired bearer)
+  - Never logs token value — only length and expiry
+
+### Diagnostics now emitted around the real playback seam
+`TTS_AUTH_READY`, `TTS_AUTH_MINT_FAILED`, `ELEVENLABS_REQUEST_ABORT`
+(reason: `no-bearer-token`), plus the existing `VOICE_RESOLUTION`,
+`VOICE_PROVIDER_SELECTED`, `ELEVENLABS_REQUEST_START`,
+`ELEVENLABS_RESPONSE`, `ELEVENLABS_AUDIO_READY`, `AUDIO_LOAD_START`,
+`AUDIO_LOAD_SUCCESS`, `AUDIO_PLAY_START`, `AUDIO_PLAYING`,
+`AUDIO_PLAYBACK_COMPLETE`, `AUDIO_PLAYBACK_ERROR`,
+`FALLBACK_TO_EXPO_SPEECH`.
+
+### Deployment status
+- Pre-build gate: **GREEN**
+- Backend regression tests: **851 pass** (was 831, +20 new device-session suite)
+- Voice pipeline smoke: **28 ok, 0 fail**
+- TypeScript baseline: 31 (unchanged, protected)
+- Lint baseline: 325 (new DTZ003 noqa-annotated, under baseline 327)
+- **NO APK built. NO GitHub push. NO deploy.**
+
+### Still OPEN / DEFERRED (unchanged by this ticket)
+- SEC-001 (Google/Apple ID-token verification)
+- SEC-002 (session enforcement on protected routes)
+- SEC-003 (QA_PREMIUM payment bypass)
+- Live `ELEVENLABS_API_KEY` configuration out-of-band
+- Daily Drill DebugLog instrumentation

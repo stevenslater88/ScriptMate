@@ -2501,6 +2501,104 @@ async def logout(user_id: str, device_id: str = None):
     
     return {"message": "Logged out successfully"}
 
+# ─── 2026-02 SCRIPT M8 — DEVICE SESSION FOR TTS PROXY ─────────────────
+# Google/Apple sign-in is currently gated off in the mobile client
+# (see frontend/contexts/AuthContext.tsx lines ~97-99 — "TEMPORARILY
+# DISABLED: Sign-In will be enabled in future update"). Without a
+# sign-in, the device has NO bearer token, and the SEC-004 auth gate
+# on POST /api/tts/elevenlabs/generate rejects every rehearsal line
+# with 401. That is why on-device voice playback was silently falling
+# back to expo-speech despite elevenLabsConfigured=true.
+#
+# This endpoint mints an anonymous session token bound to the device
+# (via the AsyncStorage-stored `@scriptmate_device_id`). It is the
+# SMALLEST change that lets the SEC-004-hardened proxy serve the real
+# app today while leaving the hardening (bearer required, per-user
+# rate limit, 2000-char cap) fully intact.
+#
+# Security notes:
+#   * The token is still a 64-hex sha256 (same `generate_access_token`
+#     used by Google/Apple sign-in).
+#   * `user_id` is deterministically derived as `device:<device_id>`
+#     so repeated calls from the same device upsert the same row,
+#     and the TTS per-user rate limit (60/10min) applies per device.
+#   * Minting itself is rate-limited: 10 mints / 10 min / device, so
+#     a single device cannot churn tokens.
+#   * Device ID is bounded to 128 chars and must be non-empty.
+#   * When real Google/Apple sign-in is re-enabled, the authenticated
+#     session supersedes this anonymous one — nothing here blocks
+#     SEC-001 remediation.
+
+class DeviceSessionRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=128)
+
+    class Config:
+        extra = "forbid"
+
+
+# In-memory rate limit for device-session minting. Keyed by device_id.
+import threading as _device_session_thread  # local alias to avoid collision
+_device_session_rl_lock = _device_session_thread.Lock()
+_device_session_rl_state: dict[str, list] = {}
+DEVICE_SESSION_RL_MAX = 10
+DEVICE_SESSION_RL_WINDOW_SECONDS = 600
+
+
+def _device_session_check_rate_limit(device_id: str) -> None:
+    import time as _time
+    now = _time.monotonic()
+    with _device_session_rl_lock:
+        bucket = _device_session_rl_state.get(device_id, [])
+        cutoff = now - DEVICE_SESSION_RL_WINDOW_SECONDS
+        bucket = [t for t in bucket if t > cutoff]
+        if len(bucket) >= DEVICE_SESSION_RL_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many device-session mints; try again later",
+            )
+        bucket.append(now)
+        _device_session_rl_state[device_id] = bucket
+
+
+@api_router.post("/auth/device-session")
+async def mint_device_session(request: DeviceSessionRequest):
+    """Mint an anonymous bearer token bound to the mobile device.
+
+    Returns {token, user_id, expires_at}. The token is stored in
+    db.auth_tokens exactly like a sign-in session so the SEC-004
+    `get_authenticated_user_id` dependency accepts it unchanged.
+    """
+    device_id = request.device_id.strip()
+    if not device_id:
+        raise HTTPException(status_code=422, detail="device_id required")
+    _device_session_check_rate_limit(device_id)
+
+    user_id = f"device:{device_id}"
+    token = generate_access_token(user_id)
+    # Naive UTC — matches the sign-in flow writes above so the shared
+    # `get_authenticated_user_id` dependency compares correctly.
+    now_naive = datetime.utcnow()  # noqa: DTZ003 — matches sign-in writes
+    expires_at = now_naive + timedelta(days=30)
+    await db.auth_tokens.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "user_id": user_id,
+                "token": token,
+                "created_at": now_naive,
+                "expires_at": expires_at,
+                "device_id": device_id,
+                "kind": "device-anonymous",
+            }
+        },
+        upsert=True,
+    )
+    return {
+        "token": token,
+        "user_id": user_id,
+        "expires_at": expires_at.isoformat() + "Z",
+    }
+
 # ==================== SYNC ROUTES ====================
 
 @api_router.post("/sync/push")

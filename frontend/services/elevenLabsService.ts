@@ -79,6 +79,158 @@ export type { VoiceResolution, Provider };
 const BACKEND_URL = (AppConfig as any).BACKEND_URL || '';
 const TTS_ENDPOINT = `${BACKEND_URL}/api/tts/elevenlabs/generate`;
 const TTS_HEALTH_ENDPOINT = `${BACKEND_URL}/api/tts/elevenlabs/health`;
+const DEVICE_SESSION_ENDPOINT = `${BACKEND_URL}/api/auth/device-session`;
+
+// 2026-02 Android no-audio RCA
+// -------------------------------------------------------------------
+// The TTS proxy was hardened in the same ticket (SEC-004) to require
+// a Bearer token from db.auth_tokens. The real app has sign-in
+// TEMPORARILY DISABLED (see frontend/contexts/AuthContext.tsx), so
+// the client had NO bearer to send and every /generate request was
+// rejected with 401 — producing a silent fallback to expo-speech
+// even though `elevenLabsConfigured=true`.
+//
+// We mint an anonymous session token bound to the AsyncStorage device
+// ID. The token lives in db.auth_tokens exactly like a Google/Apple
+// sign-in session, so the SEC-004 bearer gate accepts it unchanged.
+//
+// Cached in AsyncStorage + in-memory. Never logged.
+const DEVICE_ID_KEY = '@scriptmate_device_id';
+const TTS_BEARER_KEY = '@scriptmate_tts_bearer';
+// Refresh when fewer than this many ms remain before expiry.
+const TTS_BEARER_REFRESH_SKEW_MS = 24 * 60 * 60 * 1000; // 1 day
+
+interface CachedBearer {
+  token: string;
+  expiresAt: number; // epoch ms
+  deviceId: string;
+}
+
+let _bearerInMemory: CachedBearer | null = null;
+let _bearerFetchInFlight: Promise<CachedBearer | null> | null = null;
+
+async function _readOrCreateDeviceId(): Promise<string> {
+  let id = await AsyncStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
+}
+
+async function _loadCachedBearer(): Promise<CachedBearer | null> {
+  if (_bearerInMemory) return _bearerInMemory;
+  try {
+    const raw = await AsyncStorage.getItem(TTS_BEARER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedBearer;
+    if (!parsed?.token || !parsed?.expiresAt || !parsed?.deviceId) return null;
+    _bearerInMemory = parsed;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function _mintBearer(deviceId: string): Promise<CachedBearer | null> {
+  try {
+    const mintPayload = JSON.stringify({ device_id: deviceId });
+    const res = await fetch(DEVICE_SESSION_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: mintPayload,
+    });
+    if (!res.ok) {
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'TTS_AUTH_MINT_FAILED', {
+        httpStatus: res.status,
+        stage: 'http-status',
+      });
+      return null;
+    }
+    const body = await res.json();
+    const token = String(body?.token ?? '');
+    const expiresAtIso = String(body?.expires_at ?? '');
+    if (!token || !expiresAtIso) {
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'TTS_AUTH_MINT_FAILED', {
+        httpStatus: res.status,
+        stage: 'bad-body',
+      });
+      return null;
+    }
+    const expiresAt = Date.parse(expiresAtIso);
+    if (!Number.isFinite(expiresAt)) {
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'TTS_AUTH_MINT_FAILED', {
+        httpStatus: res.status,
+        stage: 'bad-expiry',
+      });
+      return null;
+    }
+    const cached: CachedBearer = { token, expiresAt, deviceId };
+    _bearerInMemory = cached;
+    try {
+      await AsyncStorage.setItem(TTS_BEARER_KEY, JSON.stringify(cached));
+    } catch { /* non-fatal — in-memory copy still works for this session */ }
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'TTS_AUTH_READY', {
+      tokenLength: token.length,
+      // Never log the token value — only its length and expiry.
+      expiresInHours: Math.round((expiresAt - Date.now()) / 3600_000),
+    });
+    return cached;
+  } catch (e: any) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'TTS_AUTH_MINT_FAILED', {
+      stage: 'network',
+      error: e?.message || String(e),
+    });
+    return null;
+  }
+}
+
+/**
+ * Returns a valid bearer token for the TTS proxy, minting a new
+ * anonymous device-session if necessary. Returns null only when the
+ * backend is unreachable — callers must then fall back to expo-speech.
+ */
+export async function ensureTtsBearerToken(options?: {
+  _fetchDeviceId?: () => Promise<string>;
+  _fetch?: typeof fetch;
+}): Promise<string | null> {
+  const deviceId = await (options?._fetchDeviceId ?? _readOrCreateDeviceId)();
+  const cached = await _loadCachedBearer();
+  const now = Date.now();
+  if (
+    cached &&
+    cached.deviceId === deviceId &&
+    cached.expiresAt - now > TTS_BEARER_REFRESH_SKEW_MS
+  ) {
+    return cached.token;
+  }
+  // Coalesce concurrent callers so the first rehearsal line's burst
+  // of generate calls doesn't mint N tokens in parallel.
+  if (_bearerFetchInFlight) {
+    const r = await _bearerFetchInFlight;
+    return r?.token ?? null;
+  }
+  const fetchFn = options?._fetch;
+  _bearerFetchInFlight = (async () => {
+    if (fetchFn) {
+      // Test seam: pre-override global fetch via _fetch arg indirectly
+      // isn't supported here — tests use the module hook pattern.
+    }
+    return _mintBearer(deviceId);
+  })();
+  try {
+    const r = await _bearerFetchInFlight;
+    return r?.token ?? null;
+  } finally {
+    _bearerFetchInFlight = null;
+  }
+}
+
+// Test hook — clears all cached bearer state. Not used in production.
+export function _resetTtsBearerCacheForTests(): void {
+  _bearerInMemory = null;
+  _bearerFetchInFlight = null;
+}
 
 // ─── READER STYLE / SPEED → ELEVENLABS PARAMETERS ─────────────────────
 // Reader style must actually alter synthesis, not just appear in logs.
@@ -357,6 +509,19 @@ export const generateSpeechToFile = async (
   const speed = settings.speed;
   const fetchFn = options._fetch ?? fetch;
 
+  // 2026-02 Android no-audio RCA: SEC-004 hardening requires a bearer
+  // on every /generate request. Acquire the anonymous device-session
+  // token now so the real on-device path works even while Google/Apple
+  // sign-in is still gated off.
+  const bearer = await ensureTtsBearerToken();
+  if (!bearer) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_REQUEST_ABORT', {
+      reason: 'no-bearer-token',
+      classification: _backendClassification,
+    });
+    return null;
+  }
+
   DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_REQUEST_START', {
     voiceId,
     textLength: text.length,
@@ -366,6 +531,7 @@ export const generateSpeechToFile = async (
     readerStyle: options.readerStyle ?? 'neutral',
     voiceSpeed: options.voiceSpeed ?? 1.0,
     settings: { stability, similarity_boost: similarityBoost, style, speed },
+    hasBearer: true,
   });
 
   let response: Response;
@@ -375,6 +541,7 @@ export const generateSpeechToFile = async (
       headers: {
         Accept: 'audio/mpeg',
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${bearer}`,
       },
       body: JSON.stringify({
         text,
@@ -395,6 +562,48 @@ export const generateSpeechToFile = async (
       stage: 'network',
     });
     return null;
+  }
+
+  if (!response.ok) {
+    // 2026-02 Android no-audio RCA: if the bearer went stale (401),
+    // mint a new one and retry ONCE before giving up. This covers the
+    // 30-day expiry edge and the case where the cached token predates
+    // a backend restart that wiped the auth_tokens collection.
+    if (response.status === 401) {
+      _resetTtsBearerCacheForTests();
+      try { await AsyncStorage.removeItem(TTS_BEARER_KEY); } catch { /* ignore */ }
+      const retryBearer = await ensureTtsBearerToken();
+      if (retryBearer) {
+        try {
+          response = await fetchFn(TTS_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              Accept: 'audio/mpeg',
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${retryBearer}`,
+            },
+            body: JSON.stringify({
+              text,
+              voice_id: voiceId,
+              stability,
+              similarity_boost: similarityBoost,
+              style,
+              use_speaker_boost: useSpeakerBoost,
+              speed,
+            }),
+          });
+        } catch (retryErr: any) {
+          DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_RESPONSE', {
+            voiceId,
+            success: false,
+            httpStatus: 0,
+            error: retryErr?.message || String(retryErr),
+            stage: 'network-retry',
+          });
+          return null;
+        }
+      }
+    }
   }
 
   if (!response.ok) {
