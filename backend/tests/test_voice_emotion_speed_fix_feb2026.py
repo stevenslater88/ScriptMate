@@ -90,18 +90,25 @@ def test_classifyElevenLabsKey_distinguishes_api_key_id():
     )
 
 
-def test_isElevenLabsConfigured_uses_strict_validator_not_just_truthiness():
-    """`elevenLabsConfigured:true` must never appear merely because
-    a value exists — must require valid FORMAT."""
+def test_isElevenLabsConfigured_uses_backend_health_probe():
+    """2026-02 SCRIPT M8 Option A: the client no longer carries an
+    ElevenLabs credential. `isElevenLabsConfigured()` now reports
+    whichever verdict the backend health probe at
+    `/api/tts/elevenlabs/health` returned."""
     src = SERVICE.read_text()
     m = re.search(
         r"isElevenLabsConfigured\s*=\s*\([^)]*\)\s*:\s*boolean\s*=>\s*"
-        r"isValidElevenLabsApiKey\(",
+        r"_backendConfigured\s*===\s*true",
         src,
     )
     assert m, (
-        "isElevenLabsConfigured must delegate to isValidElevenLabsApiKey "
-        "rather than a `!!ELEVENLABS_API_KEY` truthiness check"
+        "isElevenLabsConfigured must return the cached backend-health "
+        "verdict (_backendConfigured === true), not a client-side "
+        "credential check"
+    )
+    # And the probe URL must be the ScriptMate backend health route.
+    assert "/api/tts/elevenlabs/health" in src, (
+        "frontend must probe the backend health route"
     )
 
 
@@ -119,12 +126,16 @@ def test_service_emits_ELEVENLABS_CONFIG_INVALID_diagnostic():
     )
 
 
-def test_generateSpeechToFile_aborts_early_on_invalid_key_format():
+def test_generateSpeechToFile_aborts_early_when_backend_not_configured():
+    """2026-02 SCRIPT M8 Option A: the client no longer validates an
+    API-key format. Instead it checks the cached health-probe verdict
+    and aborts BEFORE calling the backend /generate route when the
+    server reports no credential."""
     src = SERVICE.read_text()
-    # New request-abort reason.
-    assert "'invalid-api-key-format'" in src, (
-        "generateSpeechToFile must abort with reason='invalid-api-key-format' "
-        "when the credential fails the strict validator"
+    # New abort reason.
+    assert "'backend-not-configured'" in src, (
+        "generateSpeechToFile must abort with reason='backend-not-configured' "
+        "when the backend health probe reports no server credential"
     )
 
 
@@ -159,15 +170,19 @@ def test_generateSpeechToFile_forwards_readerStyle_and_voiceSpeed():
         "generateSpeechToFile options must accept voiceSpeed"
     )
     # And the body must call readerStyleToElevenLabsSettings.
-    body = src[src.find("export const generateSpeechToFile"):src.find("export const generateSpeech ") if "export const generateSpeech " in src else -1]
+    body = src[src.find("export const generateSpeechToFile"):src.find("// ─── Deprecated shim") if "// ─── Deprecated shim" in src else -1]
     assert "readerStyleToElevenLabsSettings" in body, (
         "generateSpeechToFile must derive voice_settings from "
         "readerStyleToElevenLabsSettings(readerStyle, voiceSpeed)"
     )
-    # voice_settings body must include `style` and `speed` keys.
-    assert re.search(r"voice_settings\s*:\s*\{[^}]*style[^}]*speed[^}]*\}", body, re.DOTALL), (
-        "ElevenLabs request body must include voice_settings.style AND voice_settings.speed"
-    )
+    # 2026-02 SCRIPT M8 Option A: body is the ScriptMate backend-proxy
+    # payload now (top-level stability/style/speed), not the direct
+    # ElevenLabs voice_settings object.
+    body_block = body[body.find("body: JSON.stringify"):body.find("body: JSON.stringify") + 500]
+    assert "voice_id" in body_block, "backend-proxy body must include voice_id"
+    assert "stability" in body_block, "backend-proxy body must forward stability"
+    assert "style" in body_block, "backend-proxy body must forward style"
+    assert "speed" in body_block, "backend-proxy body must forward speed"
 
 
 def test_playSpeech_signature_accepts_readerStyle_and_voiceSpeed():
@@ -309,17 +324,20 @@ def test_C_voice_speed_is_forwarded_into_voice_settings_body():
 
 
 def test_D_invalid_api_key_short_circuits_before_network():
-    """The strict validator gate in generateSpeechToFile must abort
-    BEFORE the fetch is issued when the key is invalid. Otherwise a
-    guaranteed-400 request is sent every line."""
+    """The health-probe gate in generateSpeechToFile must abort
+    BEFORE the backend /generate POST is issued when the health
+    verdict is false. Otherwise a guaranteed-503 request is sent
+    every line."""
     src = SERVICE.read_text()
     fn = src[src.find("export const generateSpeechToFile"):]
-    abort_idx = fn.find("'invalid-api-key-format'")
-    fetch_idx = fn.find("await fetchFn(url")
-    assert abort_idx > 0 and fetch_idx > 0
+    abort_idx = fn.find("'backend-not-configured'")
+    fetch_idx = fn.find("await fetchFn(TTS_ENDPOINT")
+    assert abort_idx > 0 and fetch_idx > 0, (
+        f"abort_idx={abort_idx}, fetch_idx={fetch_idx} — both must be present"
+    )
     assert abort_idx < fetch_idx, (
-        "the invalid-key abort MUST come before any fetch — "
-        "otherwise every line still burns a network round-trip"
+        "the backend-not-configured abort MUST come before any fetch — "
+        "otherwise every line still burns a backend round-trip"
     )
 
 

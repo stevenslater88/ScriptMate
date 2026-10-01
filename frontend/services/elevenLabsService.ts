@@ -50,7 +50,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppConfig, classifyElevenLabsKey, isValidElevenLabsApiKey } from './appConfig';
+import { AppConfig } from './appConfig';
 import { DebugLog } from './debugLogService';
 import {
   resolveVoiceForCharacter as _resolveVoiceForCharacter,
@@ -69,8 +69,16 @@ export const uint8ArrayToBase64 = _uint8ArrayToBase64;
 export const makeAudioCacheKey = _makeAudioCacheKey;
 export type { VoiceResolution, Provider };
 
-const ELEVENLABS_API_KEY = AppConfig.ELEVENLABS_API_KEY;
-const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1';
+// 2026-02 SCRIPT M8 (Option A backend-proxy refactor)
+// -------------------------------------------------------------------
+// The Android app NO LONGER carries an ElevenLabs API credential.
+// All rehearsal audio is proxied through the ScriptMate backend at
+// POST /api/tts/elevenlabs/generate. The `xi-api-key` header lives
+// only in backend/.env and never enters the mobile bundle, the JS,
+// the git tree, the diagnostics, or the on-device logs.
+const BACKEND_URL = (AppConfig as any).BACKEND_URL || '';
+const TTS_ENDPOINT = `${BACKEND_URL}/api/tts/elevenlabs/generate`;
+const TTS_HEALTH_ENDPOINT = `${BACKEND_URL}/api/tts/elevenlabs/health`;
 
 // ─── READER STYLE / SPEED → ELEVENLABS PARAMETERS ─────────────────────
 // Reader style must actually alter synthesis, not just appear in logs.
@@ -126,39 +134,54 @@ export function readerStyleToElevenLabsSettings(
   };
 }
 
-// ─── CONFIGURATION VALIDATION ─────────────────────────────────────────
-// Emitted at module load AND before every generateSpeechToFile call
-// so an invalid credential is impossible to miss in the diagnostic
-// report. The classifier lives in appConfig.ts.
-let _configLoggedOnce = false;
-function logElevenLabsConfigStatus(): { valid: boolean; classification: string } {
-  const classification = classifyElevenLabsKey(ELEVENLABS_API_KEY);
-  const valid = classification === 'valid';
-  if (!_configLoggedOnce) {
-    _configLoggedOnce = true;
-    if (!valid) {
+// ─── BACKEND CONFIG PROBE ─────────────────────────────────────────
+// The client no longer holds an ElevenLabs credential. Instead it
+// asks the ScriptMate backend once per session whether the server's
+// ELEVENLABS_API_KEY is usable. Cached in-memory. Never logs the key.
+let _backendConfigured: boolean | null = null;
+let _backendClassification: string = 'unknown';
+
+async function probeBackendElevenLabs(): Promise<void> {
+  try {
+    const res = await fetch(TTS_HEALTH_ENDPOINT, { method: 'GET' });
+    if (!res.ok) {
+      _backendConfigured = false;
+      _backendClassification = `http-${res.status}`;
       DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_CONFIG_INVALID', {
-        classification,
-        // Never log the value. Only its shape.
-        length: typeof ELEVENLABS_API_KEY === 'string' ? ELEVENLABS_API_KEY.length : 0,
-        hint: classification === 'looks-like-api-key-id'
-          ? 'A 64-char hex value is an ElevenLabs API KEY ID, not an API KEY. Real keys start with sk_ .'
-          : (classification === 'wrong-prefix'
-             ? 'Real ElevenLabs API keys start with sk_ .'
-             : classification),
+        source: 'backend-health',
+        classification: _backendClassification,
+      });
+      return;
+    }
+    const body = await res.json();
+    _backendConfigured = !!body.configured;
+    _backendClassification = String(body.classification ?? 'unknown');
+    if (_backendConfigured) {
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_CONFIG_VALID', {
+        source: 'backend-health',
       });
     } else {
-      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_CONFIG_VALID', {
-        prefix: 'sk_',
-        length: (ELEVENLABS_API_KEY as string).length,
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_CONFIG_INVALID', {
+        source: 'backend-health',
+        classification: _backendClassification,
       });
     }
+  } catch (e: any) {
+    _backendConfigured = false;
+    _backendClassification = 'health-probe-failed';
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_CONFIG_INVALID', {
+      source: 'backend-health',
+      classification: _backendClassification,
+      error: e?.message || String(e),
+    });
   }
-  return { valid, classification };
 }
-// Fire once at module load so the config verdict is always in the
-// diagnostic buffer even before the first rehearsal line.
-logElevenLabsConfigStatus();
+
+// Fire once at module load — the verdict is available before the
+// first rehearsal line by the time playSpeech() is called.
+probeBackendElevenLabs();
+
+// ─── READER STYLE / SPEED → ELEVENLABS PARAMETERS ─────────────────────
 
 // ─── PRESET VOICES ─────────────────────────────────────────────────────
 export interface PresetVoice {
@@ -278,6 +301,14 @@ export interface ElevenLabsGenerateResult {
  * IMPORTANT: this function is exported for the automated mocked
  * playback test. Real callers should use `playSpeech()`.
  */
+/**
+ * Generate speech via the ScriptMate backend proxy and persist to a
+ * temp file. Returns the `file://` URI the Android/iOS audio engine
+ * can play. The ElevenLabs API key never enters the mobile client.
+ *
+ * IMPORTANT: this function is exported for the automated mocked
+ * playback test. Real callers should use `playSpeech()`.
+ */
 export const generateSpeechToFile = async (
   text: string,
   voiceId: string,
@@ -297,13 +328,19 @@ export const generateSpeechToFile = async (
     _tmpDir?: string;
   } = {}
 ): Promise<ElevenLabsGenerateResult | null> => {
-  // Strict-format gate: the ElevenLabs server rejects API key IDs
-  // with HTTP 400 "invalid_api_key". Reject up-front so the diagnostic
-  // pinpoints the config bug rather than a generic HTTP failure.
-  if (!isValidElevenLabsApiKey(ELEVENLABS_API_KEY)) {
+  // Backend-health gate: if the backend reports the ElevenLabs
+  // credential unusable, abort BEFORE any /generate round-trip so we
+  // never send a request that is guaranteed to 503. The probe fires
+  // at module load; if it hasn't resolved yet, we retry it once
+  // synchronously (inside a Promise) so the first rehearsal line
+  // still has a verdict.
+  if (_backendConfigured === null) {
+    await probeBackendElevenLabs();
+  }
+  if (_backendConfigured === false) {
     DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_REQUEST_ABORT', {
-      reason: 'invalid-api-key-format',
-      classification: classifyElevenLabsKey(ELEVENLABS_API_KEY),
+      reason: 'backend-not-configured',
+      classification: _backendClassification,
     });
     return null;
   }
@@ -320,38 +357,33 @@ export const generateSpeechToFile = async (
   const speed = settings.speed;
   const fetchFn = options._fetch ?? fetch;
 
-  const url = `${ELEVENLABS_API_URL}/text-to-speech/${voiceId}`;
   DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_REQUEST_START', {
     voiceId,
     textLength: text.length,
-    endpoint: `/text-to-speech/${voiceId}`,
+    // Backend proxy endpoint. The client never contacts ElevenLabs
+    // directly anymore.
+    endpoint: '/api/tts/elevenlabs/generate',
     readerStyle: options.readerStyle ?? 'neutral',
     voiceSpeed: options.voiceSpeed ?? 1.0,
-    // Confirm the settings actually leaving the client — this is the
-    // single line the reviewer needs to prove emotion + speed reached
-    // the wire. Never includes the API key.
     settings: { stability, similarity_boost: similarityBoost, style, speed },
   });
 
   let response: Response;
   try {
-    response = await fetchFn(url, {
+    response = await fetchFn(TTS_ENDPOINT, {
       method: 'POST',
       headers: {
         Accept: 'audio/mpeg',
         'Content-Type': 'application/json',
-        'xi-api-key': ELEVENLABS_API_KEY,
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: {
-          stability,
-          similarity_boost: similarityBoost,
-          style,
-          use_speaker_boost: useSpeakerBoost,
-          speed,
-        },
+        voice_id: voiceId,
+        stability,
+        similarity_boost: similarityBoost,
+        style,
+        use_speaker_boost: useSpeakerBoost,
+        speed,
       }),
     });
   } catch (netErr: any) {
@@ -652,18 +684,25 @@ export const playSpeech = async (
 };
 
 // ─── CONFIG PROBE ─────────────────────────────────────────────────────
-// Strict-format probe — the Feb-2026 fix. A configured value that is
-// syntactically an API key ID (or otherwise malformed) is treated as
-// UNCONFIGURED so the caller never falsely reports
-// `elevenLabsConfigured: true` and never sends a request that is
-// guaranteed to 400.
-export const isElevenLabsConfigured = (): boolean =>
-  isValidElevenLabsApiKey(ELEVENLABS_API_KEY);
+// 2026-02 SCRIPT M8 Option A backend-proxy refactor.
+// The mobile client no longer holds an ElevenLabs credential. This
+// probe reports the LAST verdict returned by the backend health
+// route. The rehearsal screen uses this exactly like before — it
+// only asks "is ElevenLabs available?" and never sees the key.
+export const isElevenLabsConfigured = (): boolean => _backendConfigured === true;
 
 export const elevenLabsConfigStatus = (): { valid: boolean; classification: string } => ({
-  valid: isValidElevenLabsApiKey(ELEVENLABS_API_KEY),
-  classification: classifyElevenLabsKey(ELEVENLABS_API_KEY),
+  valid: _backendConfigured === true,
+  classification: _backendClassification,
 });
+
+// Test hook — allows the pre-push verification harness to force a
+// re-probe against a specific backend URL without waiting for the
+// module-load probe to resolve. Not used in production paths.
+export const _refreshElevenLabsConfig = async (): Promise<void> => {
+  _backendConfigured = null;
+  await probeBackendElevenLabs();
+};
 
 export default {
   PRESET_VOICES,

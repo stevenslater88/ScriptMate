@@ -778,6 +778,10 @@ class ElevenLabsTTSRequest(BaseModel):
     similarity_boost: float = 0.75
     style: float = 0.0
     use_speaker_boost: bool = True
+    # 2026-02 SCRIPT M8: speed reaches the ElevenLabs synthesis
+    # request via voice_settings.speed. Clamped server-side to the
+    # ElevenLabs supported range 0.7-1.2 before the SDK call.
+    speed: float = 1.0
 
 class CharacterVoiceAssignment(BaseModel):
     """Voice assignment for a character in a script"""
@@ -2705,49 +2709,101 @@ async def get_preset_voices():
         "total": len(voices_list)
     }
 
+@api_router.get("/tts/elevenlabs/health")
+async def elevenlabs_health():
+    """Report whether the backend has a usable ElevenLabs credential.
+
+    Returns a shape-only verdict — never the key value or any prefix
+    of it. Used by the mobile client (which no longer ships an
+    ElevenLabs credential) to decide whether to route rehearsal audio
+    through this proxy or fall back to on-device expo-speech.
+
+    2026-02 SCRIPT M8 backend-proxy refactor.
+    """
+    configured = bool(ELEVENLABS_API_KEY) and eleven_client is not None
+    # `classification` mirrors the frontend validator vocabulary so
+    # diagnostics on the device match what the server reports.
+    if not ELEVENLABS_API_KEY:
+        classification = "missing"
+    elif not ELEVENLABS_API_KEY.startswith("sk_"):
+        classification = "wrong-prefix"
+    elif len(ELEVENLABS_API_KEY) < 20:
+        classification = "too-short"
+    else:
+        classification = "valid" if configured else "sdk-unavailable"
+    return {
+        "configured": configured,
+        "classification": classification,
+        # A safe length echo — cannot reconstruct the value.
+        "key_length": len(ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else 0,
+    }
+
+
 @api_router.post("/tts/elevenlabs/generate")
 async def generate_elevenlabs_tts(request: ElevenLabsTTSRequest):
-    """Generate TTS audio using ElevenLabs (Premium feature)"""
+    """Generate TTS audio using ElevenLabs (Premium feature).
+
+    2026-02 SCRIPT M8: returns raw MP3 with Content-Type audio/mpeg
+    so the mobile client can write directly to a file and hand it to
+    Audio.Sound (Android ExoPlayer). Previously returned a
+    data:audio/mpeg;base64,... URL which is documented to fail on
+    Android's ExoPlayer for non-trivial payloads.
+    """
     if not eleven_client:
         raise HTTPException(status_code=503, detail="ElevenLabs service not configured")
-    
+
     try:
         # Resolve voice_id if a preset key was provided
         voice_id = request.voice_id
         if request.voice_id in PRESET_VOICES:
             voice_id = PRESET_VOICES[request.voice_id]["id"]
-        
-        # Generate audio using ElevenLabs
+
+        # ElevenLabs supports voice_settings.speed on eleven_multilingual_v2
+        # in the 0.7–1.2 range. Clamp defensively so a stale/legacy client
+        # value cannot make the SDK reject the request.
+        speed = max(0.7, min(1.2, float(request.speed or 1.0)))
+
         voice_settings = VoiceSettings(
             stability=request.stability,
             similarity_boost=request.similarity_boost,
             style=request.style,
-            use_speaker_boost=request.use_speaker_boost
+            use_speaker_boost=request.use_speaker_boost,
+            speed=speed,
         )
-        
+
         audio_generator = eleven_client.text_to_speech.convert(
             text=request.text,
             voice_id=voice_id,
             model_id="eleven_multilingual_v2",
-            voice_settings=voice_settings
+            voice_settings=voice_settings,
         )
-        
-        # Collect audio data
+
+        # Collect audio bytes and stream them back as audio/mpeg.
         audio_data = b""
         for chunk in audio_generator:
             audio_data += chunk
-        
-        # Convert to base64 for transfer
-        audio_b64 = base64.b64encode(audio_data).decode()
-        
-        return {
-            "audio_base64": audio_b64,
-            "audio_url": f"data:audio/mpeg;base64,{audio_b64}",
-            "text": request.text,
-            "voice_id": voice_id,
-            "format": "mp3"
-        }
-        
+
+        if not audio_data:
+            raise HTTPException(status_code=502, detail="ElevenLabs returned empty audio")
+
+        # Response headers echo the resolved voice_id + settings for
+        # on-device diagnostics. Body is raw MP3 — no base64, no
+        # data-URI. Never echoes the API key.
+        return Response(
+            content=audio_data,
+            media_type="audio/mpeg",
+            headers={
+                "X-ElevenLabs-Voice-Id": voice_id,
+                "X-ElevenLabs-Model-Id": "eleven_multilingual_v2",
+                "X-ElevenLabs-Stability": str(request.stability),
+                "X-ElevenLabs-Style": str(request.style),
+                "X-ElevenLabs-Speed": str(speed),
+                "X-ElevenLabs-Byte-Length": str(len(audio_data)),
+            },
+        )
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"ElevenLabs TTS error: {str(e)}")
         raise HTTPException(status_code=500, detail="Voice generation failed. Please try again.")

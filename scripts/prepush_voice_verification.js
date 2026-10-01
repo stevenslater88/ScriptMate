@@ -56,6 +56,12 @@ const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 const https = require('https');
+const http = require('http');
+// Pick http or https based on the URL — allows local backend
+// testing against http://localhost:8001.
+function clientFor(url) {
+  return url.protocol === 'http:' ? http : https;
+}
 
 const ROOT = path.join(__dirname, '..');
 const outDir = path.join(__dirname, 'voice_pipeline_smoke_build');
@@ -75,12 +81,7 @@ if (!fs.existsSync(pureFile)) {
 }
 const pure = require(pureFile);
 
-// ─── Fingerprint helper (never emits the value) ──────────────────
-function fingerprint(k) {
-  if (typeof k !== 'string' || !k) return 'MISSING';
-  const cls = pure.classifyElevenLabsKeyPure(k);
-  return `${cls} (len=${k.length}, prefix=${k.substring(0, 3)})`;
-}
+// (fingerprint helper removed — client no longer handles the key)
 
 const results = [];
 function record(name, ok, detail) {
@@ -95,15 +96,41 @@ const ASSIGNMENTS = {
   SARAH:         { characterName: 'SARAH',       voiceKey: 'sarah', voiceId: 'EXAVITQu4vr4xnSDxMaL' },
 };
 
-// ─── TEST 1 — Credential shape ────────────────────────────────────
-const KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY || '';
-const CRED_CLASS = pure.classifyElevenLabsKeyPure(KEY);
-const CRED_VALID = CRED_CLASS === 'valid';
-record(
-  'TEST 1 — Credential shape',
-  CRED_VALID,
-  `credentialValidation: ${CRED_CLASS}; elevenLabsConfigured: ${CRED_VALID}; ${fingerprint(KEY)}`,
-);
+// ─── TEST 1 — Backend health probe (no client credential required) ──
+// 2026-02 SCRIPT M8 Option A — the mobile client no longer carries a
+// credential. The health probe asks the ScriptMate backend whether
+// its own `ELEVENLABS_API_KEY` (in backend/.env) is usable.
+async function backendHealthProbe() {
+  const url = new URL(`${BACKEND_URL}/api/tts/elevenlabs/health`);
+  return await new Promise((resolve) => {
+    const req = clientFor(url).request({
+      method: 'GET',
+      host: url.hostname,
+      path: url.pathname,
+      port: url.port || 443,
+      timeout: 15000,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          resolve({ status: res.statusCode, body });
+        } catch (e) {
+          resolve({ status: res.statusCode, body: null, parseError: e.message });
+        }
+      });
+    });
+    req.on('error', (e) => resolve({ status: 0, body: null, error: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: null, error: 'timeout' }); });
+    req.end();
+  });
+}
+
+// Backend health verdict — populated inside the main IIFE before
+// anything that depends on it runs. Starts as null so a missing
+// backend is caught explicitly rather than passing silently.
+let CRED_VALID = null;
 
 // ─── Adapter factory: mocked (offline) ────────────────────────────
 function mockAdapters() {
@@ -127,33 +154,43 @@ function mockAdapters() {
   return { adapters, capture, events };
 }
 
-// ─── Adapter factory: LIVE (real network) ─────────────────────────
-// Wires the ScriptMate pipeline seam to a real https POST. Never
-// logs the API key. Never logs response bodies. Only records the
-// status, content type, and byte length.
+// ─── Adapter factory: LIVE (real network through ScriptMate backend proxy) ─
+// 2026-02 SCRIPT M8 Option A — live tests go through the ScriptMate
+// backend at $SCRIPTMATE_BACKEND_URL (default: production preview).
+// The ElevenLabs API key is NEVER present in this process; it lives
+// only in backend/.env on the server. We never log any token.
+const BACKEND_URL = process.env.SCRIPTMATE_BACKEND_URL
+  || process.env.REACT_APP_BACKEND_URL
+  || 'https://scriptmate-8.emergent.host';
+
 function liveAdapters(readerStyle, voiceSpeed, capture) {
   return {
     fetchAudio: async (voiceId, text) => {
       const settings = pure.readerStyleToElevenLabsSettingsPure(readerStyle, voiceSpeed);
       const bodyObj = {
         text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: settings,
+        voice_id: voiceId,
+        stability: settings.stability,
+        similarity_boost: settings.similarity_boost,
+        style: settings.style,
+        use_speaker_boost: settings.use_speaker_boost,
+        speed: settings.speed,
       };
       const body = JSON.stringify(bodyObj);
       capture.settings = settings;
+      const url = new URL(`${BACKEND_URL}/api/tts/elevenlabs/generate`);
       return await new Promise((resolve) => {
-        const req = https.request({
+        const req = clientFor(url).request({
           method: 'POST',
-          host: 'api.elevenlabs.io',
-          path: `/v1/text-to-speech/${voiceId}`,
+          host: url.hostname,
+          path: url.pathname + url.search,
+          port: url.port || 443,
           headers: {
             Accept: 'audio/mpeg',
             'Content-Type': 'application/json',
-            'xi-api-key': KEY,
             'Content-Length': Buffer.byteLength(body),
           },
-          timeout: 30000,
+          timeout: 45000,
         }, (res) => {
           const chunks = [];
           res.on('data', (c) => chunks.push(c));
@@ -162,6 +199,9 @@ function liveAdapters(readerStyle, voiceSpeed, capture) {
             capture.httpStatus = res.statusCode;
             capture.contentType = res.headers['content-type'];
             capture.byteLength = buf.length;
+            capture.resolvedVoiceId = res.headers['x-elevenlabs-voice-id'];
+            capture.serverStyle = res.headers['x-elevenlabs-style'];
+            capture.serverSpeed = res.headers['x-elevenlabs-speed'];
             resolve({
               ok: res.statusCode === 200,
               status: res.statusCode || 0,
@@ -172,11 +212,7 @@ function liveAdapters(readerStyle, voiceSpeed, capture) {
         });
         req.on('error', (e) => {
           capture.error = e.message;
-          resolve({
-            ok: false, status: 0,
-            arrayBuffer: async () => new ArrayBuffer(0),
-            text: async () => e.message,
-          });
+          resolve({ ok: false, status: 0, arrayBuffer: async () => new ArrayBuffer(0), text: async () => e.message });
         });
         req.on('timeout', () => {
           req.destroy();
@@ -187,8 +223,6 @@ function liveAdapters(readerStyle, voiceSpeed, capture) {
         req.end();
       });
     },
-    // Persist the returned audio bytes to a temp file — same code
-    // path the client uses. Never logs the file contents.
     writeAudioFile: async (voiceId, base64) => {
       const tmp = path.join(require('os').tmpdir(), `el_${voiceId}_${Date.now()}.mp3`);
       fs.writeFileSync(tmp, Buffer.from(base64, 'base64'));
@@ -196,12 +230,6 @@ function liveAdapters(readerStyle, voiceSpeed, capture) {
       capture.tmpFileBytes = fs.statSync(tmp).size;
       return `file://${tmp}`;
     },
-    // Mock the audio-load-and-play step. On a real device this is
-    // expo-av's Audio.Sound; here we only need to prove the pipeline
-    // handed a valid file URI + returned started=true. Any real
-    // failure to decode a corrupt MP3 would surface as
-    // Audio.setStatusAsync errors on device — outside the scope of
-    // this pre-push harness.
     loadAndPlay: async (uri, onFinish) => {
       capture.audioUri = uri;
       capture.audioLoaded = true;
@@ -209,7 +237,6 @@ function liveAdapters(readerStyle, voiceSpeed, capture) {
       return { handle: { mocked: true }, started: true };
     },
     emit: (e, p) => {
-      // Track fallback event explicitly — the regression bar.
       if (e === 'FALLBACK_TO_EXPO_SPEECH') capture.fallbackTriggered = true;
       if (!capture.events) capture.events = [];
       capture.events.push({ e, p });
@@ -249,6 +276,16 @@ async function runCharacterLive(character, readerStyle, voiceSpeed, textOverride
 
 // ─── EXECUTE ──────────────────────────────────────────────────────
 (async () => {
+  // TEST 1 — Backend health probe (must run first because every live
+  // test is gated on this verdict).
+  const health = await backendHealthProbe();
+  CRED_VALID = health.status === 200 && health.body && health.body.configured === true;
+  record(
+    'TEST 1 — Backend ElevenLabs health probe',
+    CRED_VALID,
+    `httpStatus=${health.status}; configured=${health.body?.configured}; classification=${health.body?.classification}; keyLengthEcho=${health.body?.key_length}; backend=${BACKEND_URL}`,
+  );
+
   // TESTS 2m / 3m — mocked pipeline routes distinct voice IDs.
   const harrisM = await runCharacterMocked('DET. HARRIS');
   const sarahM = await runCharacterMocked('SARAH');
@@ -313,7 +350,7 @@ async function runCharacterLive(character, readerStyle, voiceSpeed, textOverride
   if (!wantLive) {
     console.log('\n(Live network tests skipped: set ELEVENLABS_LIVE_TEST=1 to enable.)');
   } else if (!CRED_VALID) {
-    console.log(`\n(Live network tests skipped: TEST 1 failed with classification='${CRED_CLASS}'.)`);
+    console.log(`\n(Live network tests skipped: TEST 1 failed — backend reports ElevenLabs not configured.)`);
   } else {
     console.log('\n--- LIVE ELEVENLABS ROUND-TRIPS ---');
 

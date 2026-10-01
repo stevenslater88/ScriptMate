@@ -39,13 +39,10 @@ const DEFAULTS = {
   REVENUECAT_GOOGLE_API_KEY: 'goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT',
   REVENUECAT_APPLE_API_KEY: 'appl_YOUR_IOS_KEY_HERE',
   SENTRY_DSN: 'https://141660e463cc23c1c29fef7403bcb3d6@o4510914410840064.ingest.de.sentry.io/4510914414116944',
-  // ElevenLabs API keys start with 'sk_'. A 64-char hex value is an
-  // API-key ID, NOT a valid API key — the ElevenLabs server will reject
-  // it with HTTP 400 "invalid_api_key". We keep this field EMPTY here
-  // so the strict validator in isElevenLabsConfigured() treats
-  // ElevenLabs as unavailable unless a real sk_… key is supplied via
-  // Constants.expoConfig.extra or EXPO_PUBLIC_ELEVENLABS_API_KEY.
-  ELEVENLABS_API_KEY: '',
+  // 2026-02 SCRIPT M8 (Option A): ELEVENLABS_API_KEY was intentionally
+  // removed from the client. All ElevenLabs synthesis is proxied
+  // through the ScriptMate backend at POST /api/tts/elevenlabs/generate
+  // — the credential exists only in backend/.env, never in the APK.
   PREMIUM_ENABLED: true,
   SHOW_LIFETIME: false,
   PAYWALL_VARIANT: 'A',
@@ -110,7 +107,9 @@ const _backendUrl = { value: DEFAULTS.BACKEND_URL, source: 'hardcoded' as Config
 const _rcGoogleKey = resolve('EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY', DEFAULTS.REVENUECAT_GOOGLE_API_KEY);
 const _rcAppleKey = resolve('EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY', DEFAULTS.REVENUECAT_APPLE_API_KEY);
 const _sentryDsn = resolve('EXPO_PUBLIC_SENTRY_DSN', DEFAULTS.SENTRY_DSN);
-const _elevenLabsKey = resolve('EXPO_PUBLIC_ELEVENLABS_API_KEY', DEFAULTS.ELEVENLABS_API_KEY);
+// 2026-02 SCRIPT M8 (Option A) — ELEVENLABS_API_KEY resolution
+// removed. Client no longer holds an ElevenLabs credential; all
+// synthesis is proxied through the backend.
 
 // ─── Exported config ───────────────────────────────────────────────────────
 export const AppConfig = {
@@ -118,7 +117,6 @@ export const AppConfig = {
   REVENUECAT_GOOGLE_API_KEY: _rcGoogleKey.value,
   REVENUECAT_APPLE_API_KEY: _rcAppleKey.value,
   SENTRY_DSN: _sentryDsn.value,
-  ELEVENLABS_API_KEY: _elevenLabsKey.value,
   PREMIUM_ENABLED: resolveBoolean('EXPO_PUBLIC_PREMIUM_ENABLED', DEFAULTS.PREMIUM_ENABLED),
   SHOW_LIFETIME: resolveBoolean('EXPO_PUBLIC_SHOW_LIFETIME', DEFAULTS.SHOW_LIFETIME),
   PAYWALL_VARIANT: resolve('EXPO_PUBLIC_PAYWALL_VARIANT', DEFAULTS.PAYWALL_VARIANT).value,
@@ -136,7 +134,7 @@ console.log('[AppConfig] ===== CONFIG AUDIT =====');
 console.log(`[AppConfig] Backend URL: ${AppConfig.BACKEND_URL} [${_backendUrl.source}]`);
 console.log(`[AppConfig] RC Key (${Platform.OS}): ${mask(AppConfig.REVENUECAT_API_KEY)} [${Platform.OS === 'ios' ? _rcAppleKey.source : _rcGoogleKey.source}]`);
 console.log(`[AppConfig] Sentry: ${AppConfig.SENTRY_DSN ? 'Set' : 'MISSING'} [${_sentryDsn.source}]`);
-console.log(`[AppConfig] ElevenLabs: ${AppConfig.ELEVENLABS_API_KEY ? 'Set' : 'MISSING'} [${_elevenLabsKey.source}]`);
+console.log(`[AppConfig] ElevenLabs: routed server-side via /api/tts/elevenlabs/*`);
 console.log(`[AppConfig] Premium: ${AppConfig.PREMIUM_ENABLED}, Lifetime: ${AppConfig.SHOW_LIFETIME}`);
 console.log(`[AppConfig] Constants.expoConfig present: ${!!Constants.expoConfig}`);
 console.log(`[AppConfig] Constants.expoConfig.extra keys: ${JSON.stringify(Object.keys(Constants.expoConfig?.extra || {}))}`);
@@ -223,10 +221,13 @@ export function getConfigAudit(): ConfigAudit[] {
       present: _sentryDsn.value.length > 0,
     },
     {
-      key: 'ElevenLabs Key',
-      resolved: _elevenLabsKey.value ? mask(_elevenLabsKey.value) : 'Missing',
-      source: _elevenLabsKey.source,
-      present: _elevenLabsKey.value.length > 0,
+      // 2026-02 SCRIPT M8 (Option A) — ElevenLabs credential lives
+      // server-side only. Reported here for completeness so the audit
+      // never suggests the client is misconfigured.
+      key: 'ElevenLabs',
+      resolved: 'routed server-side via /api/tts/elevenlabs/*',
+      source: 'hardcoded' as ConfigSource,
+      present: true,
     },
   ];
 }
