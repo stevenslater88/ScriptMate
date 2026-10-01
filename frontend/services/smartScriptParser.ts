@@ -70,6 +70,45 @@ const PAREN_RE = /^\s*\(.*\)?\s*$/;
 const CAPS_RATIO_THRESHOLD = 0.7;
 const MAX_CHARACTER_NAME_LEN = 35;
 
+// ─── 2026-02 SCRIPT M8 — FRONTEND PARSER PARITY WITH BACKEND ──────────
+// Mirrors `backend/server.py::_HEADER_KEYWORDS` and `_INLINE_CUE_RE`.
+// Front-matter / cast-list labels authored by users in stage plays
+// and Fountain-style drafts (TITLE, CHARACTERS, DRAMATIS PERSONAE,
+// etc.) must NEVER be classified as speaking characters even though
+// they are all-uppercase and short. Inline-cue dialogue of the form
+// `NAME: text` must be split so the name becomes a character and
+// the text becomes a dialogue line without the "NAME:" prefix.
+//
+// If these two mirrors ever drift from the backend, the frontend
+// ScriptParser preview and the saved rehearsal will disagree —
+// `backend/tests/test_frontend_backend_parser_parity_feb2026.py`
+// locks the two parsers against the Jack/Sarah physical repro.
+const HEADER_KEYWORDS: ReadonlySet<string> = new Set([
+  'TITLE',
+  'AUTHOR',
+  'BY',
+  'WRITTEN BY',
+  'CHARACTERS',
+  'CAST',
+  'DRAMATIS PERSONAE',
+  'SETTING',
+  'TIME',
+  'PLACE',
+  'SYNOPSIS',
+  'LOGLINE',
+]);
+
+const INLINE_CUE_RE = /^([A-Z][A-Z0-9 .'\-]{0,30}):\s+(.+)$/;
+
+function isHeaderLine(trimmed: string): boolean {
+  const upper = trimmed.toUpperCase();
+  for (const kw of HEADER_KEYWORDS) {
+    if (upper === kw || upper === kw + ':') return true;
+    if (upper.startsWith(kw + ':') || upper.startsWith(kw + ' ')) return true;
+  }
+  return false;
+}
+
 function uid(): string {
   return Math.random().toString(36).substring(2, 10);
 }
@@ -214,6 +253,76 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
       });
       // Stay in dialogue block — parenthetical doesn't break it
       continue;
+    }
+
+    // ─── Front-matter header block (TITLE:, CHARACTERS:, etc.) ───
+    // Must come BEFORE character-cue detection so uppercase labels
+    // like `TITLE: THE CALL` do not get promoted to characters.
+    if (isHeaderLine(trimmed)) {
+      parsedLines.push({
+        id: uid(),
+        type: 'ACTION',
+        characterName: null,
+        text: trimmed,
+        confidence: 0.9,
+      });
+      inDialogueBlock = false;
+      currentCharacter = null;
+      continue;
+    }
+
+    // ─── Inline-cue dialogue (`NAME: dialogue text`) ─────────────
+    // Common in stage plays and Fountain drafts. The cue must
+    // satisfy the standard character-cue constraints (uppercase,
+    // <=3 words, >1 char, not a scene heading, not a header
+    // keyword). The right-hand side becomes a single DIALOGUE line
+    // attributed to that cue — the "NAME:" prefix is NOT retained.
+    const inlineMatch = trimmed.match(INLINE_CUE_RE);
+    if (inlineMatch) {
+      const cueRaw = inlineMatch[1].trim();
+      const dialogueText = inlineMatch[2].trim();
+      const cueUpper = cueRaw.toUpperCase();
+      const cueWords = cueRaw.split(/\s+/).length;
+      if (
+        cueRaw.length > 1 &&
+        cueWords <= 3 &&
+        cueRaw === cueUpper &&
+        !HEADER_KEYWORDS.has(cueUpper) &&
+        !HEADING_RE.test(cueRaw) &&
+        dialogueText.length > 0
+      ) {
+        // Normalize cue name the same way the two-line path does
+        // (strip parenthetical extensions like `(V.O.)`).
+        const normalized = cueRaw
+          .replace(/\s*\(.*\)\s*$/, '')
+          .trim()
+          .toUpperCase();
+        currentCharacter = normalized;
+        currentCharConfidence = 0.95;
+        inDialogueBlock = true;
+
+        if (!characterCounts[normalized]) {
+          characterCounts[normalized] = { count: 0, totalConf: 0 };
+        }
+        characterCounts[normalized].count++;
+        characterCounts[normalized].totalConf += 0.95;
+
+        parsedLines.push({
+          id: uid(),
+          type: 'CHARACTER',
+          characterName: normalized,
+          text: normalized,
+          confidence: 0.95,
+        });
+        parsedLines.push({
+          id: uid(),
+          type: 'DIALOGUE',
+          characterName: normalized,
+          text: dialogueText,
+          confidence: 0.9,
+        });
+        continue;
+      }
     }
 
     // Character name detection
@@ -370,6 +479,37 @@ export function runParserTests(): { name: string; pass: boolean; detail: string 
     name: 'Scene heading detection',
     pass: t5.stats.headingLines === 1,
     detail: `headings=${t5.stats.headingLines}`,
+  });
+
+  // Test 6: Front-matter header block must not become characters
+  const t6 = parseScript(
+    `TITLE: THE CALL\nCHARACTERS:\nJACK\nSARAH\n\nJACK: Are you ready?\nSARAH: I've been ready.`
+  );
+  const t6names = t6.detectedCharacters.map(c => c.name).sort();
+  results.push({
+    name: 'Front-matter block (TITLE:/CHARACTERS:) is not a character',
+    pass:
+      t6names.length === 2 &&
+      t6names[0] === 'JACK' &&
+      t6names[1] === 'SARAH',
+    detail: `chars=[${t6names.join(',')}]`,
+  });
+
+  // Test 7: Inline-cue dialogue splits correctly, no NAME: prefix
+  const t7 = parseScript(
+    `JACK: Are you ready?\nSARAH: I've been ready for ten minutes.\nJACK: Then let's do this.`
+  );
+  const t7dialogue = t7.parsedLines.filter(l => l.type === 'DIALOGUE');
+  results.push({
+    name: 'Inline-cue dialogue splits with alternating characters',
+    pass:
+      t7dialogue.length === 3 &&
+      t7dialogue[0].characterName === 'JACK' &&
+      t7dialogue[0].text === 'Are you ready?' &&
+      t7dialogue[1].characterName === 'SARAH' &&
+      t7dialogue[2].characterName === 'JACK' &&
+      !t7dialogue.some(l => l.text.includes(':') && /^[A-Z]+:/.test(l.text)),
+    detail: `d=${t7dialogue.length} first="${t7dialogue[0]?.text}"`,
   });
 
   return results;
