@@ -290,7 +290,21 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     if (!deviceId) return false;
     
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/users/${deviceId}/start-trial`, {}, { timeout: API_TIMEOUT });
+      // SEC-003 (Feb 2026): the backend verifies this app_user_id against
+      // RevenueCat's REST API before granting Premium. Without a valid id
+      // the request is rejected with 400.
+      let revenuecat_app_user_id: string | null = null;
+      try {
+        const Purchases = (await import('react-native-purchases')).default;
+        revenuecat_app_user_id = await Purchases.getAppUserID();
+      } catch (rcErr) {
+        console.warn('[ScriptStore] startTrial: cannot resolve RC app_user_id', rcErr);
+      }
+      const response = await axios.post(
+        `${API_BASE_URL}/api/users/${deviceId}/start-trial`,
+        { revenuecat_app_user_id },
+        { timeout: API_TIMEOUT },
+      );
       set({ 
         user: response.data, 
         isPremium: true 
@@ -308,9 +322,22 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     if (!deviceId) return false;
     
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/users/${deviceId}/subscribe`, {
-        plan,
-      }, { timeout: API_TIMEOUT });
+      // SEC-003 (Feb 2026): backend requires a RevenueCat app_user_id and
+      // independently verifies an active Premium entitlement before
+      // writing subscription_tier=premium. 402 is returned if the
+      // entitlement is missing/expired.
+      let revenuecat_app_user_id: string | null = null;
+      try {
+        const Purchases = (await import('react-native-purchases')).default;
+        revenuecat_app_user_id = await Purchases.getAppUserID();
+      } catch (rcErr) {
+        console.warn('[ScriptStore] subscribe: cannot resolve RC app_user_id', rcErr);
+      }
+      const response = await axios.post(
+        `${API_BASE_URL}/api/users/${deviceId}/subscribe`,
+        { plan, revenuecat_app_user_id },
+        { timeout: API_TIMEOUT },
+      );
       set({ 
         user: response.data, 
         isPremium: true 

@@ -7,7 +7,7 @@ import os
 import re
 import tempfile
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -48,6 +48,39 @@ db = client[os.environ['DB_NAME']]
 # Get API key
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
+
+# SEC-003 (Feb 2026): server-side RevenueCat verification is used by
+# the subscribe / start-trial routes. Import the client lazily-friendly
+# (module-level import, but routes still re-check REVENUECAT_SECRET_KEY
+# so tests can monkeypatch the env or the client function itself).
+from revenuecat_client import (  # noqa: E402
+    RevenueCatUnavailable,
+    RevenueCatNotConfigured,
+    fetch_premium_entitlement,
+)
+
+
+def _is_production_env() -> bool:
+    """SEC-003: Fail-closed QA_PREMIUM when the backend is running in
+    production. We treat `ENV` values of "prod"/"production" (case-
+    insensitive) as production; everything else (dev, test, staging,
+    unset) is non-prod."""
+    env = os.environ.get("ENV", "").strip().lower()
+    return env in ("prod", "production")
+
+
+def _qa_premium_enabled() -> bool:
+    """SEC-003: Centralised, fail-closed QA_PREMIUM read. Returns True
+    only when QA_PREMIUM=true AND ENV is NOT production. In production
+    we log an error (loud alert) and treat the flag as disabled."""
+    flag = os.environ.get("QA_PREMIUM", "").strip().lower() == "true"
+    if flag and _is_production_env():
+        logger.error(
+            "[SEC-003] QA_PREMIUM=true is set in a PRODUCTION environment; "
+            "ignoring the flag. Remove QA_PREMIUM from production .env.",
+        )
+        return False
+    return flag
 
 # Initialize ElevenLabs client
 eleven_client = None
@@ -789,8 +822,17 @@ class UserSettings(BaseModel):
 
 class SubscriptionUpdate(BaseModel):
     plan: str  # monthly, yearly
+    revenuecat_app_user_id: Optional[str] = None  # SEC-003: required for server-side RC verification
     receipt: Optional[str] = None  # App store receipt for validation
     transaction_id: Optional[str] = None
+
+
+class StartTrialRequest(BaseModel):
+    """SEC-003: start-trial now requires server-side RevenueCat entitlement
+    verification. The client supplies its RevenueCat app_user_id; the
+    backend fetches entitlements from RC and only writes trial state when
+    an active Premium (intro/trial) entitlement is confirmed."""
+    revenuecat_app_user_id: Optional[str] = None
 
 class TTSRequest(BaseModel):
     text: str
@@ -891,7 +933,7 @@ async def check_user_limits(user_id: str, action: str) -> Dict[str, Any]:
                     {"$set": {"subscription_tier": "free"}}
                 )
 
-    # ─── QA BYPASS (isolated, env-gated) ─────────────────────────────────────
+    # ─── QA BYPASS (isolated, env-gated, fail-closed in production) ─────────
     # Setting QA_PREMIUM=true in the backend .env grants the caller full
     # Premium-tier entitlements for the duration of this request only. It does
     # NOT mutate the user record in Mongo, does NOT touch RevenueCat, and does
@@ -899,8 +941,10 @@ async def check_user_limits(user_id: str, action: str) -> Dict[str, Any]:
     # directly (only endpoints that route through check_user_limits() or
     # GET /users/{id}/limits inherit the override). This flag is DEV/QA-only
     # and MUST remain absent (or "false") in the production environment.
-    # Production entitlement logic is unchanged when the flag is not set.
-    qa_premium = os.environ.get("QA_PREMIUM", "").lower() == "true"
+    # SEC-003 (Feb 2026): `_qa_premium_enabled()` additionally fails CLOSED
+    # when ENV=production is set, logging an error if someone leaves the
+    # flag on in a prod deploy.
+    qa_premium = _qa_premium_enabled()
     if qa_premium and tier != "premium":
         logger.warning(
             "[QA_BYPASS] Premium entitlement granted for user_id=%s "
@@ -1929,7 +1973,8 @@ async def get_user_limits(
     # See docstring on check_user_limits() above. When QA_PREMIUM=true the
     # response reports premium entitlements without mutating the user row.
     # Absent flag → identical behaviour to production.
-    qa_premium = os.environ.get("QA_PREMIUM", "").lower() == "true"
+    # SEC-003 (Feb 2026): fail-closed in production via _qa_premium_enabled().
+    qa_premium = _qa_premium_enabled()
     qa_override_applied = False
     if qa_premium and tier != "premium":
         logger.warning(
@@ -2029,7 +2074,14 @@ async def subscribe_user(
 
     SEC-002 (2026-02): the path `device_id` must match the authenticated
     bearer so one caller cannot activate premium on another user's
-    account (privilege-escalation prevention)."""
+    account (privilege-escalation prevention).
+
+    SEC-003 (2026-02): Premium entitlement is granted ONLY after the
+    server independently verifies an active Premium entitlement via the
+    RevenueCat REST API (`fetch_premium_entitlement`). The client-supplied
+    `plan` is still accepted for metadata, but it CANNOT grant Premium
+    on its own. Requests without `revenuecat_app_user_id` → 400.
+    Entitlement missing/expired → 402. RevenueCat unreachable → 503."""
     enforce_user_id_match(device_id, authenticated_user_id)
     user = await db.users.find_one({"device_id": device_id})
     if not user:
@@ -2038,33 +2090,62 @@ async def subscribe_user(
     plan = SUBSCRIPTION_PLANS.get(subscription.plan)
     if not plan:
         raise HTTPException(status_code=400, detail="Invalid subscription plan")
-    
+
+    # SEC-003: require a RevenueCat app_user_id and verify server-side.
+    if not subscription.revenuecat_app_user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="revenuecat_app_user_id is required for server-side verification",
+        )
+    try:
+        entitlement = await fetch_premium_entitlement(
+            subscription.revenuecat_app_user_id,
+        )
+    except RevenueCatNotConfigured as exc:
+        logger.error("[SEC-003] subscribe: RC not configured: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Subscription verification is temporarily unavailable",
+        ) from exc
+    except RevenueCatUnavailable as exc:
+        logger.warning("[SEC-003] subscribe: RC unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Subscription verification is temporarily unavailable",
+        ) from exc
+
+    if not entitlement.active:
+        logger.info(
+            "[SEC-003] subscribe REJECTED for device_id=%s rc_user=%s "
+            "(active=False, expires_at=%s)",
+            device_id, subscription.revenuecat_app_user_id, entitlement.expires_at,
+        )
+        raise HTTPException(
+            status_code=402,
+            detail="No active Premium entitlement found in RevenueCat",
+        )
+
     # Calculate subscription dates
     now = datetime.utcnow()
-    
-    # Check for trial
-    trial_end = None
-    if not user.get("trial_used") and plan.get("trial_days", 0) > 0:
-        trial_end = now + timedelta(days=plan["trial_days"])
-    
-    # Calculate subscription end
-    if plan["period"] == "month":
-        sub_end = now + timedelta(days=30)
-    else:  # yearly
-        sub_end = now + timedelta(days=365)
-    
+    sub_end = entitlement.expires_at
+    if sub_end is None:
+        # Lifetime entitlement — pick a far-future sentinel so downstream
+        # expiry checks (datetime.utcnow() > subscription_end) stay false.
+        sub_end = now + timedelta(days=36500)
+    else:
+        # Convert tz-aware UTC → naive UTC to match the rest of the
+        # codebase's `datetime.utcnow()` convention.
+        sub_end = sub_end.astimezone(timezone.utc).replace(tzinfo=None)
+
     update_data = {
         "subscription_tier": "premium",
         "subscription_plan": subscription.plan,
         "subscription_start": now,
         "subscription_end": sub_end,
+        "revenuecat_app_user_id": subscription.revenuecat_app_user_id,
         "updated_at": now,
     }
-    
-    if trial_end:
-        update_data["trial_used"] = True
-        update_data["trial_end"] = trial_end
-    
+
     await db.users.update_one(
         {"device_id": device_id},
         {"$set": update_data}
@@ -2076,12 +2157,19 @@ async def subscribe_user(
 @api_router.post("/users/{device_id}/start-trial")
 async def start_trial(
     device_id: str,
+    request: StartTrialRequest | None = None,
     authenticated_user_id: str = Depends(get_authenticated_user_id),
 ):
     """Start a 3-day premium trial.
 
     SEC-002 (2026-02): path `device_id` must match the authenticated
-    bearer; prevents trial-grant on another user's account."""
+    bearer; prevents trial-grant on another user's account.
+
+    SEC-003 (2026-02): the trial flag is only set after RevenueCat
+    confirms an active Premium entitlement (intro/trial counts as
+    `active=True` in RC). The server never grants Premium on client
+    signal alone. Missing `revenuecat_app_user_id` → 400; no active
+    entitlement → 402; RC unreachable → 503."""
     enforce_user_id_match(device_id, authenticated_user_id)
     user = await db.users.find_one({"device_id": device_id})
     if not user:
@@ -2089,9 +2177,45 @@ async def start_trial(
     
     if user.get("trial_used"):
         raise HTTPException(status_code=400, detail="Trial already used")
-    
+
+    # SEC-003: require RC app_user_id + server-side verification.
+    rc_app_user_id = request.revenuecat_app_user_id if request else None
+    if not rc_app_user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="revenuecat_app_user_id is required for server-side verification",
+        )
+    try:
+        entitlement = await fetch_premium_entitlement(rc_app_user_id)
+    except RevenueCatNotConfigured as exc:
+        logger.error("[SEC-003] start-trial: RC not configured: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Trial verification is temporarily unavailable",
+        ) from exc
+    except RevenueCatUnavailable as exc:
+        logger.warning("[SEC-003] start-trial: RC unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Trial verification is temporarily unavailable",
+        ) from exc
+
+    if not entitlement.active:
+        logger.info(
+            "[SEC-003] start-trial REJECTED for device_id=%s rc_user=%s "
+            "(active=False, expires_at=%s)",
+            device_id, rc_app_user_id, entitlement.expires_at,
+        )
+        raise HTTPException(
+            status_code=402,
+            detail="No active Premium trial entitlement found in RevenueCat",
+        )
+
     now = datetime.utcnow()
-    trial_end = now + timedelta(days=3)
+    if entitlement.expires_at is None:
+        trial_end = now + timedelta(days=3)
+    else:
+        trial_end = entitlement.expires_at.astimezone(timezone.utc).replace(tzinfo=None)
     
     await db.users.update_one(
         {"device_id": device_id},
@@ -2100,6 +2224,7 @@ async def start_trial(
             "trial_used": True,
             "trial_end": trial_end,
             "subscription_end": trial_end,
+            "revenuecat_app_user_id": rc_app_user_id,
             "updated_at": now,
         }}
     )
