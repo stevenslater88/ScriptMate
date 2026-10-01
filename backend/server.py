@@ -3525,6 +3525,169 @@ def _tts_check_rate_limit(user_id: str) -> None:
         _tts_rl_state[user_id] = history
 
 
+# ─── Phase P2 (SEC-004): per-tier daily/monthly character budgets + global
+#     emergency ceiling. All four knobs are env-driven; absent / empty / "0"
+#     means "disabled" so this helper is a no-op by default. When enabled,
+#     the check runs AFTER authentication, after Pydantic validation, after
+#     the sliding-window rate limit, and BEFORE the ElevenLabs vendor call —
+#     so no financial cost is incurred for a rejected budget request.
+#
+#     Order of enforcement inside this helper:
+#       (1) Global emergency ceiling → 503 (operator signal)
+#       (2) Premium monthly cap      → 402 (user signal)
+#       (3) Per-tier daily cap       → 402 (user signal)
+#
+#     Reuses the P1 ledger (`db.tts_usage`) read-only. No schema change,
+#     no new collection, no new index — see index-verification table in
+#     the P2 implementation ticket. Tier resolution reuses the SEC-003
+#     fail-closed `_qa_premium_enabled()` helper so QA_PREMIUM remains
+#     a dev-only override that does nothing in production.
+
+def _env_int(name: str) -> int:
+    """Return the int value of env var `name`, or 0 if unset / empty /
+    non-numeric / negative. 0 means 'this lever disabled'."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return 0
+    try:
+        v = int(raw)
+    except ValueError:
+        return 0
+    return max(0, v)
+
+
+async def _resolve_tier_for_tts(user_id: str) -> str:
+    """Resolve 'free' or 'premium' for a bearer-derived user_id.
+
+    Mirrors the first ~15 lines of `check_user_limits` but strips the
+    per-action branches — the budget check only needs the tier string.
+    Honours the SEC-003 fail-closed QA_PREMIUM gate via
+    `_qa_premium_enabled()`.
+
+    `user_id` arrives in the raw form produced by `get_authenticated_user_id`
+    (either "device:<id>" or a UUID for authenticated accounts). We query
+    both collections because a device can later be linked to an account."""
+    effective = effective_user_id(user_id)
+    tier = "free"
+    user = await db.users.find_one({"device_id": effective})
+    if not user:
+        user = await db.authenticated_users.find_one({"id": effective})
+    if user:
+        tier = user.get("subscription_tier", "free")
+        sub_end = user.get("subscription_end")
+        if tier == "premium" and sub_end and datetime.now(timezone.utc).replace(tzinfo=None) > sub_end:
+            tier = "free"
+    if _qa_premium_enabled() and tier != "premium":
+        tier = "premium"
+    return tier
+
+
+async def _tts_check_character_budget(user_id: str, requested_chars: int) -> None:
+    """SEC-004 / Phase P2 enforcement.
+
+    Raises:
+      * 503 — global daily ceiling would be exceeded (operator signal).
+      * 402 — per-user monthly or daily cap would be exceeded (user signal).
+
+    Short-circuits with zero DB access when all four env vars are
+    disabled (empty / 0), preserving the Phase P1 "observability only"
+    behaviour for ops still rolling out levers one at a time."""
+    free_daily_cap = _env_int("TTS_FREE_DAILY_CHARS")
+    premium_daily_cap = _env_int("TTS_PREMIUM_DAILY_CHARS")
+    premium_monthly_cap = _env_int("TTS_PREMIUM_MONTHLY_CHARS")
+    global_daily_cap = _env_int("TTS_GLOBAL_DAILY_CEILING_CHARS")
+
+    if not any([free_daily_cap, premium_daily_cap,
+                premium_monthly_cap, global_daily_cap]):
+        return  # P1 behaviour preserved — nothing enabled.
+
+    now = datetime.now(timezone.utc)
+    date_key = now.strftime("%Y-%m-%d")
+    month_key = now.strftime("%Y-%m")
+
+    # ── (1) Global emergency ceiling — operator signal (503) ───────────
+    # Uses tts_usage_date_chars_desc (date leading key).
+    if global_daily_cap:
+        global_cursor = db.tts_usage.aggregate([
+            {"$match": {"date": date_key}},
+            {"$group": {"_id": None, "chars": {"$sum": "$characters"}}},
+        ])
+        agg = await global_cursor.to_list(length=1)
+        global_used = int(agg[0]["chars"]) if agg else 0
+        if global_used + requested_chars > global_daily_cap:
+            logger.warning(
+                "[SEC-004 P2] global ceiling reached: used=%d limit=%d "
+                "requested=%d",
+                global_used, global_daily_cap, requested_chars,
+            )
+            # Retry-After points at next UTC midnight — the ceiling
+            # is per UTC day, so this is the earliest the day sum
+            # resets.
+            tomorrow = (now + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0,
+            )
+            retry_after = max(1, int((tomorrow - now).total_seconds()))
+            raise HTTPException(
+                status_code=503,
+                detail="TTS temporarily unavailable (daily service ceiling reached)",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+    # ── (2) and (3) Per-user caps — needs tier.
+    #       Resolve tier once; honours SEC-003 fail-closed QA_PREMIUM.
+    tier = await _resolve_tier_for_tts(user_id)
+
+    # Per-user DAILY cap. Uses tts_usage_user_date_uniq (point lookup).
+    daily_cap = premium_daily_cap if tier == "premium" else free_daily_cap
+    user_doc = await db.tts_usage.find_one(
+        {"user_id": user_id, "date": date_key},
+        projection={"_id": 0, "characters": 1},
+    )
+    user_daily_used = int(user_doc.get("characters", 0)) if user_doc else 0
+
+    # ── (2) Premium monthly cap (checked before daily so an exhausted
+    #       monthly budget reports monthly, not daily). ────────────────
+    if tier == "premium" and premium_monthly_cap:
+        monthly_cursor = db.tts_usage.aggregate([
+            {"$match": {"user_id": user_id, "billing_month": month_key}},
+            {"$group": {"_id": None, "chars": {"$sum": "$characters"}}},
+        ])
+        magg = await monthly_cursor.to_list(length=1)
+        monthly_used = int(magg[0]["chars"]) if magg else 0
+        if monthly_used + requested_chars > premium_monthly_cap:
+            logger.info(
+                "[SEC-004 P2] premium monthly cap: user=%s used=%d "
+                "limit=%d requested=%d",
+                user_id, monthly_used, premium_monthly_cap, requested_chars,
+            )
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "tier": "premium",
+                    "scope": "monthly",
+                    "used": monthly_used,
+                    "limit": premium_monthly_cap,
+                },
+            )
+
+    # ── (3) Per-tier daily cap. ──────────────────────────────────────
+    if daily_cap and (user_daily_used + requested_chars > daily_cap):
+        logger.info(
+            "[SEC-004 P2] %s daily cap: user=%s used=%d limit=%d "
+            "requested=%d",
+            tier, user_id, user_daily_used, daily_cap, requested_chars,
+        )
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "tier": tier,
+                "scope": "daily",
+                "used": user_daily_used,
+                "limit": daily_cap,
+            },
+        )
+
+
 # ─── Phase P1: Persistent TTS usage ledger (visibility only) ──────────────
 #
 # Design (see `/app/memory/PRD.md` → Phase P1 TTS Visibility):
@@ -3804,6 +3967,7 @@ async def generate_elevenlabs_tts(
         bytes directly to a file for Android ExoPlayer playback.
     """
     _tts_check_rate_limit(user_id)
+    await _tts_check_character_budget(user_id, len(request.text))
 
     if not eleven_client:
         raise HTTPException(status_code=503, detail="ElevenLabs service not configured")
