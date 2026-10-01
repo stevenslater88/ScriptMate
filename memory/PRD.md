@@ -1784,3 +1784,85 @@ Without these set, the endpoints return 503 "not configured" rather than silentl
 ### Still OPEN / DEFERRED
 - SEC-002 — session enforcement on protected routes
 - SEC-003 — `QA_PREMIUM` payment bypass
+
+## 2026-02 — Physical build 1.0.66 / VC1110 — TITLE duplicate parser regression (FIXED, UNVERIFIED-PHYSICAL)
+
+### Physical failure
+`ScriptM8_Parser_Parity_Test.pdf` on Samsung S23 Ultra (SM-S918B / Android 16)
+produced characters `{JACK, SARAH, THE CALL}` — "THE CALL" wrongly promoted
+to a speaking character alongside JACK/SARAH, both in the preview and in
+the saved result (not just a UI display issue).
+
+### Real pipeline input (reproduced in automated tests)
+PyPDF2 extracts the on-page title TWICE — once as a standalone top-of-page
+line and once as part of the authored metadata. After `_coalesce_pdf_header_value_splits`
+runs, both the backend parser and the frontend `smartScriptParser.ts`
+receive exactly:
+```
+THE CALL
+TITLE: THE CALL
+AUTHOR: ScriptM8 QA
+CHARACTERS:
+JACK
+SARAH
+JACK:
+Are you ready?
+...
+```
+
+### Why the pre-fix parsers classified "THE CALL" as a character
+`THE CALL` is uppercase, two words, not a scene heading, not a parenthetical,
+not an inline-cue (no colon) and the header-keyword gate only matches lines
+that *start with* TITLE/AUTHOR/etc. — so "THE CALL" fell through to the
+character-cue heuristic and was promoted. The pre-existing
+`_coalesce_pdf_header_value_splits` only handles the `TITLE:\nVALUE` split
+case, not the "duplicate standalone title" case.
+
+### Smallest safe structural fix (both layers, parity preserved)
+Pre-scan the input to find the first explicit `TITLE: <value>` header and
+capture its value + index. During parsing, when the current line equals
+that value AND the current index is **before** the TITLE header index,
+route the line to the stage-direction path instead of the character-cue
+path. Duplicates AFTER the TITLE header are preserved as legitimate
+character cues (so a character named identically to the title still
+works when they speak later in the script).
+
+NOT hard-coded to "THE CALL" — swapping in "ANOTHER TITLE" / "LA TRAVIATA"
+yields identical behaviour (`test_backend_no_hard_coded_title_value`).
+
+### Files changed
+- `backend/server.py` — pre-scan + suppression branch at top of
+  `fallback_parse_script`.
+- `frontend/services/smartScriptParser.ts` — mirror of the backend rule
+  at top of `parseScript` (parity).
+- `scripts/prebuild_gate.py` — registered the new regression suite in
+  `STATIC_REGRESSION_TESTS`.
+- `backend/tests/test_title_duplication_parser_regression_feb2026.py` —
+  new, 16 regression tests. 7 of them demonstrably **fail against the
+  pre-fix implementation** and pass only with the fix applied; the other
+  9 lock in legitimate behaviours (first-character-is-JACK, multi-word
+  `THE DETECTIVE:`, character named like title AFTER the header, etc.).
+
+### Untouched (frozen per handoff)
+- ElevenLabs TTS proxy / voice assignment / generation-counter audio fix
+- `cancelledRef` rehearsal lifecycle
+- SEC-001 identity-token verification
+- SEC-004 device-session minting
+- RevenueCat / entitlement code
+- Baseline Ruff / TS findings (prebuild_gate baseline preserved)
+
+### Pre-build gate result (after fix)
+```
+Tests:        946 passed, 2 failed (pre-existing baseline, same count on clean main)
+Runtime smoke: PASS — 18 ok / 0 fail
+Voice smoke:   PASS — 28 ok / 0 fail (audio untouched)
+TypeScript:    PASS — 31 baseline, 0 NEW
+Lint (ruff):   PASS — 320 baseline, 0 NEW
+Dependencies:  PASS — no changes
+```
+
+### Still OPEN / DEFERRED
+- Physical S23 build 1.0.67+ verification (user authorises exactly one
+  fresh APK after reviewing this report).
+- SEC-002, SEC-003 (deferred, unchanged by this ticket).
+

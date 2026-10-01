@@ -101,6 +101,7 @@ STATIC_REGRESSION_TESTS = [
     "tests/test_frontend_backend_parser_parity_feb2026.py",
     "tests/test_pdf_header_value_coalesce_feb2026.py",
     "tests/test_rehearsal_audio_lifecycle_feb2026.py",
+    "tests/test_title_duplication_parser_regression_feb2026.py",
 ]
 
 # Files required for the frontend/backend to build/run. Missing = RED.

@@ -1440,11 +1440,69 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
         run-boundary word concatenations (`nothinghappens`)."""
         return _split_concatenated_words(_repair_intra_word_spaces(t))
 
-    for line in lines:
+    # ─── 2026-02 PHYSICAL BUILD 1.0.66 — TITLE DUPLICATE SUPPRESSION ──
+    # PyPDF2 extracts the on-page document title TWICE: once as a
+    # standalone large-text line AT THE TOP, and again as part of the
+    # author's `TITLE: <value>` metadata header. Example extraction:
+    #
+    #     THE CALL              ← duplicate, uppercase, 2 words
+    #     TITLE: THE CALL       ← authored metadata
+    #     AUTHOR: ...
+    #     CHARACTERS:
+    #     JACK
+    #     SARAH
+    #
+    # Without this hint, the leading `THE CALL` falls through to the
+    # character-cue heuristic (uppercase, <=3 words, not a scene
+    # heading, no header-keyword prefix) and is wrongly promoted to a
+    # speaking character alongside JACK/SARAH.
+    #
+    # Structural rule (generic, NOT hard-coded to any title):
+    #   If an explicit `TITLE: <value>` header exists AND a preceding
+    #   standalone line equals that `<value>`, treat the preceding
+    #   line as duplicated document-title extraction (stage direction,
+    #   not a character). The suppression is INDEX-GATED: duplicates
+    #   AFTER the TITLE header are preserved as legitimate character
+    #   cues (so a character named identically to the title still
+    #   works when they speak later in the script).
+    _title_value_upper = ""
+    _title_header_idx = -1
+    for _i, _ln in enumerate(lines):
+        _s = _ln.strip()
+        _u = _s.upper()
+        if _u.startswith("TITLE:"):
+            _title_value_upper = _s[len("TITLE:"):].strip().upper()
+            _title_header_idx = _i
+            break
+
+    for _idx, line in enumerate(lines):
         line = line.strip()
         if not line:
             continue
-            
+
+        # Suppress standalone duplicate of TITLE metadata value
+        # appearing BEFORE the `TITLE: X` header line. See block
+        # comment above `fallback_parse_script` loop entry.
+        if (
+            _title_value_upper
+            and _idx < _title_header_idx
+            and line.upper() == _title_value_upper
+        ):
+            if current_character and current_text:
+                lines_data.append({
+                    "character": current_character,
+                    "text": _repair(_smart_join_dialogue(current_text)),
+                    "is_stage_direction": False
+                })
+                current_text = []
+            current_character = ""
+            lines_data.append({
+                "character": "",
+                "text": _repair(line),
+                "is_stage_direction": True
+            })
+            continue
+
         potential_char = line.replace(':', '').strip()
         # Header keyword — front-matter / cast-list labels (TITLE,
         # CHARACTERS, DRAMATIS PERSONAE, etc.) must NEVER be treated as

@@ -218,6 +218,33 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
   let currentCharConfidence = 0;
   let inDialogueBlock = false;
 
+  // ─── 2026-02 PHYSICAL BUILD 1.0.66 — TITLE DUPLICATE SUPPRESSION ─
+  // Mirrors `backend/server.py::fallback_parse_script`. PyPDF2
+  // extracts the on-page document title TWICE: once as a standalone
+  // large-text line at the top, and again as part of the author's
+  // `TITLE: <value>` metadata. Without this hint, the leading
+  // duplicate (uppercase, <=3 words, not a header-keyword prefix)
+  // falls through to the character-cue heuristic and is wrongly
+  // promoted to a speaking character.
+  //
+  // Structural rule (generic, NOT hard-coded to any title):
+  //   If an explicit `TITLE: <value>` header exists AND a preceding
+  //   standalone line equals that `<value>`, treat the preceding
+  //   line as duplicated document-title extraction. INDEX-GATED:
+  //   duplicates AFTER the TITLE header are preserved as legitimate
+  //   character cues.
+  let titleValueUpper = '';
+  let titleHeaderIdx = -1;
+  for (let k = 0; k < rawLines.length; k++) {
+    const s = rawLines[k].trim();
+    const u = s.toUpperCase();
+    if (u.startsWith('TITLE:')) {
+      titleValueUpper = s.slice('TITLE:'.length).trim().toUpperCase();
+      titleHeaderIdx = k;
+      break;
+    }
+  }
+
   for (let i = 0; i < rawLines.length; i++) {
     const line = rawLines[i];
     const trimmed = line.trim();
@@ -225,6 +252,25 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
     // Empty line → reset dialogue block
     if (trimmed.length === 0) {
       inDialogueBlock = false;
+      continue;
+    }
+
+    // Standalone duplicate of TITLE metadata value appearing BEFORE
+    // the `TITLE: X` header line — suppress from character detection.
+    if (
+      titleValueUpper.length > 0 &&
+      i < titleHeaderIdx &&
+      trimmed.toUpperCase() === titleValueUpper
+    ) {
+      parsedLines.push({
+        id: uid(),
+        type: 'ACTION',
+        characterName: null,
+        text: trimmed,
+        confidence: 0.9,
+      });
+      inDialogueBlock = false;
+      currentCharacter = null;
       continue;
     }
 
