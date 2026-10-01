@@ -5067,21 +5067,44 @@ async def delete_share_link(
 VOICE_STUDIO_DIR = Path(tempfile.gettempdir()) / "voice_studio"
 VOICE_STUDIO_DIR.mkdir(exist_ok=True)
 
+# V1 B-1 (Feb 2026): defensive upload bounds applied BEFORE any
+# pydub processing on the two audio-upload routes
+# (/voice-studio/process, /voice-studio/demo-reel). Both routes
+# additionally require a verified bearer via Depends(get_effective_user_id).
+_VOICE_STUDIO_MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB per upload
+_VOICE_STUDIO_MAX_DEMO_REEL_FILES = 10
+
 @api_router.post("/voice-studio/process")
 async def process_audio(
     audio: UploadFile = File(...),
     operation: str = Form(...),  # "trim", "normalize", "remove_silence", "all"
     trim_start: float = Form(0.0),   # seconds
     trim_end: float = Form(0.0),     # seconds from end to cut
+    user_id: str = Depends(get_effective_user_id),  # V1 B-1: bearer required
 ):
-    """Process an audio file: trim, normalize volume, remove silence."""
+    """Process an audio file: trim, normalize volume, remove silence.
+
+    V1 B-1 (Feb 2026): requires a verified bearer (mirrors
+    `/voice-studio/takes`). Upload size is bounded at 25 MB BEFORE
+    pydub processing — oversize payloads return 413 without touching
+    disk/CPU to prevent anonymous resource exhaustion."""
     from pydub import AudioSegment
     from pydub.silence import detect_nonsilent
 
+    # V1 B-1: enforce size cap before anything expensive. Read bytes
+    # into memory first (FastAPI's SpooledTemporaryFile does this
+    # anyway); then check length against the 25 MB ceiling. We fail
+    # fast so we never touch disk / pydub for oversize uploads.
+    content = await audio.read()
+    if len(content) > _VOICE_STUDIO_MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Audio upload exceeds {_VOICE_STUDIO_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit",
+        )
+
     try:
-        content = await audio.read()
         suffix = ".m4a" if audio.filename and audio.filename.endswith(".m4a") else ".wav"
-        
+
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_in:
             tmp_in.write(content)
             tmp_in_path = tmp_in.name
@@ -5129,6 +5152,8 @@ async def process_audio(
             if os.path.exists(tmp_in_path):
                 os.unlink(tmp_in_path)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Audio processing error: {e}")
         raise HTTPException(status_code=500, detail=json.dumps({"error": "Audio processing failed", "message": "Could not process audio file. Please try again."}))
@@ -5138,9 +5163,21 @@ async def process_audio(
 async def build_demo_reel(
     files: List[UploadFile] = File(...),
     gaps: str = Form("0.5"),  # comma-separated gap durations in seconds between clips
+    user_id: str = Depends(get_effective_user_id),  # V1 B-1: bearer required
 ):
-    """Build a demo reel by concatenating multiple audio files with optional gaps."""
+    """Build a demo reel by concatenating multiple audio files with optional gaps.
+
+    V1 B-1 (Feb 2026): requires a verified bearer. File count is
+    bounded at 10 uploads BEFORE any pydub work; each upload is
+    bounded at 25 MB. Over-count returns 422; over-size returns 413."""
     from pydub import AudioSegment
+
+    # V1 B-1: bound the uploaded-file list before touching pydub.
+    if len(files) > _VOICE_STUDIO_MAX_DEMO_REEL_FILES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Demo reel accepts at most {_VOICE_STUDIO_MAX_DEMO_REEL_FILES} files",
+        )
 
     try:
         gap_list = [float(g.strip()) for g in gaps.split(",") if g.strip()]
@@ -5148,6 +5185,11 @@ async def build_demo_reel(
 
         for f in files:
             content = await f.read()
+            if len(content) > _VOICE_STUDIO_MAX_UPLOAD_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Audio upload exceeds {_VOICE_STUDIO_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit",
+                )
             suffix = ".m4a" if f.filename and f.filename.endswith(".m4a") else ".wav"
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                 tmp.write(content)
