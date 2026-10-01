@@ -429,6 +429,20 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# ─── SEC-002 (2026-02): centralized auth deps ─────────────────────────
+# Hoisted from the former inline `get_authenticated_user_id` so every
+# protected route gets the SAME identity extraction. Imported here (not
+# at the top of the file) because `backend/auth.py` reads `db` lazily
+# from this module, and placing the import after `db` is defined keeps
+# the resolution order boring and deterministic. See `backend/auth.py`
+# for the identity model.
+from auth import (
+    effective_user_id,
+    enforce_user_id_match,
+    get_authenticated_user_id,
+    get_effective_user_id,
+)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -1825,6 +1839,59 @@ async def create_or_get_user(user_data: UserProfileCreate):
     await db.users.insert_one(user.dict())
     return user
 
+# ─── SEC-002 (2026-02): /users/me — identity-from-bearer ───────────────
+# A bearer-only endpoint the client can call to resolve "who am I,
+# according to the server". Must be declared BEFORE the parameterized
+# `/users/{device_id}` route or FastAPI will route `/users/me` into
+# that handler with `device_id="me"`. Returns the SAME shape for both
+# anonymous device sessions and signed-in users so the mobile UI
+# doesn't branch. Only safe/public fields are included — the token
+# itself is never echoed back.
+@api_router.get("/users/me")
+async def get_current_user(
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Return the authenticated identity resolved from the bearer token.
+
+    Response fields:
+      * `user_id`            — RAW identity ("device:<id>" or UUID)
+      * `effective_user_id`  — the id used for data filters
+      * `is_anonymous_device`— True for device-session bearers
+      * `email`, `name`, `subscription_tier`, `created_at` — populated
+        for signed-in Google/Apple accounts; `None` for anonymous
+        device sessions (except `subscription_tier`, which falls back
+        to the device-row tier when present, else "free")."""
+    is_device = authenticated_user_id.startswith("device:")
+    effective = effective_user_id(authenticated_user_id)
+
+    email = None
+    name = None
+    tier = "free"
+    created_at = None
+
+    if is_device:
+        urow = await db.users.find_one({"device_id": effective})
+        if urow:
+            tier = urow.get("subscription_tier", "free")
+            created_at = urow.get("created_at")
+    else:
+        urow = await db.authenticated_users.find_one({"id": effective})
+        if urow:
+            email = urow.get("email")
+            name = urow.get("name")
+            tier = urow.get("subscription_tier", "free")
+            created_at = urow.get("created_at")
+
+    return {
+        "user_id": authenticated_user_id,
+        "effective_user_id": effective,
+        "is_anonymous_device": is_device,
+        "email": email,
+        "name": name,
+        "subscription_tier": tier,
+        "created_at": created_at,
+    }
+
 @api_router.get("/users/{device_id}", response_model=UserProfile)
 async def get_user(device_id: str):
     """Get user profile by device ID"""
@@ -2031,8 +2098,16 @@ async def cancel_subscription(device_id: str):
 # ==================== SCRIPT ROUTES ====================
 
 @api_router.post("/scripts", response_model=Script)
-async def create_script(script_data: ScriptCreate):
+async def create_script(
+    script_data: ScriptCreate,
+    user_id: str = Depends(get_effective_user_id),
+):
     """Create a new script from raw text.
+
+    SEC-002 (2026-02): the effective owner is now the authenticated
+    bearer identity. Any `script_data.user_id` the client sends is
+    IGNORED — one device/user can no longer plant a script against
+    another user's id.
 
     IMPORT LATENCY FIX (2026-02):
     Previously this handler synchronously called ``parse_script_with_ai``
@@ -2056,7 +2131,7 @@ async def create_script(script_data: ScriptCreate):
     """
     try:
         # Check user limits
-        limits_check = await check_user_limits(script_data.user_id, "create_script")
+        limits_check = await check_user_limits(user_id, "create_script")
         if not limits_check["allowed"]:
             raise HTTPException(status_code=403, detail=limits_check["upgrade_reason"])
 
@@ -2089,14 +2164,14 @@ async def create_script(script_data: ScriptCreate):
             raw_text=script_data.raw_text,
             characters=characters,
             lines=lines,
-            user_id=script_data.user_id
+            user_id=user_id,
         )
 
         await db.scripts.insert_one(script.dict())
 
         # Update user script count
         await db.users.update_one(
-            {"$or": [{"id": script_data.user_id}, {"device_id": script_data.user_id}]},
+            {"$or": [{"id": user_id}, {"device_id": user_id}]},
             {"$inc": {"scripts_count": 1}}
         )
 
@@ -2111,7 +2186,7 @@ async def create_script(script_data: ScriptCreate):
 async def upload_script(
     file: UploadFile = File(...),
     title: str = Form(...),
-    user_id: str = Form(default="default")
+    user_id: str = Depends(get_effective_user_id),
 ):
     """Extract text from a PDF, Word document, or text file.
 
@@ -2119,6 +2194,10 @@ async def upload_script(
     Script row. The frontend is the single owner of persistence and calls
     POST /api/scripts once the user has reviewed the extracted text and
     picked their character (via the script-parser screen).
+
+    SEC-002 (2026-02): the `user_id` form field was previously trusted
+    unauthenticated; it is now derived from the bearer and the form
+    field is no longer accepted. Returns 401 for unauthenticated callers.
 
     Returns: { raw_text, filename, title, size_bytes, source: 'multipart' }
     """
@@ -2179,11 +2258,18 @@ async def upload_script(
 
 
 @api_router.post("/scripts/upload-base64")
-async def upload_script_base64(request: Request):
+async def upload_script_base64(
+    request: Request,
+    user_id: str = Depends(get_effective_user_id),
+):
     """Base64 extraction endpoint (Android-safe alternative to multipart).
 
     ⚠️ CONTRACT: Same as /scripts/upload — EXTRACTION-ONLY. Does NOT persist
     a Script. Frontend is the single owner of persistence.
+
+    SEC-002 (2026-02): any `user_id` key in the JSON body is IGNORED; the
+    effective owner is the authenticated bearer identity. Returns 401 for
+    unauthenticated callers.
 
     Returns: { raw_text, filename, title, size_bytes, source: 'base64' }
     """
@@ -2192,7 +2278,6 @@ async def upload_script_base64(request: Request):
         title = body.get("title", "Untitled Script")
         filename = (body.get("filename", "file.txt") or "file.txt").lower()
         file_base64 = body.get("file_data", "")
-        user_id = body.get("user_id", "default")
 
         if not file_base64:
             raise HTTPException(status_code=400, detail="No file data provided")
@@ -2252,8 +2337,13 @@ async def upload_script_base64(request: Request):
 
 
 @api_router.get("/scripts", response_model=List[Script])
-async def get_scripts(user_id: str = "default"):
-    """Get all scripts for a user - optimized with projection to exclude large fields"""
+async def get_scripts(user_id: str = Depends(get_effective_user_id)):
+    """Get all scripts for a user - optimized with projection to exclude large fields.
+
+    SEC-002 (2026-02): the previous `?user_id=` query parameter is now
+    IGNORED. The list is always keyed to the authenticated bearer so one
+    user cannot enumerate another user's scripts.
+    """
     # Exclude raw_text from list view for performance (can be fetched in detail view)
     projection = {
         "_id": 0,
@@ -2273,58 +2363,79 @@ async def get_scripts(user_id: str = "default"):
     return [Script(**s) for s in scripts]
 
 @api_router.get("/scripts/{script_id}", response_model=Script)
-async def get_script(script_id: str):
-    """Get a specific script by ID"""
+async def get_script(
+    script_id: str,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Get a specific script by ID.
+
+    SEC-002 (2026-02): 404 is returned if the script exists but belongs
+    to another user — same shape as 'not found' so cross-user existence
+    probing is not possible.
+    """
     script = await db.scripts.find_one({"id": script_id})
-    if not script:
+    if not script or script.get("user_id") != user_id:
         raise HTTPException(status_code=404, detail="Script not found")
     return Script(**script)
 
 @api_router.put("/scripts/{script_id}")
-async def update_script(script_id: str, update_data: ScriptUpdate):
-    """Update script settings"""
+async def update_script(
+    script_id: str,
+    update_data: ScriptUpdate,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Update script settings.
+
+    SEC-002 (2026-02): one user cannot mutate another user's scripts.
+    Attempts return 404 (indistinguishable from a true miss)."""
     script = await db.scripts.find_one({"id": script_id})
-    if not script:
+    if not script or script.get("user_id") != user_id:
         raise HTTPException(status_code=404, detail="Script not found")
-    
+
     update_dict = {"updated_at": datetime.utcnow()}
-    
+
     if update_data.title:
         update_dict["title"] = update_data.title
-    
+
     if update_data.user_character:
         characters = script.get("characters", [])
         for char in characters:
             char["is_user_character"] = (char["name"] == update_data.user_character)
         update_dict["characters"] = characters
-    
+
     if update_data.characters:
         update_dict["characters"] = update_data.characters
-    
+
     await db.scripts.update_one({"id": script_id}, {"$set": update_dict})
     updated = await db.scripts.find_one({"id": script_id})
     return Script(**updated)
 
 @api_router.delete("/scripts/{script_id}")
-async def delete_script(script_id: str):
-    """Delete a script"""
+async def delete_script(
+    script_id: str,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Delete a script.
+
+    SEC-002 (2026-02): one user cannot delete another user's scripts;
+    cross-owner attempts return 404 (indistinguishable from a true miss)."""
     script = await db.scripts.find_one({"id": script_id})
-    if not script:
+    if not script or script.get("user_id") != user_id:
         raise HTTPException(status_code=404, detail="Script not found")
-    
+
     result = await db.scripts.delete_one({"id": script_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Script not found")
-    
+
     await db.rehearsals.delete_many({"script_id": script_id})
-    
+
     # Update user script count
     if script.get("user_id"):
         await db.users.update_one(
             {"$or": [{"id": script["user_id"]}, {"device_id": script["user_id"]}]},
             {"$inc": {"scripts_count": -1}}
         )
-    
+
     return {"message": "Script deleted successfully"}
 
 # ==================== REHEARSAL ROUTES ====================
@@ -2750,6 +2861,7 @@ async def get_authenticated_user(user_id: str):
         "created_at": user.get("created_at"),
     }
 
+
 @api_router.post("/auth/logout")
 async def logout(user_id: str, device_id: str = None):
     """Logout user (optionally from specific device)"""
@@ -2955,20 +3067,45 @@ async def pull_sync_data(user_id: str, last_sync: str = None):
 # ==================== DIRECTOR NOTES ROUTES ====================
 
 @api_router.get("/notes/{script_id}")
-async def get_script_notes(script_id: str, user_id: str):
-    """Get all director notes for a script"""
+async def get_script_notes(
+    script_id: str,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Get all director notes for a script.
+
+    SEC-002 (2026-02): the previous `?user_id=` query parameter is
+    IGNORED. Notes are always filtered by the authenticated bearer
+    identity so one user cannot read another's notes.
+    """
     notes = await db.director_notes.find({
         "script_id": script_id,
         "user_id": user_id
-    }).to_list(500)
+    }, {"_id": 0}).to_list(500)
     return notes
 
 @api_router.post("/notes")
-async def create_note(note: DirectorNote, user_id: str):
-    """Create or update a director note"""
+async def create_note(
+    note: DirectorNote,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Create or update a director note.
+
+    SEC-002 (2026-02): the previous `?user_id=` query parameter is
+    IGNORED; the stored `user_id` is derived from the bearer so one
+    user cannot plant notes against another user's id. If a note with
+    the given id already exists against a different owner it is NOT
+    overwritten — this prevents stealthy note hijacking by colliding
+    the id.
+    """
     note_dict = note.dict()
     note_dict["user_id"] = user_id
-    
+
+    # Guard against id collision across owners: only upsert when the
+    # existing row (if any) belongs to the same authenticated user.
+    existing = await db.director_notes.find_one({"id": note.id})
+    if existing and existing.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Note not found")
+
     await db.director_notes.update_one(
         {"id": note.id},
         {"$set": note_dict},
@@ -2977,9 +3114,19 @@ async def create_note(note: DirectorNote, user_id: str):
     return note_dict
 
 @api_router.delete("/notes/{note_id}")
-async def delete_note(note_id: str):
-    """Delete a director note"""
-    result = await db.director_notes.delete_one({"id": note_id})
+async def delete_note(
+    note_id: str,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Delete a director note.
+
+    SEC-002 (2026-02): cross-owner delete attempts return 404
+    (indistinguishable from a true miss) so one user cannot delete
+    another user's notes."""
+    existing = await db.director_notes.find_one({"id": note_id})
+    if not existing or existing.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Note not found")
+    result = await db.director_notes.delete_one({"id": note_id, "user_id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Note not found")
     return {"message": "Note deleted"}
@@ -2987,13 +3134,22 @@ async def delete_note(note_id: str):
 # ==================== PERFORMANCE STATS ROUTES ====================
 
 @api_router.get("/stats/{user_id}")
-async def get_user_stats(user_id: str):
-    """Get user's performance statistics"""
-    stats = await db.performance_stats.find_one({"user_id": user_id})
+async def get_user_stats(
+    user_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get user's performance statistics.
+
+    SEC-002 (2026-02): the path `user_id` is now validated against the
+    authenticated bearer. Mismatches return 403 so one user cannot read
+    another user's stats by swapping the URL segment."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    effective = effective_user_id(authenticated_user_id)
+    stats = await db.performance_stats.find_one({"user_id": effective}, {"_id": 0})
     if not stats:
         # Return default stats
         return {
-            "user_id": user_id,
+            "user_id": effective,
             "total_rehearsals": 0,
             "total_lines_completed": 0,
             "total_practice_time": 0,
@@ -3005,10 +3161,20 @@ async def get_user_stats(user_id: str):
     return stats
 
 @api_router.post("/stats/{user_id}/update")
-async def update_user_stats(user_id: str, stats_update: Dict[str, Any]):
-    """Update user's performance statistics after a rehearsal"""
-    current = await db.performance_stats.find_one({"user_id": user_id})
-    
+async def update_user_stats(
+    user_id: str,
+    stats_update: Dict[str, Any],
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Update user's performance statistics after a rehearsal.
+
+    SEC-002 (2026-02): the path `user_id` is now validated against the
+    authenticated bearer. Mismatches return 403 so one user cannot
+    tamper with another user's performance history."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    effective = effective_user_id(authenticated_user_id)
+    current = await db.performance_stats.find_one({"user_id": effective})
+
     if current:
         # Merge updates
         update_data = {
@@ -3037,13 +3203,13 @@ async def update_user_stats(user_id: str, stats_update: Dict[str, Any]):
             update_data["streak_days"] = 1
         
         await db.performance_stats.update_one(
-            {"user_id": user_id},
+            {"user_id": effective},
             {"$set": update_data}
         )
     else:
         # Create new stats
         new_stats = {
-            "user_id": user_id,
+            "user_id": effective,
             "total_rehearsals": stats_update.get("rehearsals_delta", 1),
             "total_lines_completed": stats_update.get("lines_delta", 0),
             "total_practice_time": stats_update.get("time_delta", 0),
@@ -3087,44 +3253,13 @@ async def get_preset_voices():
     }
 
 # ─── 2026-02 SCRIPT M8 — TTS endpoint hardening (SEC-004) ──────────────
-# Minimal GENUINE authentication for the ElevenLabs proxy. Uses the
-# session tokens already issued by the Google/Apple sign-in flow and
-# stored in db.auth_tokens — the token is a sha256 of
-# `user_id:timestamp:uuid`, 30-day TTL, upserted per user.
+# ─── 2026-02 SEC-002   — SAME auth now applied to scripts/notes/stats ──
 #
-# NOTE (dependency on SEC-002): the existing session mechanism IS
-# used here, but the broader SEC-002 finding (that MOST protected
-# routes never check the token) is NOT fixed by this ticket — that
-# requires wiring this same dependency across every /scripts /notes
-# /stats route and is scoped as a separate remediation.
-#
-# The guard here closes the TTS cost-abuse hole: an anonymous caller
-# cannot invent a UUID and burn ElevenLabs budget. Breaking it would
-# require either (a) stealing a real sign-in token, or (b) first
-# fixing SEC-001 so a forged Google/Apple token no longer yields a
-# usable session.
-async def get_authenticated_user_id(
-    authorization: str | None = Header(default=None, alias="Authorization"),
-) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token")
-    token = authorization.split(" ", 1)[1].strip()
-    if not token or len(token) < 32:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    record = await db.auth_tokens.find_one({"token": token})
-    if not record:
-        raise HTTPException(status_code=401, detail="Unknown token")
-    expires_at = record.get("expires_at")
-    if expires_at and isinstance(expires_at, datetime):
-        # expires_at stored by sign-in flow was `datetime.utcnow() + …`,
-        # which is naive. Compare without a tz to stay consistent.
-        now_naive = datetime.utcnow()  # noqa: DTZ003 — matches sign-in writes
-        if expires_at < now_naive:
-            raise HTTPException(status_code=401, detail="Expired token")
-    user_id = record.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Malformed session")
-    return user_id
+# The authoritative identity extractor was hoisted to `backend/auth.py`
+# and imported near the top of this module (see the import block right
+# below the APIRouter definition). The TTS proxy below continues to use
+# `Depends(get_authenticated_user_id)` unchanged — SEC-002 extends the
+# same gate across scripts, notes, stats, daily-drill and `/users/me`.
 
 
 # In-memory sliding-window rate limiter for the TTS proxy. Keyed by
@@ -3162,6 +3297,242 @@ def _tts_check_rate_limit(user_id: str) -> None:
             )
         history.append(now)
         _tts_rl_state[user_id] = history
+
+
+# ─── Phase P1: Persistent TTS usage ledger (visibility only) ──────────────
+#
+# Design (see `/app/memory/PRD.md` → Phase P1 TTS Visibility):
+#
+# Collection: `db.tts_usage`
+#   Primary doc shape (one per effective user per UTC date):
+#     {
+#       user_id:       str,       # as returned by get_authenticated_user_id
+#                                 # (e.g. "user:<uuid>" or "device:<id>")
+#       date:          str,       # UTC YYYY-MM-DD
+#       billing_month: str,       # UTC YYYY-MM
+#       characters:    int,       # SUM of len(request.text) for success calls
+#       requests:      int,       # count of success calls
+#       audio_bytes:   int,       # SUM of len(audio_data) for success calls
+#       voices:        {voice_id -> count},
+#       models:        {model_id -> count},
+#       first_request_at: ISO8601 UTC,
+#       last_request_at:  ISO8601 UTC,
+#     }
+#
+#   NO script text, no raw transcripts, no PII payload beyond the user_id
+#   and voice/model identifiers. This is a BILLING-RECONCILIATION ledger
+#   only — never a content audit log.
+#
+# Compound unique index: (user_id, date) — enforced lazily on first write.
+# Atomic increment via Mongo `$inc` + `$setOnInsert` upsert. Concurrent
+# requests on the same (user_id, date) key cannot double-count because
+# Mongo serialises the upsert at the storage engine.
+#
+# This endpoint is PURELY OBSERVATIONAL in Phase P1. It does NOT gate
+# any request. Free/Premium enforcement is Phase P2.
+
+_TTS_USAGE_INDEXES_CREATED = False
+
+
+async def _ensure_tts_usage_indexes() -> None:
+    """Create the (user_id, date) unique index on first access.
+
+    Idempotent — safe to call on every request. Avoids a boot-time
+    migration script. The flag suppresses the Mongo roundtrip after
+    the first successful create."""
+    global _TTS_USAGE_INDEXES_CREATED
+    if _TTS_USAGE_INDEXES_CREATED:
+        return
+    try:
+        await db.tts_usage.create_index(
+            [("user_id", 1), ("date", 1)],
+            unique=True,
+            name="tts_usage_user_date_uniq",
+        )
+        await db.tts_usage.create_index(
+            [("billing_month", 1)],
+            name="tts_usage_billing_month",
+        )
+        await db.tts_usage.create_index(
+            [("date", 1), ("characters", -1)],
+            name="tts_usage_date_chars_desc",
+        )
+        _TTS_USAGE_INDEXES_CREATED = True
+    except Exception as idx_err:
+        # Index creation races are harmless — another worker may have
+        # just created it. Log and move on; the next call retries.
+        logger.warning("tts_usage index creation deferred: %s", idx_err)
+
+
+async def _record_tts_usage(
+    user_id: str,
+    characters: int,
+    audio_bytes: int,
+    voice_id: str,
+    model_id: str,
+) -> None:
+    """Atomically record one successful ElevenLabs synthesis.
+
+    Called ONLY after the vendor returned non-empty audio. See
+    docstring on the ledger above."""
+    await _ensure_tts_usage_indexes()
+
+    now = datetime.utcnow()
+    date_key = now.strftime("%Y-%m-%d")
+    month_key = now.strftime("%Y-%m")
+    now_iso = now.replace(microsecond=0).isoformat() + "Z"
+
+    await db.tts_usage.update_one(
+        {"user_id": user_id, "date": date_key},
+        {
+            "$inc": {
+                "characters": int(characters),
+                "requests": 1,
+                "audio_bytes": int(audio_bytes),
+                f"voices.{voice_id}": 1,
+                f"models.{model_id}": 1,
+            },
+            "$set": {"last_request_at": now_iso},
+            "$setOnInsert": {
+                "billing_month": month_key,
+                "first_request_at": now_iso,
+            },
+        },
+        upsert=True,
+    )
+
+    # Structured one-liner so operators can `grep tts_usage` on
+    # prod logs and reconstruct the ledger even without Mongo access.
+    logger.info(
+        "tts_usage user=%s chars=%d bytes=%d voice=%s model=%s",
+        user_id, int(characters), int(audio_bytes), voice_id, model_id,
+    )
+
+
+def _require_admin_token(x_admin_token: str | None = Header(default=None)) -> None:
+    """Shared admin-auth gate for `/api/admin/*` observability routes.
+
+    Reads `ADMIN_TOKEN` from backend/.env at request time (NOT at
+    import time) so that rotating the token does not require a
+    backend restart. If `ADMIN_TOKEN` is unset or empty, the admin
+    surface is DISABLED (every request 503) — fail-closed."""
+    expected = os.environ.get("ADMIN_TOKEN", "")
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Admin surface disabled (ADMIN_TOKEN not configured)",
+        )
+    if not x_admin_token or x_admin_token != expected:
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+
+
+@api_router.get("/admin/tts/usage")
+async def admin_tts_usage(
+    _: None = Depends(_require_admin_token),
+    date: str | None = None,
+    month: str | None = None,
+    top: int = 20,
+):
+    """Aggregated TTS usage ledger for operators.
+
+    Query parameters:
+      * `date`  — UTC YYYY-MM-DD. Defaults to today. Returns the
+                  day's totals + top N consumers for that day.
+      * `month` — UTC YYYY-MM. If supplied, also returns the month
+                  total + top N consumers for the billing month.
+      * `top`   — number of top consumers to return (clamped 1-100).
+
+    Response is JSON only. Never includes script text, dialogue,
+    or any content fields — only (user_id, characters, requests,
+    audio_bytes, voices-usage-counts, models-usage-counts)."""
+    await _ensure_tts_usage_indexes()
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    this_month = datetime.utcnow().strftime("%Y-%m")
+    date_key = (date or today).strip()
+    month_key = (month or this_month).strip()
+    top_n = max(1, min(100, int(top or 20)))
+
+    # Daily aggregation
+    day_total_cursor = db.tts_usage.aggregate([
+        {"$match": {"date": date_key}},
+        {"$group": {
+            "_id": None,
+            "characters": {"$sum": "$characters"},
+            "requests": {"$sum": "$requests"},
+            "audio_bytes": {"$sum": "$audio_bytes"},
+            "distinct_users": {"$addToSet": "$user_id"},
+        }},
+    ])
+    day_agg = await day_total_cursor.to_list(length=1)
+    if day_agg:
+        d = day_agg[0]
+        daily = {
+            "date": date_key,
+            "characters": int(d.get("characters", 0)),
+            "requests": int(d.get("requests", 0)),
+            "audio_bytes": int(d.get("audio_bytes", 0)),
+            "distinct_users": len(d.get("distinct_users", [])),
+        }
+    else:
+        daily = {
+            "date": date_key, "characters": 0, "requests": 0,
+            "audio_bytes": 0, "distinct_users": 0,
+        }
+
+    # Monthly aggregation
+    month_total_cursor = db.tts_usage.aggregate([
+        {"$match": {"billing_month": month_key}},
+        {"$group": {
+            "_id": None,
+            "characters": {"$sum": "$characters"},
+            "requests": {"$sum": "$requests"},
+            "audio_bytes": {"$sum": "$audio_bytes"},
+            "distinct_users": {"$addToSet": "$user_id"},
+        }},
+    ])
+    month_agg = await month_total_cursor.to_list(length=1)
+    if month_agg:
+        m = month_agg[0]
+        monthly = {
+            "month": month_key,
+            "characters": int(m.get("characters", 0)),
+            "requests": int(m.get("requests", 0)),
+            "audio_bytes": int(m.get("audio_bytes", 0)),
+            "distinct_users": len(m.get("distinct_users", [])),
+        }
+    else:
+        monthly = {
+            "month": month_key, "characters": 0, "requests": 0,
+            "audio_bytes": 0, "distinct_users": 0,
+        }
+
+    # Top consumers for the requested day
+    top_cursor = db.tts_usage.find(
+        {"date": date_key},
+        projection={
+            "_id": 0,
+            "user_id": 1,
+            "characters": 1,
+            "requests": 1,
+            "audio_bytes": 1,
+            "voices": 1,
+            "models": 1,
+            "last_request_at": 1,
+        },
+    ).sort("characters", -1).limit(top_n)
+    top_daily = await top_cursor.to_list(length=top_n)
+
+    return {
+        "generated_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        "daily": daily,
+        "monthly": monthly,
+        "top_consumers_day": top_daily,
+        # Phase P1 is observability-only. No enforcement thresholds
+        # are exposed yet — intentionally omitted so no client can
+        # start depending on them.
+        "phase": "P1-visibility",
+    }
 
 
 @api_router.get("/tts/elevenlabs/health")
@@ -3244,6 +3615,35 @@ async def generate_elevenlabs_tts(
 
         if not audio_data:
             raise HTTPException(status_code=502, detail="ElevenLabs returned empty audio")
+
+        # ─── Phase P1: persistent TTS usage accounting ──────────────
+        # Record on SUCCESS only. Pre-synthesis failures (401 / 422 /
+        # 429 / 503) and upstream failures (ElevenLabs returning no
+        # audio / raising) deliberately do NOT increment the counter
+        # — those requests are not billed by the vendor.
+        #
+        # Billing-char cost cannot be perfectly reconciled from the
+        # SDK's streaming `convert()` surface (vendor response
+        # headers are consumed internally). `requested_characters =
+        # len(request.text)` is the pre-vendor count ScriptMate
+        # authoritatively knows and matches ElevenLabs' documented
+        # 1 char = 1 credit billing rule for `eleven_multilingual_v2`.
+        # `audio_bytes_returned` is captured as a vendor-side signal
+        # that lets us retrospectively detect grossly disproportionate
+        # bills (e.g. if ElevenLabs ever changes its billing formula).
+        try:
+            await _record_tts_usage(
+                user_id=user_id,
+                characters=len(request.text),
+                audio_bytes=len(audio_data),
+                voice_id=voice_id,
+                model_id="eleven_multilingual_v2",
+            )
+        except Exception:
+            # Accounting failure must never break the user-facing
+            # response. The error is logged so we can detect ledger
+            # drift during the P1 observation window.
+            logger.exception("tts_usage accounting failed")
 
         # Response headers echo the resolved voice_id + settings for
         # on-device diagnostics. Body is raw MP3 — no base64, no
@@ -3737,8 +4137,16 @@ class StreakResponse(BaseModel):
     activities_today: List[str]
 
 @api_router.get("/daily-drill/{user_id}")
-async def get_daily_drill(user_id: str):
-    """Get today's daily acting drill challenge."""
+async def get_daily_drill(
+    user_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get today's daily acting drill challenge.
+
+    SEC-002 (2026-02): the path `user_id` is validated against the
+    authenticated bearer; mismatches return 403."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    user_id = effective_user_id(authenticated_user_id)
     today = datetime.utcnow().strftime("%Y-%m-%d")
     
     # Check if drill already generated for today
@@ -3802,8 +4210,16 @@ async def get_daily_drill(user_id: str):
     return drill
 
 @api_router.post("/daily-drill/{user_id}/complete")
-async def complete_daily_drill(user_id: str):
-    """Mark today's drill as complete and award XP."""
+async def complete_daily_drill(
+    user_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Mark today's drill as complete and award XP.
+
+    SEC-002 (2026-02): path `user_id` is validated against the
+    authenticated bearer; mismatches return 403."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    user_id = effective_user_id(authenticated_user_id)
     today = datetime.utcnow().strftime("%Y-%m-%d")
     
     drill = await db.daily_drills.find_one({"user_id": user_id, "date": today})
@@ -3919,8 +4335,17 @@ class DrillFeedbackRequest(BaseModel):
     performance_notes: Optional[str] = ""
 
 @api_router.post("/daily-drill/{user_id}/feedback")
-async def get_drill_feedback(user_id: str, request: DrillFeedbackRequest):
-    """Get AI performance feedback for a daily drill."""
+async def get_drill_feedback(
+    user_id: str,
+    request: DrillFeedbackRequest,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get AI performance feedback for a daily drill.
+
+    SEC-002 (2026-02): path `user_id` is validated against the
+    authenticated bearer; mismatches return 403."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    user_id = effective_user_id(authenticated_user_id)
     feedback = None
     
     if EMERGENT_LLM_KEY:

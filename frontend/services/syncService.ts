@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 import { API_BASE_URL } from './apiConfig';
+import { authFetch } from './authClient';
 
 const BACKEND_URL = API_BASE_URL;
 
@@ -84,7 +85,10 @@ export async function getNotesForScript(scriptId: string): Promise<DirectorNote[
   // If authenticated, try server first
   if (userId && BACKEND_URL) {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/notes/${scriptId}?user_id=${userId}`);
+      // SEC-002: bearer required on /api/notes/{scriptId}. The server
+      // ignores the legacy ?user_id= query and derives identity from
+      // the token.
+      const response = await authFetch(`${BACKEND_URL}/api/notes/${scriptId}`);
       if (response.ok) {
         const serverNotes = await response.json();
         // Cache locally
@@ -112,7 +116,10 @@ export async function saveNote(note: DirectorNote): Promise<DirectorNote> {
   // If authenticated, sync to server
   if (userId && BACKEND_URL) {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/notes?user_id=${userId}`, {
+      // SEC-002: bearer required on POST /api/notes. The server
+      // ignores the legacy ?user_id= query and derives the owner
+      // from the token.
+      const response = await authFetch(`${BACKEND_URL}/api/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -149,7 +156,9 @@ export async function deleteNote(noteId: string, scriptId: string): Promise<void
   // If authenticated, delete from server
   if (userId && BACKEND_URL) {
     try {
-      await fetch(`${BACKEND_URL}/api/notes/${noteId}`, {
+      // SEC-002: bearer required on DELETE /api/notes/{id}; the server
+      // 404s cross-owner deletes.
+      await authFetch(`${BACKEND_URL}/api/notes/${noteId}`, {
         method: 'DELETE',
       });
     } catch (error) {
@@ -319,7 +328,9 @@ export async function getPerformanceStats(): Promise<PerformanceStats> {
   // If authenticated, try server first
   if (userId && BACKEND_URL) {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/stats/${userId}`);
+      // SEC-002: bearer required; server validates the path user_id
+      // matches the authenticated identity (403 on mismatch).
+      const response = await authFetch(`${BACKEND_URL}/api/stats/${userId}`);
       if (response.ok) {
         const serverStats = await response.json();
         // Cache locally
@@ -432,7 +443,9 @@ export async function updatePerformanceStats(update: {
   // If authenticated, sync to server
   if (userId && BACKEND_URL) {
     try {
-      await fetch(`${BACKEND_URL}/api/stats/${userId}/update`, {
+      // SEC-002: bearer required; server validates the path user_id
+      // matches the authenticated identity.
+      await authFetch(`${BACKEND_URL}/api/stats/${userId}/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(update),

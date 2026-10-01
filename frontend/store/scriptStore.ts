@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 
 import { API_BASE_URL, API_TIMEOUT, API_TIMEOUT_LLM, BUILD_ID, getApiDiagnostics } from '../services/apiConfig';
+import { getAuthHeader } from '../services/authClient';
 import { isDevTestMode } from '../services/devTestMode';
 import { checkPremiumAccess } from '../services/revenuecat';
 import { DebugLog } from '../services/debugLogService';
@@ -350,8 +351,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     const deviceId = await getDeviceId();
     set({ loading: true, error: null });
     try {
+      // SEC-002: bearer required; the backend ignores query/body user_id
+      // and keys the list to the authenticated identity.
+      const authHeader = await getAuthHeader();
       const response = await axios.get(`${API_BASE_URL}/api/scripts`, {
-        params: { user_id: deviceId },
+        headers: authHeader,
         timeout: API_TIMEOUT,
       });
       set({ scripts: response.data, loading: false });
@@ -364,7 +368,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   fetchScript: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/scripts/${id}`, { timeout: API_TIMEOUT });
+      const authHeader = await getAuthHeader();
+      const response = await axios.get(`${API_BASE_URL}/api/scripts/${id}`, {
+        headers: authHeader,
+        timeout: API_TIMEOUT,
+      });
       const script = response.data;
       set((state) => {
         const exists = state.scripts.some(s => s.id === id);
@@ -425,7 +433,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         title,
         raw_text: rawText,
         user_id: deviceId,
-      }, { timeout: API_TIMEOUT_LLM });
+      }, {
+        headers: await getAuthHeader(),
+        timeout: API_TIMEOUT_LLM,
+      });
       
       const durationMs = Date.now() - startTime;
       const newScript = response.data;
@@ -488,7 +499,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         throw new Error(`URL contains undefined: ${url}`);
       }
       
-      const response = await axios.put(url, data, { timeout: API_TIMEOUT });
+      const response = await axios.put(url, data, {
+        headers: await getAuthHeader(),
+        timeout: API_TIMEOUT,
+      });
       console.log(`[ScriptStore] updateScript success for id=${id}`);
       set((state) => ({
         scripts: state.scripts.map((s) => (s.id === id ? response.data : s)),
@@ -513,7 +527,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   deleteScript: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      await axios.delete(`${API_BASE_URL}/api/scripts/${id}`, { timeout: API_TIMEOUT });
+      await axios.delete(`${API_BASE_URL}/api/scripts/${id}`, {
+        headers: await getAuthHeader(),
+        timeout: API_TIMEOUT,
+      });
       set((state) => ({
         scripts: state.scripts.filter((s) => s.id !== id),
         currentScript: state.currentScript?.id === id ? null : state.currentScript,

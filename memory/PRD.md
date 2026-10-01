@@ -59,6 +59,60 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 
 ## Changelog
 
+### 2026-02 SEC-002 — Session enforcement on protected routes
+
+**Problem:** SEC-004 (Feb 2026) hardened only `POST /api/tts/elevenlabs/generate`. Every other protected route (scripts, notes, stats, daily-drill, …) still trusted a client-supplied `user_id` path/query/body parameter, so any caller could read or mutate another user's data by swapping that one field.
+
+**Fix (minimal scope, no API-shape changes):**
+1. **New module `backend/auth.py`** — hoists `get_authenticated_user_id` out of `server.py` and adds two helpers:
+   - `effective_user_id(raw)` — maps `device:<id>` → `<id>` so pre-existing data stored against the raw device_id remains visible to the authenticated owner (no migration).
+   - `enforce_user_id_match(path_user_id, authenticated_user_id)` — raises 403 for legacy `/{user_id}` routes.
+2. **`backend/server.py`** — applied `Depends(get_effective_user_id)` / `Depends(get_authenticated_user_id)` to:
+   - `POST/GET/PUT/DELETE /api/scripts` + `/api/scripts/upload` + `/api/scripts/upload-base64`
+   - `GET /api/notes/{script_id}` + `POST /api/notes` + `DELETE /api/notes/{note_id}`
+   - `GET /api/stats/{user_id}` + `POST /api/stats/{user_id}/update`
+   - `GET /api/daily-drill/{user_id}` + `POST /api/daily-drill/{user_id}/complete` + `POST /api/daily-drill/{user_id}/feedback`
+   - `GET /api/users/me` (NEW — identity-from-bearer, placed before the parameterized `/users/{device_id}` route).
+   The route handlers derive the effective user id from the bearer and ignore any `user_id` field in body/query. Legacy `/{user_id}` path routes now 403 on mismatch and 404 on cross-owner access.
+3. **Frontend** — new shared helper `frontend/services/authClient.ts` (`getAuthHeader`, `authFetch`, `authAxios`). Updated:
+   - `services/syncService.ts` — notes + stats calls now attach bearer.
+   - `store/scriptStore.ts` — all scripts CRUD now attaches bearer.
+   - `app/upload.tsx` — both multipart and base64 upload paths attach bearer.
+   - `app/daily-drill.tsx` — drill fetch / complete / feedback attach bearer.
+   The bearer is reused from the existing `ensureTtsBearerToken()` device-session minting; no new session flow was added.
+4. **Test infrastructure** — new `backend/tests/conftest.py` auto-attaches the SEC-002 bearer to `requests.*` and `requests.sessions.Session.request` so the pre-existing 977-test suite continues to pass with no file-by-file churn. For legacy tests that embed arbitrary `{user_id}` segments in `/stats`, `/daily-drill`, `/streak`, the wrapper rewrites that segment to the canonical device_id (preserving test intent while playing nice with auth).
+5. **New regression suite** `backend/tests/test_sec002_route_auth_enforcement_feb2026.py` (27 tests): unauthenticated 401 lockout on every protected route, `/users/me` identity shape, client-user_id override rejected, cross-user script/note isolation (404), path-user_id mismatch rejected (403), TTS proxy still accepts the same bearer, device-session identity shape preserved.
+
+**Identity model (unchanged for owners, enforced for strangers):**
+- Device-anonymous session: raw bearer identity is `device:<device_id>`, effective id for data filters is `<device_id>` (strip `device:` prefix).
+- Google/Apple signed-in session: raw bearer identity is the authenticated-users UUID, effective id is unchanged.
+- The `user_id` field on existing scripts/notes/stats rows is untouched — effective_user_id maps the two cases to match what's already in the DB.
+
+**Related routes with the same pattern — AUDITED, NOT fixed (scope guardrail):** these were listed in the handoff but out of ticket scope and will need the same treatment in follow-up tickets:
+- `POST /api/rehearsals`, `GET /api/rehearsals`, `GET/PUT/DELETE /api/rehearsals/{id}` — still accept `user_id` in body/query.
+- `GET /api/streak/{user_id}`, `POST /api/streak/{user_id}/record`.
+- `POST /api/sync/push`, `GET /api/sync/pull/{user_id}`.
+- `GET /api/users/{device_id}`, `GET /api/users/{device_id}/limits`, `GET /api/users/{device_id}/stats`, `POST /api/users/{device_id}/{subscribe,start-trial,cancel-subscription}`.
+- `GET /api/dialect/history/{user_id}`, `GET /api/acting-coach/history/{user_id}`.
+- `GET /api/tapes/user/{user_id}`, `DELETE /api/tapes/share/{share_id}`, `GET /api/voice-studio/takes/{user_id}`, `DELETE /api/voice-studio/takes/{take_id}`.
+- `POST /api/support/bug-report` (currently anonymous).
+
+**Verification:**
+- 27/27 SEC-002 regression tests pass (new suite).
+- 85/85 pass across SEC-002 + device-session + TTS usage ledger + mobile credential-hardening suites.
+- Full-suite comparison: baseline 205 failed → SEC-002 69 failed (−136). All 69 remaining failures were already pre-existing before SEC-002 (wrong preview-URL defaults, pre-existing test bugs, test-order-dependent flakes); none are caused by this ticket.
+- TypeScript error count: 33 before SEC-002 → 33 after (zero new TS errors).
+- `scripts/prebuild_gate.py`: PASSES — zero new ruff findings beyond the frozen baseline, zero new TS errors, baseline test failures unchanged.
+- TTS proxy auth still works: the device-session bearer that unlocks `/api/tts/elevenlabs/generate` is the SAME bearer that now unlocks `/api/scripts` et al. — one mint, one session, every protected route. Phase P1 `tts_usage` ledger reads/writes untouched.
+
+**Scope guardrails honored:**
+- No APK build, no deploy, no GitHub push.
+- No fixes to the 18 pre-existing baseline lint findings or the 2 pre-existing baseline test failures (`test_fallback_parse_script_*`).
+- No ElevenLabs credential or key handling changes. The 2000-credit safety cap, 60/10-min rate limit, and proxy-only architecture all remain intact.
+- No dependency changes.
+
+
+
 ### 2026-02 — SM8-1110 voice-pipeline diagnostic + cache hardening
 
 Physical QA of build 1110 reported the ElevenLabs picker showed Rachel selected for DET. HARRIS, but rehearsal playback did NOT use Rachel. The diagnostic showed `voice-assignments-loaded {count: 3, elevenLabsConfigured: true}` yet `createRehearsal {voice: "alloy"}`. Because failures in the ElevenLabs path silently fell through to expo-speech, we couldn't tell which stage broke.
@@ -1866,3 +1920,72 @@ Dependencies:  PASS — no changes
   fresh APK after reviewing this report).
 - SEC-002, SEC-003 (deferred, unchanged by this ticket).
 
+
+## 2026-10-01 — Phase P1: Persistent TTS Usage Ledger (IMPLEMENTED, GREEN)
+
+### Scope delivered
+Visibility-only ledger that makes every successful ElevenLabs synthesis call auditable per effective user, per date, per billing month. **No Free/Premium enforcement added. No character caps changed. No Elevenlabs secrets touched. No APK built. No deploy.**
+
+### Files changed
+- `backend/server.py` — +245 lines inside the TTS section:
+  - `_ensure_tts_usage_indexes()` — lazy unique index on (user_id, date), billing_month, and (date, chars DESC) for admin-top queries
+  - `_record_tts_usage(user_id, characters, audio_bytes, voice_id, model_id)` — atomic Mongo `$inc` + `$setOnInsert` upsert on success only
+  - `_require_admin_token(x_admin_token)` — fail-closed admin gate reading `ADMIN_TOKEN` from env at request time
+  - `@api_router.get("/admin/tts/usage")` — aggregated daily + monthly + top-N consumer read endpoint
+  - Post-synthesis call site at `generate_elevenlabs_tts` success path wraps `await _record_tts_usage(...)` in a `try/except` so accounting failures never break the user response
+- `scripts/prebuild_gate.py` — registered `test_tts_usage_ledger_phase_p1_feb2026.py` in `STATIC_REGRESSION_TESTS`
+- `backend/tests/test_tts_usage_ledger_phase_p1_feb2026.py` — NEW, 19 tests
+
+### Database schema
+Collection `db.tts_usage` (one document per user per UTC date):
+```
+{ user_id, date (YYYY-MM-DD), billing_month (YYYY-MM),
+  characters, requests, audio_bytes,
+  voices: { voice_id -> count }, models: { model_id -> count },
+  first_request_at, last_request_at }
+```
+Indexes: unique `(user_id, date)`, `(billing_month)`, `(date, characters DESC)`.
+
+### API additions
+- `GET /api/admin/tts/usage?date=YYYY-MM-DD&month=YYYY-MM&top=N`
+  - Requires header `X-Admin-Token: <ADMIN_TOKEN>` (env-driven, fail-closed if not set)
+  - Returns: `{generated_at, daily, monthly, top_consumers_day[], phase: "P1-visibility"}`
+  - Never exposes script text / dialogue / PII payload
+
+### Logging
+Every success path emits: `tts_usage user=<id> chars=<n> bytes=<n> voice=<id> model=<id>`. Operators can `grep tts_usage /var/log/supervisor/backend.out.log` to reconstruct the ledger from logs alone.
+
+### What was explicitly NOT changed
+- 2,000-char Pydantic text cap on `/api/tts/elevenlabs/generate` — intact
+- 60/10min sliding rate limit — intact
+- Backend-only ElevenLabs architecture — intact
+- `ELEVENLABS_API_KEY` value — unchanged (`sk_12…`, length 51)
+- 2,000-credit-per-day ElevenLabs API-key dashboard safety cap — unchanged
+- No Free/Premium tier gating added anywhere
+- No character-budget enforcement added
+
+### Phase P1 observability contract (locked in by regression tests)
+1. Successful call → single ledger entry with exact `len(request.text)` + `len(audio_data)` + voice/model counters
+2. Pre-synthesis failures (401 / 422 / 429 / 503) → NO ledger entry
+3. Upstream SDK errors (ElevenLabs 402 / 500 / 503 raise) → NO ledger entry
+4. Empty-audio upstream response (502) → NO ledger entry
+5. Duplicate payloads → increment each time (idempotency is Phase P3, not P1)
+6. Admin endpoint unconfigured → 503
+7. Admin endpoint wrong/missing token → 401
+8. Ledger stores NO raw request text (canary-string test)
+9. `audio_bytes` captured for future vendor-cost reconciliation
+
+### Gate result
+```
+Tests:         977 passed, 2 failed (pre-existing `test_fallback_parse_script_*`
+               ModuleNotFoundError sys.path artefacts — same count on clean main)
+Runtime smoke: PASS 18/18
+Voice smoke:   PASS 28/28
+TypeScript:    PASS — 31 baseline, 0 new errors
+Lint (ruff):   PASS — 325 baseline, 0 new findings
+Dependencies:  PASS — no changes
+```
+
+### Phases P2 / P3 remain unimplemented by design
+- P2 Enforcement (tier gating, per-user daily/monthly character budgets) requires product decision on Model A/B/C from the 2026-02 design audit
+- P3 Hardening (idempotency keys, device-session fingerprint binding, global emergency ceiling, SEC-003 QA_PREMIUM removal) remains future work

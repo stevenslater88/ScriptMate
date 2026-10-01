@@ -9,6 +9,7 @@ import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_BASE_URL } from '../services/apiConfig';
+import { getAuthHeader } from '../services/authClient';
 
 
 
@@ -42,8 +43,13 @@ export default function DailyDrillScreen() {
       setLoadError(null);
       const userId = await getDeviceId();
       console.log(`[Drill] Fetching from ${API_BASE_URL}/api/daily-drill/${userId}`);
+      // SEC-002: /api/daily-drill/{user_id} and /api/streak/{user_id}
+      // (where SEC-002 is applied) require a bearer; attach it on every
+      // call. The server also validates that the path user_id matches
+      // the authenticated identity.
+      const authConfig = { headers: await getAuthHeader(), timeout: 15000 };
       const [drillRes, streakRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/daily-drill/${userId}`, { timeout: 15000 }),
+        axios.get(`${API_BASE_URL}/api/daily-drill/${userId}`, authConfig),
         axios.get(`${API_BASE_URL}/api/streak/${userId}`, { timeout: 15000 }),
       ]);
       setDrill(drillRes.data);
@@ -71,7 +77,8 @@ export default function DailyDrillScreen() {
     try {
       setCompleting(true);
       const userId = await getDeviceId();
-      const res = await axios.post(`${API_BASE_URL}/api/daily-drill/${userId}/complete`, {}, { timeout: 15000 });
+      const authConfig = { headers: await getAuthHeader(), timeout: 15000 };
+      const res = await axios.post(`${API_BASE_URL}/api/daily-drill/${userId}/complete`, {}, authConfig);
       const streakRes = await axios.get(`${API_BASE_URL}/api/streak/${userId}`, { timeout: 15000 });
       setStreak(streakRes.data);
       setDrill({ ...drill, completed: true });
@@ -82,7 +89,7 @@ export default function DailyDrillScreen() {
         const fbRes = await axios.post(`${API_BASE_URL}/api/daily-drill/${userId}/feedback`, {
           drill_prompt: drill.prompt || '',
           challenge_type: drill.challenge_type || 'emotion_shift',
-        }, { timeout: 20000 });
+        }, { headers: await getAuthHeader(), timeout: 20000 });
         setFeedback(fbRes.data);
       } catch (fbErr) {
         console.error('Feedback error:', fbErr);

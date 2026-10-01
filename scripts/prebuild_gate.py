@@ -103,6 +103,7 @@ STATIC_REGRESSION_TESTS = [
     "tests/test_rehearsal_audio_lifecycle_feb2026.py",
     "tests/test_title_duplication_parser_regression_feb2026.py",
     "tests/test_mobile_elevenlabs_credential_hardening_feb2026.py",
+    "tests/test_tts_usage_ledger_phase_p1_feb2026.py",
 ]
 
 # Files required for the frontend/backend to build/run. Missing = RED.

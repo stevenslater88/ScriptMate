@@ -23,6 +23,7 @@ import axios from 'axios';
 import { useScriptStore } from '../store/scriptStore';
 import { DebugLog } from '../services/debugLogService';
 import { API_BASE_URL } from '../services/apiConfig';
+import { getAuthHeader } from '../services/authClient';
 
 const UPLOAD_TIMEOUT = 30000; // 30s for file uploads
 const FILE_OP_TIMEOUT = 15000; // 15s for file system operations
@@ -296,7 +297,14 @@ export default function UploadScreen() {
               file_data: base64Data,
               user_id: userId,
             },
-            { headers: { 'Content-Type': 'application/json' }, timeout: UPLOAD_TIMEOUT }
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                // SEC-002: /scripts/upload-base64 is bearer-gated.
+                ...(await getAuthHeader()),
+              },
+              timeout: UPLOAD_TIMEOUT,
+            }
           );
           DebugLog.importStage(`${fileType}-base64-ok`, { status: resp?.status, durationMs: Date.now() - t0, chars: resp?.data?.raw_text?.length || 0 });
           return resp;
@@ -316,7 +324,11 @@ export default function UploadScreen() {
         const t0 = Date.now();
         DebugLog.importStage(`${fileType}-formdata-post`, { url: uploadUrl });
         try {
-          const resp = await axios.post(uploadUrl, formData, { timeout: UPLOAD_TIMEOUT });
+          const resp = await axios.post(uploadUrl, formData, {
+            // SEC-002: /scripts/upload is bearer-gated.
+            headers: await getAuthHeader(),
+            timeout: UPLOAD_TIMEOUT,
+          });
           DebugLog.importStage(`${fileType}-formdata-ok`, { status: resp?.status, durationMs: Date.now() - t0, chars: resp?.data?.raw_text?.length || 0 });
           return resp;
         } catch (err: any) {
