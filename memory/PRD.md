@@ -124,6 +124,44 @@ Physical QA of build 1110 reported the ElevenLabs picker showed Rachel selected 
 - `frontend/app/script/[id].tsx::handleStartRehearsal`:
   - Emit `CREATE_REHEARSAL_REQUEST { character, mode, globalFallbackVoice, readerStyle, voiceSpeed, voiceAssignments[], voiceAssignmentCount }` at rehearsal start. Loads the persisted assignments and includes the full per-character map — a missing character in this list is now the exact reason their line will fall back.
 - `frontend/app/rehearsal/[id].tsx`:
+
+### 2026-02 SEC-002 Follow-up — complete audit closure
+
+Follow-up audit of the full 68-route backend surface classified every endpoint A–E (correctly protected / intentionally public / needs-auth / needs-ownership / admin). 34 user-data routes needed the same bearer gate SEC-002 applied to scripts/notes/stats/daily-drill. The follow-up extends the ticket's smallest-safe pattern to all of them:
+
+**Protected (26 additional routes):**
+- `GET /api/users/{device_id}`, `/limits`, `/stats` — path user_id must match bearer (403 on mismatch)
+- `POST /api/users/{device_id}/subscribe`, `/start-trial`, `/cancel-subscription` — privilege-escalation gates (403 on mismatch)
+- `GET /api/auth/user/{user_id}` — identity-harvest gate (403 on mismatch)
+- `POST /api/auth/logout` — user_id now derived from bearer; cannot invalidate another user's tokens
+- `POST /api/sync/push` — owner derived from bearer; body `user_id` ignored
+- `GET /api/sync/pull/{user_id}` — path user_id must match bearer
+- `POST/GET/PUT/DELETE /api/rehearsals` + `/{id}` — bearer gate + script ownership check on create (404) + cross-owner CRUD returns 404
+- `GET /api/streak/{user_id}`, `POST /api/streak/{user_id}/record` — path user_id must match bearer
+- `GET /api/dialect/history/{user_id}`, `GET /api/acting-coach/history/{user_id}` — path user_id must match bearer
+- `POST /api/dialect/analyze`, `POST /api/acting-coach/analyze` — owner derived from bearer; attempts stored against the authenticated identity, body/form `user_id` ignored
+- `GET/POST /api/scripts/{script_id}/voices`, `PUT /api/scripts/{script_id}/voices/{character_name}` — script-owner check (404 for cross-owner)
+- `POST /api/tapes/share` — owner derived from bearer; `request.user_id` ignored
+- `GET /api/tapes/user/{user_id}` — path user_id must match bearer
+- `DELETE /api/tapes/share/{share_id}` — ownership check (404 cross-owner)
+- `POST /api/voice-studio/takes` — owner derived from bearer; form `user_id` ignored
+- `GET /api/voice-studio/takes/{user_id}` — path user_id must match bearer
+- `DELETE /api/voice-studio/takes/{take_id}` — ownership check (404 cross-owner)
+
+**Preserved public (16 routes):** `/`, `/health`, `/subscription/plans`, `/subscription/regions`, `/analyze` (stateless), `/auth/apple`, `/auth/google`, `/auth/device-session`, `/voices/presets`, `/tts/elevenlabs/health`, `/dialect/accents*`, `/dialect/sample-lines`, `/acting-coach/scenes`, `/tape/{actor_slug}/{share_id}` HTML, `/tapes/share/{share_id}` JSON (both are the public casting-share surface by design — password-protectable). `/voice-studio/process`, `/voice-studio/demo-reel` left public (stateless FFmpeg, no user data stored). `/support/bug-report` left public (intentionally anonymous).
+
+**Admin-authenticated (1 route):** `GET /api/admin/tts/usage` — `_require_admin_token` dependency unchanged.
+
+**Frontend wiring** extended: `scriptStore.createRehearsal/fetchRehearsal/updateRehearsal` + `index.tsx` streak fetch + `daily-drill.tsx` streak fetches all attach the bearer. Existing `authClient.getAuthHeader()` helper is the single injection point.
+
+**Tests:** new `test_sec002_followup_route_audit_feb2026.py` — 45 passing tests + 1 env-conditional skip. Covers (a) unauth 401 lockout for every new route, (b) path user_id mismatch 403 for the 13 `/{user_id}` family routes, (c) cross-user rehearsal CRUD 404, (d) cross-user script-voices 404, (e) subscribe privilege-escalation 403, (f) sync-push body user_id ignored, (g) TTS proxy smoke under same bearer.
+
+**Verification totals:**
+- `scripts/prebuild_gate.py`: **PASS** — 977 passed / 2 pre-existing failures (unchanged), 0 new TS errors, 0 new ruff findings beyond frozen baseline.
+- 123/123 pass across the five security suites (SEC-002, SEC-002 follow-up, device-session, TTS usage ledger, mobile credential hardening).
+- SEC-002 is now **COMPLETE** across every user-data route in the backend. No remaining unprotected user-owned routes.
+
+
   - `REHEARSAL_VOICE_ASSIGNMENTS { count, elevenLabsConfigured, assignments[] }` now lists each character + voiceKey + voiceId (previously logged count only).
   - Assignment map stored under BOTH exact and upper-cased keys; `speakLine` looks up `voiceAssignmentsRef.current[lineCharacter] ?? voiceAssignmentsRef.current[lineCharacter.toUpperCase()]` — guards against picker/parser casing drift.
   - `TTS_REQUEST { character, provider, voiceId, voiceKey, assignmentPresent, elevenLabsConfigured, globalFallbackVoiceType, readerStyle, voiceSpeed }` emitted BEFORE any provider call — proves which voice was chosen per line.

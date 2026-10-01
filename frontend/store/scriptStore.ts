@@ -564,7 +564,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         reader_style: readerStyle,
         voice_speed: voiceSpeed,
         user_id: deviceId || 'default',
-      }, { timeout: API_TIMEOUT });
+      }, {
+        headers: await getAuthHeader(),
+        timeout: API_TIMEOUT,
+      });
       set({ currentRehearsal: response.data, loading: false });
       return response.data;
     } catch (error: any) {
@@ -578,7 +581,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   fetchRehearsal: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/rehearsals/${id}`, { timeout: API_TIMEOUT });
+      const response = await axios.get(`${API_BASE_URL}/api/rehearsals/${id}`, {
+        headers: await getAuthHeader(),
+        timeout: API_TIMEOUT,
+      });
       set({ currentRehearsal: response.data, loading: false });
       return response.data;
     } catch (error: any) {
@@ -591,7 +597,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   updateRehearsal: async (id: string, data) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.put(`${API_BASE_URL}/api/rehearsals/${id}`, data, { timeout: API_TIMEOUT });
+      const response = await axios.put(`${API_BASE_URL}/api/rehearsals/${id}`, data, {
+        headers: await getAuthHeader(),
+        timeout: API_TIMEOUT,
+      });
       set({ currentRehearsal: response.data, loading: false });
     } catch (error: any) {
       set({ error: getErrorMessage(error), loading: false });

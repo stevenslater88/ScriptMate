@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { API_BASE_URL } from '../services/apiConfig';
+import { getAuthHeader } from '../services/authClient';
 import { useScriptStore } from '../store/scriptStore';
 import { safeHandler } from '../services/debugService';
 import { shouldShowOnboarding } from '../components/OnboardingTutorial';
@@ -49,7 +50,10 @@ export default function HomeScreen() {
     try {
       const id = await AsyncStorage.getItem('device_id');
       if (id && API_BASE_URL) {
-        const r = await axios.get(`${API_BASE_URL}/api/streak/${id}`, { timeout: 10000 });
+        const r = await axios.get(`${API_BASE_URL}/api/streak/${id}`, {
+          headers: await getAuthHeader(),
+          timeout: 10000,
+        });
         setStreak(r.data);
         console.log(`[Home] Streak loaded: ${r.data.current_streak} day streak`);
       }

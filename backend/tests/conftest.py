@@ -162,9 +162,25 @@ def _rewrite_user_scoped_url(url: str) -> str:
         return url
     import re as _re
     pattern = _re.compile(
-        r"(?P<prefix>/api/(?:daily-drill|stats|streak)/)"
+        r"(?P<prefix>/api/(?:"
+        r"daily-drill|stats|streak|dialect/history|acting-coach/history|"
+        r"sync/pull|tapes/user|voice-studio/takes|auth/user"
+        r")/)"
         r"(?P<user>[^/?#]+)"
     )
+    # Also rewrite the /api/users/{device_id}/... family (preserve the suffix).
+    # Must NOT rewrite /api/users/me — that's a literal route, not a user_id slot.
+    users_pattern = _re.compile(
+        r"(?P<prefix>/api/users/)"
+        r"(?!me(?:[/?#]|$))"
+        r"(?P<user>[^/?#]+)"
+        r"(?P<suffix>/(?:limits|stats|subscribe|start-trial|cancel-subscription)(?:[/?#].*)?|$|[/?#].*)"
+    )
+
+    def _users_sub(m: _re.Match[str]) -> str:
+        return f"{m.group('prefix')}{_DEVICE_ID}{m.group('suffix')}"
+
+    url = users_pattern.sub(_users_sub, url)
 
     def _sub(m: _re.Match[str]) -> str:
         return f"{m.group('prefix')}{_DEVICE_ID}"

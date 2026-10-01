@@ -50,7 +50,7 @@ export default function DailyDrillScreen() {
       const authConfig = { headers: await getAuthHeader(), timeout: 15000 };
       const [drillRes, streakRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/daily-drill/${userId}`, authConfig),
-        axios.get(`${API_BASE_URL}/api/streak/${userId}`, { timeout: 15000 }),
+        axios.get(`${API_BASE_URL}/api/streak/${userId}`, authConfig),
       ]);
       setDrill(drillRes.data);
       setStreak(streakRes.data);
@@ -79,7 +79,7 @@ export default function DailyDrillScreen() {
       const userId = await getDeviceId();
       const authConfig = { headers: await getAuthHeader(), timeout: 15000 };
       const res = await axios.post(`${API_BASE_URL}/api/daily-drill/${userId}/complete`, {}, authConfig);
-      const streakRes = await axios.get(`${API_BASE_URL}/api/streak/${userId}`, { timeout: 15000 });
+      const streakRes = await axios.get(`${API_BASE_URL}/api/streak/${userId}`, authConfig);
       setStreak(streakRes.data);
       setDrill({ ...drill, completed: true });
       

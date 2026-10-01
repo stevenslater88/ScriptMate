@@ -1893,16 +1893,29 @@ async def get_current_user(
     }
 
 @api_router.get("/users/{device_id}", response_model=UserProfile)
-async def get_user(device_id: str):
-    """Get user profile by device ID"""
+async def get_user(
+    device_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get user profile by device ID.
+
+    SEC-002 (2026-02): the path `device_id` must match the authenticated
+    bearer; cross-user profile reads return 403."""
+    enforce_user_id_match(device_id, authenticated_user_id)
     user = await db.users.find_one({"device_id": device_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return UserProfile(**user)
 
 @api_router.get("/users/{device_id}/limits")
-async def get_user_limits(device_id: str):
-    """Get user's current limits and usage"""
+async def get_user_limits(
+    device_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get user's current limits and usage.
+
+    SEC-002 (2026-02): path `device_id` must match authenticated bearer."""
+    enforce_user_id_match(device_id, authenticated_user_id)
     user = await db.users.find_one({"device_id": device_id})
     
     tier = "free"
@@ -2007,8 +2020,17 @@ async def get_all_regions():
     }
 
 @api_router.post("/users/{device_id}/subscribe")
-async def subscribe_user(device_id: str, subscription: SubscriptionUpdate):
-    """Activate or update user subscription"""
+async def subscribe_user(
+    device_id: str,
+    subscription: SubscriptionUpdate,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Activate or update user subscription.
+
+    SEC-002 (2026-02): the path `device_id` must match the authenticated
+    bearer so one caller cannot activate premium on another user's
+    account (privilege-escalation prevention)."""
+    enforce_user_id_match(device_id, authenticated_user_id)
     user = await db.users.find_one({"device_id": device_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -2052,8 +2074,15 @@ async def subscribe_user(device_id: str, subscription: SubscriptionUpdate):
     return UserProfile(**updated_user)
 
 @api_router.post("/users/{device_id}/start-trial")
-async def start_trial(device_id: str):
-    """Start a 3-day premium trial"""
+async def start_trial(
+    device_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Start a 3-day premium trial.
+
+    SEC-002 (2026-02): path `device_id` must match the authenticated
+    bearer; prevents trial-grant on another user's account."""
+    enforce_user_id_match(device_id, authenticated_user_id)
     user = await db.users.find_one({"device_id": device_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -2079,8 +2108,14 @@ async def start_trial(device_id: str):
     return UserProfile(**updated_user)
 
 @api_router.post("/users/{device_id}/cancel-subscription")
-async def cancel_subscription(device_id: str):
-    """Cancel user subscription (keeps access until end date)"""
+async def cancel_subscription(
+    device_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Cancel user subscription (keeps access until end date).
+
+    SEC-002 (2026-02): path `device_id` must match authenticated bearer."""
+    enforce_user_id_match(device_id, authenticated_user_id)
     user = await db.users.find_one({"device_id": device_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -2441,10 +2476,17 @@ async def delete_script(
 # ==================== REHEARSAL ROUTES ====================
 
 @api_router.post("/rehearsals", response_model=RehearsalSession)
-async def create_rehearsal(rehearsal_data: RehearsalCreate):
-    """Create a new rehearsal session"""
-    # Check user limits
-    limits_check = await check_user_limits(rehearsal_data.user_id, "create_rehearsal")
+async def create_rehearsal(
+    rehearsal_data: RehearsalCreate,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Create a new rehearsal session.
+
+    SEC-002 (2026-02): effective owner is the authenticated bearer;
+    any `rehearsal_data.user_id` from the client is IGNORED. Script
+    ownership is enforced (cross-user script-id rehearsal returns 404)."""
+    # Check user limits (bearer-derived identity)
+    limits_check = await check_user_limits(user_id, "create_rehearsal")
     if not limits_check["allowed"]:
         raise HTTPException(status_code=403, detail=limits_check["upgrade_reason"])
     
@@ -2463,7 +2505,8 @@ async def create_rehearsal(rehearsal_data: RehearsalCreate):
         )
     
     script = await db.scripts.find_one({"id": rehearsal_data.script_id})
-    if not script:
+    if not script or script.get("user_id") != user_id:
+        # 404 for both "not found" and "not yours" (don't leak existence).
         raise HTTPException(status_code=404, detail="Script not found")
     
     total_lines = sum(1 for line in script.get("lines", []) 
@@ -2471,7 +2514,7 @@ async def create_rehearsal(rehearsal_data: RehearsalCreate):
     
     rehearsal = RehearsalSession(
         script_id=rehearsal_data.script_id,
-        user_id=rehearsal_data.user_id,
+        user_id=user_id,
         user_character=rehearsal_data.user_character,
         mode=rehearsal_data.mode,
         voice_type=rehearsal_data.voice_type,
@@ -2488,7 +2531,7 @@ async def create_rehearsal(rehearsal_data: RehearsalCreate):
     
     # Update user rehearsal count
     today = datetime.utcnow().strftime("%Y-%m-%d")
-    user = await db.users.find_one({"$or": [{"id": rehearsal_data.user_id}, {"device_id": rehearsal_data.user_id}]})
+    user = await db.users.find_one({"$or": [{"id": user_id}, {"device_id": user_id}]})
     if user:
         if user.get("last_rehearsal_date") == today:
             await db.users.update_one(
@@ -2504,46 +2547,68 @@ async def create_rehearsal(rehearsal_data: RehearsalCreate):
     return rehearsal
 
 @api_router.get("/rehearsals", response_model=List[RehearsalSession])
-async def get_rehearsals(user_id: str = "default"):
-    """Get all rehearsal sessions for a user"""
+async def get_rehearsals(user_id: str = Depends(get_effective_user_id)):
+    """Get all rehearsal sessions for a user.
+
+    SEC-002 (2026-02): legacy `?user_id=` query is IGNORED; list is
+    keyed to the authenticated bearer."""
     rehearsals = await db.rehearsals.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
     return [RehearsalSession(**r) for r in rehearsals]
 
 @api_router.get("/rehearsals/{rehearsal_id}", response_model=RehearsalSession)
-async def get_rehearsal(rehearsal_id: str):
-    """Get a specific rehearsal session"""
+async def get_rehearsal(
+    rehearsal_id: str,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Get a specific rehearsal session.
+
+    SEC-002 (2026-02): cross-owner reads return 404."""
     rehearsal = await db.rehearsals.find_one({"id": rehearsal_id})
-    if not rehearsal:
+    if not rehearsal or rehearsal.get("user_id") != user_id:
         raise HTTPException(status_code=404, detail="Rehearsal session not found")
     return RehearsalSession(**rehearsal)
 
 @api_router.put("/rehearsals/{rehearsal_id}")
-async def update_rehearsal(rehearsal_id: str, update_data: Dict[str, Any]):
-    """Update rehearsal progress"""
+async def update_rehearsal(
+    rehearsal_id: str,
+    update_data: Dict[str, Any],
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Update rehearsal progress.
+
+    SEC-002 (2026-02): cross-owner mutations return 404."""
     rehearsal = await db.rehearsals.find_one({"id": rehearsal_id})
-    if not rehearsal:
+    if not rehearsal or rehearsal.get("user_id") != user_id:
         raise HTTPException(status_code=404, detail="Rehearsal session not found")
     
     update_data["updated_at"] = datetime.utcnow()
+    # Never let the client overwrite the owner field via arbitrary JSON.
+    update_data.pop("user_id", None)
     await db.rehearsals.update_one({"id": rehearsal_id}, {"$set": update_data})
     
     # Update total lines practiced
     if "completed_lines" in update_data:
         lines_count = len(update_data["completed_lines"])
-        user_id = rehearsal.get("user_id")
-        if user_id:
-            await db.users.update_one(
-                {"$or": [{"id": user_id}, {"device_id": user_id}]},
-                {"$inc": {"total_lines_practiced": lines_count}}
-            )
+        await db.users.update_one(
+            {"$or": [{"id": user_id}, {"device_id": user_id}]},
+            {"$inc": {"total_lines_practiced": lines_count}}
+        )
     
     updated = await db.rehearsals.find_one({"id": rehearsal_id})
     return RehearsalSession(**updated)
 
 @api_router.delete("/rehearsals/{rehearsal_id}")
-async def delete_rehearsal(rehearsal_id: str):
-    """Delete a rehearsal session"""
-    result = await db.rehearsals.delete_one({"id": rehearsal_id})
+async def delete_rehearsal(
+    rehearsal_id: str,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Delete a rehearsal session.
+
+    SEC-002 (2026-02): cross-owner deletes return 404."""
+    rehearsal = await db.rehearsals.find_one({"id": rehearsal_id})
+    if not rehearsal or rehearsal.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Rehearsal session not found")
+    result = await db.rehearsals.delete_one({"id": rehearsal_id, "user_id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Rehearsal session not found")
     return {"message": "Rehearsal session deleted"}
@@ -2551,8 +2616,14 @@ async def delete_rehearsal(rehearsal_id: str):
 # ==================== ANALYTICS ROUTES (PREMIUM) ====================
 
 @api_router.get("/users/{device_id}/stats")
-async def get_user_stats(device_id: str):
-    """Get user statistics (basic for free, detailed for premium)"""
+async def get_user_stats(
+    device_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get user statistics (basic for free, detailed for premium).
+
+    SEC-002 (2026-02): path `device_id` must match authenticated bearer."""
+    enforce_user_id_match(device_id, authenticated_user_id)
     user = await db.users.find_one({"device_id": device_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -2843,8 +2914,15 @@ async def google_sign_in(request: GoogleAuthRequest):
         raise HTTPException(status_code=500, detail="Authentication failed. Please try again.")
 
 @api_router.get("/auth/user/{user_id}")
-async def get_authenticated_user(user_id: str):
-    """Get authenticated user profile"""
+async def get_authenticated_user(
+    user_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get authenticated user profile.
+
+    SEC-002 (2026-02): the path `user_id` must match the authenticated
+    bearer; stops cross-user email/name harvesting."""
+    enforce_user_id_match(user_id, authenticated_user_id)
     user = await db.authenticated_users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -2863,16 +2941,24 @@ async def get_authenticated_user(user_id: str):
 
 
 @api_router.post("/auth/logout")
-async def logout(user_id: str, device_id: str = None):
-    """Logout user (optionally from specific device)"""
+async def logout(
+    device_id: str = None,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Logout user (optionally from specific device).
+
+    SEC-002 (2026-02): the user to log out is now derived from the
+    authenticated bearer; the former `user_id` query parameter is
+    IGNORED so one caller cannot invalidate another user's tokens."""
+    user_id = authenticated_user_id
     if device_id:
-        # Just remove this device
+        # Just remove this device from the signed-in profile.
         await db.authenticated_users.update_one(
             {"id": user_id},
             {"$pull": {"device_ids": device_id}}
         )
     else:
-        # Invalidate all tokens
+        # Invalidate all tokens for THIS authenticated identity.
         await db.auth_tokens.delete_many({"user_id": user_id})
     
     return {"message": "Logged out successfully"}
@@ -2978,17 +3064,25 @@ async def mint_device_session(request: DeviceSessionRequest):
 # ==================== SYNC ROUTES ====================
 
 @api_router.post("/sync/push")
-async def push_sync_data(request: SyncDataRequest):
-    """Push local data to server for sync"""
+async def push_sync_data(
+    request: SyncDataRequest,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Push local data to server for sync.
+
+    SEC-002 (2026-02): the owning user_id is derived from the bearer;
+    `request.user_id` is IGNORED so one user cannot overwrite another's
+    notes/stats/settings."""
+    user_id = authenticated_user_id
     try:
-        user = await db.authenticated_users.find_one({"id": request.user_id})
+        user = await db.authenticated_users.find_one({"id": user_id})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
         # Sync director notes
         if request.director_notes:
             for note in request.director_notes:
-                note["user_id"] = request.user_id
+                note["user_id"] = user_id
                 await db.director_notes.update_one(
                     {"id": note.get("id")},
                     {"$set": note},
@@ -2997,20 +3091,20 @@ async def push_sync_data(request: SyncDataRequest):
         
         # Sync performance stats
         if request.performance_stats:
-            request.performance_stats["user_id"] = request.user_id
+            request.performance_stats["user_id"] = user_id
             request.performance_stats["updated_at"] = datetime.utcnow()
             await db.performance_stats.update_one(
-                {"user_id": request.user_id},
+                {"user_id": user_id},
                 {"$set": request.performance_stats},
                 upsert=True
             )
         
         # Sync settings
         if request.settings:
-            request.settings["user_id"] = request.user_id
+            request.settings["user_id"] = user_id
             request.settings["updated_at"] = datetime.utcnow()
             await db.user_settings.update_one(
-                {"user_id": request.user_id},
+                {"user_id": user_id},
                 {"$set": request.settings},
                 upsert=True
             )
@@ -3026,8 +3120,15 @@ async def push_sync_data(request: SyncDataRequest):
         raise HTTPException(status_code=500, detail="Sync failed. Please try again.")
 
 @api_router.get("/sync/pull/{user_id}")
-async def pull_sync_data(user_id: str, last_sync: str = None):
-    """Pull all user data from server"""
+async def pull_sync_data(
+    user_id: str,
+    last_sync: str = None,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Pull all user data from server.
+
+    SEC-002 (2026-02): path `user_id` must match authenticated bearer."""
+    enforce_user_id_match(user_id, authenticated_user_id)
     try:
         user = await db.authenticated_users.find_one({"id": user_id})
         if not user:
@@ -3675,27 +3776,37 @@ async def generate_elevenlabs_tts(
         raise HTTPException(status_code=500, detail="Voice generation failed. Please try again.")
 
 @api_router.get("/scripts/{script_id}/voices")
-async def get_script_voice_settings(script_id: str):
-    """Get voice assignments for all characters in a script"""
+async def get_script_voice_settings(
+    script_id: str,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Get voice assignments for all characters in a script.
+
+    SEC-002 (2026-02): script ownership is enforced; cross-owner returns 404."""
+    script = await db.scripts.find_one({"id": script_id})
+    if not script or script.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Script not found")
     settings = await db.script_voice_settings.find_one({"script_id": script_id})
     if not settings:
-        # Return empty settings
         return {
             "script_id": script_id,
             "character_voices": [],
             "updated_at": None
         }
-    
-    # Remove MongoDB _id
     settings.pop("_id", None)
     return settings
 
 @api_router.post("/scripts/{script_id}/voices")
-async def save_script_voice_settings(script_id: str, voice_settings: ScriptVoiceSettings):
-    """Save voice assignments for characters in a script"""
-    # Verify script exists
+async def save_script_voice_settings(
+    script_id: str,
+    voice_settings: ScriptVoiceSettings,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Save voice assignments for characters in a script.
+
+    SEC-002 (2026-02): script ownership is enforced."""
     script = await db.scripts.find_one({"id": script_id})
-    if not script:
+    if not script or script.get("user_id") != user_id:
         raise HTTPException(status_code=404, detail="Script not found")
     
     settings_dict = voice_settings.dict()
@@ -3715,9 +3826,18 @@ async def save_script_voice_settings(script_id: str, voice_settings: ScriptVoice
     }
 
 @api_router.put("/scripts/{script_id}/voices/{character_name}")
-async def update_character_voice(script_id: str, character_name: str, voice_key: str):
-    """Update voice assignment for a single character"""
-    # Verify voice key exists
+async def update_character_voice(
+    script_id: str,
+    character_name: str,
+    voice_key: str,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Update voice assignment for a single character.
+
+    SEC-002 (2026-02): script ownership is enforced."""
+    script = await db.scripts.find_one({"id": script_id})
+    if not script or script.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Script not found")
     if voice_key not in PRESET_VOICES:
         raise HTTPException(status_code=400, detail=f"Invalid voice key: {voice_key}")
     
@@ -3800,11 +3920,14 @@ async def analyze_dialect(
     audio: UploadFile = File(...),
     expected_text: str = Form(...),
     accent_id: str = Form(...),
-    user_id: str = Form(...)
+    user_id: str = Depends(get_effective_user_id),
 ):
     """
     Analyze user's pronunciation against a target accent.
     Returns pronunciation score, pace assessment, problem words, and tips.
+
+    SEC-002 (2026-02): owner derived from the bearer; the former
+    `user_id` form field is IGNORED.
     """
     if not stt_client:
         raise HTTPException(status_code=503, detail="Speech-to-text service not configured")
@@ -3946,8 +4069,17 @@ Return ONLY valid JSON, no other text."""
         raise HTTPException(status_code=500, detail=json.dumps({"error": "Dialect analysis failed", "message": "Pronunciation analysis encountered an error. Please try again."}))
 
 @api_router.get("/dialect/history/{user_id}")
-async def get_dialect_history(user_id: str, accent_id: Optional[str] = None, limit: int = 20):
-    """Get user's recent dialect practice attempts for tracking improvement"""
+async def get_dialect_history(
+    user_id: str,
+    accent_id: Optional[str] = None,
+    limit: int = 20,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get user's recent dialect practice attempts for tracking improvement.
+
+    SEC-002 (2026-02): path `user_id` must match authenticated bearer."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    user_id = effective_user_id(authenticated_user_id)
     query = {"user_id": user_id}
     if accent_id:
         query["accent_id"] = accent_id
@@ -4006,8 +4138,14 @@ class ActingCoachRequest(BaseModel):
     user_id: str = Field(default="anonymous")
 
 @api_router.post("/acting-coach/analyze")
-async def analyze_acting_performance(request: ActingCoachRequest):
-    """AI-powered acting coach that analyzes emotion, style, and energy choices."""
+async def analyze_acting_performance(
+    request: ActingCoachRequest,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """AI-powered acting coach that analyzes emotion, style, and energy choices.
+
+    SEC-002 (2026-02): owner derived from the bearer; any `user_id`
+    on the request body is IGNORED when the attempt is stored."""
     if not EMERGENT_LLM_KEY:
         raise HTTPException(status_code=503, detail="AI service not configured")
 
@@ -4065,7 +4203,7 @@ IMPORTANT:
         # Store attempt
         attempt = {
             "id": str(uuid.uuid4()),
-            "user_id": request.user_id,
+            "user_id": user_id,
             "scene_title": request.scene_title,
             "emotion": request.emotion,
             "style": request.style,
@@ -4088,8 +4226,16 @@ IMPORTANT:
         raise HTTPException(status_code=500, detail=json.dumps({"error": "AI analysis failed", "message": "Acting coach analysis encountered an error. Please try again."}))
 
 @api_router.get("/acting-coach/history/{user_id}")
-async def get_acting_coach_history(user_id: str, limit: int = 20):
-    """Get user's acting coach history."""
+async def get_acting_coach_history(
+    user_id: str,
+    limit: int = 20,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get user's acting coach history.
+
+    SEC-002 (2026-02): path `user_id` must match authenticated bearer."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    user_id = effective_user_id(authenticated_user_id)
     attempts = await db.acting_coach_attempts.find(
         {"user_id": user_id}, {"_id": 0}
     ).sort("created_at", -1).limit(limit).to_list(length=limit)
@@ -4289,8 +4435,15 @@ async def record_activity(user_id: str, activity_type: str, xp: int = 10):
     )
 
 @api_router.get("/streak/{user_id}")
-async def get_streak(user_id: str):
-    """Get user's training streak and XP."""
+async def get_streak(
+    user_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get user's training streak and XP.
+
+    SEC-002 (2026-02): path `user_id` must match authenticated bearer."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    user_id = effective_user_id(authenticated_user_id)
     today = datetime.utcnow().strftime("%Y-%m-%d")
     yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
     
@@ -4321,10 +4474,18 @@ async def get_streak(user_id: str):
     }
 
 @api_router.post("/streak/{user_id}/record")
-async def record_streak_activity(user_id: str, activity_type: str = "general"):
-    """Record an activity for streak tracking (acting_coach, dialect_coach, rehearsal, etc)."""
+async def record_streak_activity(
+    user_id: str,
+    activity_type: str = "general",
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Record an activity for streak tracking (acting_coach, dialect_coach, rehearsal, etc).
+
+    SEC-002 (2026-02): path `user_id` must match authenticated bearer."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    user_id = effective_user_id(authenticated_user_id)
     await record_activity(user_id, activity_type, 10)
-    return await get_streak(user_id)
+    return await get_streak(user_id, authenticated_user_id)
 
 
 # ==================== PHASE C: DAILY DRILL AI FEEDBACK ====================
@@ -4427,8 +4588,15 @@ class ShareLinkResponse(BaseModel):
     has_password: bool
 
 @api_router.post("/tapes/share")
-async def create_share_link(request: CreateShareLinkRequest):
-    """Create a shareable casting link for a self tape."""
+async def create_share_link(
+    request: CreateShareLinkRequest,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Create a shareable casting link for a self tape.
+
+    SEC-002 (2026-02): owner is derived from the bearer; `request.user_id`
+    is IGNORED so one caller cannot plant share-links against another
+    user's id."""
     share_id = str(uuid.uuid4())[:8]
     actor_slug = request.actor_name.lower().replace(" ", "-").replace("'", "")
     
@@ -4442,7 +4610,7 @@ async def create_share_link(request: CreateShareLinkRequest):
         "script_title": request.script_title or "",
         "duration": request.duration or 0,
         "password": request.password,
-        "user_id": request.user_id or "default",
+        "user_id": user_id,
         "created_at": datetime.utcnow().isoformat(),
         "views": 0,
     }
@@ -4574,8 +4742,15 @@ video{{width:100%;height:100%;object-fit:contain;background:#000}}
 </html>""")
 
 @api_router.get("/tapes/user/{user_id}")
-async def get_user_shared_tapes(user_id: str):
-    """Get all shared tapes for a user."""
+async def get_user_shared_tapes(
+    user_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get all shared tapes for a user.
+
+    SEC-002 (2026-02): path `user_id` must match authenticated bearer."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    user_id = effective_user_id(authenticated_user_id)
     tapes = await db.shared_tapes.find(
         {"user_id": user_id},
         {"_id": 0, "password": 0, "video_uri": 0}
@@ -4583,9 +4758,17 @@ async def get_user_shared_tapes(user_id: str):
     return tapes
 
 @api_router.delete("/tapes/share/{share_id}")
-async def delete_share_link(share_id: str):
-    """Delete a shared tape link."""
-    result = await db.shared_tapes.delete_one({"share_id": share_id})
+async def delete_share_link(
+    share_id: str,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Delete a shared tape link.
+
+    SEC-002 (2026-02): cross-owner deletes return 404."""
+    tape = await db.shared_tapes.find_one({"share_id": share_id})
+    if not tape or tape.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    result = await db.shared_tapes.delete_one({"share_id": share_id, "user_id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Share link not found")
     return {"message": "Share link deleted"}
@@ -4727,12 +4910,15 @@ async def build_demo_reel(
 
 @api_router.post("/voice-studio/takes")
 async def save_take_metadata(
-    user_id: str = Form(...),
     take_name: str = Form(...),
     duration: float = Form(0),
     script_id: str = Form(""),
+    user_id: str = Depends(get_effective_user_id),
 ):
-    """Save voice take metadata to the database."""
+    """Save voice take metadata to the database.
+
+    SEC-002 (2026-02): owner is derived from the bearer; the former
+    `user_id` form field is IGNORED."""
     take = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -4747,8 +4933,15 @@ async def save_take_metadata(
 
 
 @api_router.get("/voice-studio/takes/{user_id}")
-async def get_user_takes(user_id: str):
-    """Get all voice takes for a user."""
+async def get_user_takes(
+    user_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Get all voice takes for a user.
+
+    SEC-002 (2026-02): path `user_id` must match authenticated bearer."""
+    enforce_user_id_match(user_id, authenticated_user_id)
+    user_id = effective_user_id(authenticated_user_id)
     takes = await db.voice_takes.find(
         {"user_id": user_id}, {"_id": 0}
     ).sort("created_at", -1).to_list(100)
@@ -4756,9 +4949,17 @@ async def get_user_takes(user_id: str):
 
 
 @api_router.delete("/voice-studio/takes/{take_id}")
-async def delete_take_metadata(take_id: str):
-    """Delete a voice take record."""
-    result = await db.voice_takes.delete_one({"id": take_id})
+async def delete_take_metadata(
+    take_id: str,
+    user_id: str = Depends(get_effective_user_id),
+):
+    """Delete a voice take record.
+
+    SEC-002 (2026-02): cross-owner deletes return 404."""
+    take = await db.voice_takes.find_one({"id": take_id})
+    if not take or take.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Take not found")
+    result = await db.voice_takes.delete_one({"id": take_id, "user_id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Take not found")
     return {"message": "Take deleted"}
