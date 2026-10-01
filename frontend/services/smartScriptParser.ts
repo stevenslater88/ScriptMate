@@ -347,8 +347,15 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
         : Math.max(0.2, confidence - 0.2);
 
       if (adjustedConf >= 0.4) {
-        // Normalize character name: strip (V.O.) etc for grouping
-        const normalized = trimmed.replace(/\s*\(.*\)\s*$/, '').trim().toUpperCase();
+        // Normalize character name: strip (V.O.) etc. for grouping,
+        // AND strip the trailing colon so `JACK:` and `JACK` cannot
+        // be stored as separate characters (physical build 1.0.65
+        // regression — mirrors the backend's `.replace(':', '')`).
+        const normalized = trimmed
+          .replace(/\s*\(.*\)\s*$/, '')
+          .replace(/:\s*$/, '')
+          .trim()
+          .toUpperCase();
 
         currentCharacter = normalized;
         currentCharConfidence = adjustedConf;

@@ -505,6 +505,8 @@ export default function RehearsalScreen() {
       // Crash-safe unmount cleanup — each native module call individually
       // guarded so a double-teardown or already-stopped state can never
       // escalate to an unhandled promise rejection / native SIGSEGV.
+      isMountedRef.current = false;
+      playbackGenerationRef.current += 1;
       try { Promise.resolve(Speech.stop()).catch(() => {}); } catch { /* ignore */ }
       // 2026-02 — also tear down any ElevenLabs Audio.Sound in flight so
       // it can't outlive the screen.
@@ -590,6 +592,31 @@ export default function RehearsalScreen() {
   const voiceAssignmentsRef = useRef<Record<string, CharacterVoiceAssignment>>({});
   const elevenLabsAvailable = useRef<boolean>(false);
   const activeElevenLabsSoundRef = useRef<Audio.Sound | null>(null);
+  // 2026-02 — Lifecycle guards for async playSpeech().
+  //
+  // playSpeech() is async and can take 1-3 s to resolve (round-trip to
+  // the backend TTS proxy + file decode). During that window the user
+  // can:
+  //   (a) navigate away → component unmounts;
+  //   (b) press Finish  → rehearsalFinish() runs synchronous cleanup;
+  //   (c) press Pause   → speakLine must abandon the current attempt.
+  //
+  // Before this fix the resumed `speakLine` would store the resolved,
+  // already-playing sound into activeElevenLabsSoundRef AFTER cleanup
+  // had already run, leaving an orphaned Audio.Sound playing after the
+  // screen was gone (physical build 1.0.65 bug).
+  //
+  // `isMountedRef` is set to false only on unmount — permanent for the
+  // life of this screen instance.
+  // `playbackGenerationRef` is a monotonic counter bumped by any event
+  // that must invalidate the IN-FLIGHT playSpeech(): unmount, finish,
+  // AND pause. Resume starts a fresh generation, so Pause→Resume still
+  // works — no permanent cancellation flag.
+  const isMountedRef = useRef(true);
+  const playbackGenerationRef = useRef(0);
+  const invalidatePendingPlayback = useCallback(() => {
+    playbackGenerationRef.current += 1;
+  }, []);
 
   useEffect(() => {
     // Load once per script — the picker persists to AsyncStorage
@@ -786,6 +813,11 @@ export default function RehearsalScreen() {
             // options, so `readerStyle: emotional` and voiceSpeed=0.9
             // appeared in the log but produced identical audio to
             // neutral / speed=1.0.
+            // Capture the generation BEFORE the async call. If the
+            // generation advances (unmount / finish / pause) while we
+            // await, the resumed function must stop/unload the sound
+            // without registering playback callbacks.
+            const generationAtStart = playbackGenerationRef.current;
             const sound = await playSpeech(text, assignment.voiceId, {
               readerStyle,
               voiceSpeed: readerVoiceSpeed,
@@ -794,6 +826,27 @@ export default function RehearsalScreen() {
               // Generation failed — fall back to expo-speech so the
               // rehearsal never stalls.
               throw new Error('playSpeech returned null');
+            }
+            // Guard: if this screen unmounted or a lifecycle event
+            // (finish / pause) advanced the playback generation
+            // while playSpeech was in flight, the returned sound is
+            // already playing but belongs to no mounted component.
+            // Stop + unload and abandon — never register the status
+            // callback and never overwrite activeElevenLabsSoundRef.
+            if (
+              !isMountedRef.current
+              || playbackGenerationRef.current !== generationAtStart
+            ) {
+              DebugLog.log(
+                'DIAGNOSTIC', 'Rehearsal', 'ELEVENLABS_STALE_SOUND_DISCARDED',
+                {
+                  lineIndex: targetLineIndex,
+                  reason: !isMountedRef.current ? 'unmounted' : 'generation-advanced',
+                },
+              );
+              try { await sound.stopAsync(); } catch { /* ignore */ }
+              try { await sound.unloadAsync(); } catch { /* ignore */ }
+              return;
             }
             DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'TTS_RESPONSE', {
               lineIndex: targetLineIndex,
@@ -938,10 +991,25 @@ export default function RehearsalScreen() {
     finalizeGuardRef.current = true;
     DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'rehearsal-finish-start', { reason });
 
+    // Invalidate any in-flight playSpeech() so a sound resolving after
+    // this point is stopped+unloaded instead of registered. See
+    // isMountedRef / playbackGenerationRef in speakLine.
+    playbackGenerationRef.current += 1;
+
     // 1. Stop TTS (never throw to caller)
     try {
       DebugLog.log('DIAGNOSTIC', 'RehearsalScreen', 'audio-cleanup-start', {});
       await Promise.resolve(Speech.stop()).catch(() => {});
+      // Also stop any currently-registered ElevenLabs sound (the
+      // bump above handles in-flight; this handles already-playing).
+      try {
+        const s = activeElevenLabsSoundRef.current;
+        activeElevenLabsSoundRef.current = null;
+        if (s) {
+          await Promise.resolve(s.stopAsync()).catch(() => {});
+          await Promise.resolve(s.unloadAsync()).catch(() => {});
+        }
+      } catch { /* ignore */ }
       isSpeakingRef.current = false;
       speakingLineIndexRef.current = null;
       if (speechTimeoutRef.current) {
@@ -1178,6 +1246,12 @@ export default function RehearsalScreen() {
       // 2026-02: also stop any active ElevenLabs playback so the pause
       // button works uniformly across both speech engines.
       stopElevenLabsSound();
+      // Invalidate any in-flight playSpeech() so a sound resolving
+      // after pause is stopped+unloaded. Resume will NOT bump the
+      // generation — resume just calls speakLine fresh, which captures
+      // a NEW generationAtStart. Pause→Resume stays functional
+      // because the counter is monotonic.
+      playbackGenerationRef.current += 1;
       setSpeaking(false);
     }
   };

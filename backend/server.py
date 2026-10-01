@@ -1597,6 +1597,69 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
         "lines": lines_data
     }
 
+def _coalesce_pdf_header_value_splits(text: str) -> str:
+    """Repair PyPDF2's habit of splitting `HEADER: value` across two lines.
+
+    PyPDF2 inserts a newline wherever the source PDF's text-run
+    positioning jumps between labels and values. For common front-matter
+    labels (TITLE, AUTHOR, WRITTEN BY, etc.) this makes the authored
+    `TITLE: THE CALL` arrive at the parser as:
+
+        TITLE:
+        THE CALL
+
+    which `fallback_parse_script` then correctly interprets as a header
+    line followed by an all-uppercase character cue (`THE CALL`). This
+    normalizer joins them back onto one line so the authored intent is
+    preserved. We ONLY coalesce when:
+      * the current line equals a known header keyword followed by `:`
+      * the next non-empty line is short (<=60 chars) and is NOT itself
+        a header keyword
+
+    `fallback_parse_script` and `/api/scripts` are UNCHANGED by this
+    repair — the join happens before any parsing.
+    """
+    if not text:
+        return text
+    lines = text.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        cur = lines[i]
+        stripped = cur.strip()
+        upper = stripped.upper()
+        # Match a bare-header line: a known keyword followed only by ":"
+        if (upper.endswith(":")
+                and upper[:-1] in _HEADER_KEYWORDS):
+            # Look ahead to the next non-empty line
+            j = i + 1
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            if j < len(lines):
+                next_line = lines[j]
+                next_stripped = next_line.strip()
+                next_upper = next_stripped.upper()
+                # Must not itself be another header
+                next_is_header = False
+                for kw in _HEADER_KEYWORDS:
+                    if next_upper == kw or next_upper == kw + ":":
+                        next_is_header = True
+                        break
+                    if next_upper.startswith((kw + ":", kw + " ")):
+                        next_is_header = True
+                        break
+                if (not next_is_header
+                        and 0 < len(next_stripped) <= 60):
+                    # Preserve leading indentation of the header line.
+                    leading_ws = cur[: len(cur) - len(cur.lstrip())]
+                    out.append(f"{leading_ws}{stripped} {next_stripped}")
+                    i = j + 1
+                    continue
+        out.append(cur)
+        i += 1
+    return "\n".join(out)
+
+
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     """Extract text from PDF file. Returns extracted text or raises HTTPException with a specific reason."""
     try:
@@ -1629,6 +1692,8 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
                 status_code=400,
                 detail="No readable text found in this PDF. It may be a scanned image — try a text-based PDF or export from a word processor.",
             )
+        # Repair PyPDF2 header-value splits (e.g. `TITLE:\nTHE CALL`).
+        text = _coalesce_pdf_header_value_splits(text)
         return text
     except HTTPException:
         raise
