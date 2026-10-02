@@ -265,8 +265,9 @@ def test_revenuecat_service_still_reads_entitlements() -> None:
         "revenuecat.ts must still resolve premium from RC customerInfo — "
         "QA bypass supplements, does not replace"
     )
-    assert "PREMIUM_ENTITLEMENT_ID = 'ScriptM8 Pro'" in src, (
-        "the entitlement identifier must not have been renamed / removed"
+    assert "PREMIUM_ENTITLEMENT_ID = 'ScriptMate Pro'" in src, (
+        "the entitlement identifier must match the RevenueCat dashboard "
+        "value (verified Feb 2026 as 'ScriptMate Pro', not 'ScriptM8 Pro')"
     )
 
 

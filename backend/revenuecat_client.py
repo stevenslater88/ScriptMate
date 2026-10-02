@@ -37,7 +37,8 @@ logger = logging.getLogger(__name__)
 REVENUECAT_API_BASE = "https://api.revenuecat.com/v1"
 # Match the entitlement identifier configured in the RevenueCat dashboard
 # (same literal used by the frontend — frontend/services/revenuecat.ts).
-DEFAULT_ENTITLEMENT_ID = "ScriptM8 Pro"
+# Dashboard identifier (verified Feb 2026): "ScriptMate Pro".
+DEFAULT_ENTITLEMENT_ID = "ScriptMate Pro"
 
 
 class RevenueCatUnavailable(RuntimeError):

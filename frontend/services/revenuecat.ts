@@ -14,7 +14,11 @@ const REVENUECAT_APPLE_API_KEY = AppConfig.REVENUECAT_APPLE_API_KEY;
 const REVENUECAT_GOOGLE_API_KEY = AppConfig.REVENUECAT_GOOGLE_API_KEY;
 
 // Entitlement identifier that unlocks premium features
-export const PREMIUM_ENTITLEMENT_ID = 'ScriptM8 Pro';
+// MUST match the entitlement identifier configured in the RevenueCat
+// dashboard byte-for-byte. Dashboard identifier (verified Feb 2026):
+// "ScriptMate Pro". Brand/UI copy may still read "ScriptM8 Pro" —
+// that is marketing, not an entitlement reference.
+export const PREMIUM_ENTITLEMENT_ID = 'ScriptMate Pro';
 
 // Product identifiers (must match RevenueCat dashboard)
 export const PRODUCT_IDS = {
