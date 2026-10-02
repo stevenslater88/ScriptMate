@@ -2057,3 +2057,69 @@ Dependencies:  PASS — no changes
 ### Phases P2 / P3 remain unimplemented by design
 - P2 Enforcement (tier gating, per-user daily/monthly character budgets) requires product decision on Model A/B/C from the 2026-02 design audit
 - P3 Hardening (idempotency keys, device-session fingerprint binding, global emergency ceiling, SEC-003 QA_PREMIUM removal) remains future work
+
+
+## 2026-02 — Overnight RevenueCat/Google Play Investigation (Samsung S23 Ultra "No Purchases Found")
+
+### Investigation summary
+Autonomous overnight investigation of the Blocker 1 physical-QA failure where "Restore Purchases" returns **"No Purchases Found"** on an S23 Ultra whose Google Play account holds an active £39.99 ScriptMate Yearly subscription (App User ID `S23 Ultra-1790484231681-ngc4o4jc`, RC project `proj802a10da`, public Android key `goog_pOGFkMgDqQIfbBBPXgCXdJJcjkT`).
+
+### Full chain audit (read-only)
+- **Frontend `services/revenuecat.ts`** — `PREMIUM_ENTITLEMENT_ID = 'ScriptMate Pro'` ✅
+- **Frontend `app/_layout.tsx`** — `Purchases.configure({ apiKey, appUserID: stableDeviceId })` with idempotent `logIn` alias ✅
+- **Frontend restore path** — `customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID]` lookup; "No Purchases Found" alert fires only when `result.success && !result.restored` — i.e. RC returned a customer info without the entitlement, meaning restore did run end-to-end
+- **Backend `revenuecat_client.py`** default — `ScriptMate Pro` ✅
+- **Android package** — `app.emergent.scriptmate870106af3` ✅ (eas.json / app.json aligned)
+- **Backend `backend/.env`** 🚨 — carried stale override `REVENUECAT_PREMIUM_ENTITLEMENT_ID=ScriptM8 Pro`
+- **Backend `REVENUECAT_SECRET_KEY`** — present as a key in pod `.env` but EMPTY (Live Secrets still unseeded, Issue 2 from prior fork)
+
+### Chain break identified (code-side, provable, fixable)
+`backend/.env::REVENUECAT_PREMIUM_ENTITLEMENT_ID` was not updated during the earlier rename and still carried `ScriptM8 Pro`. Because `revenuecat_client.py::fetch_premium_entitlement` reads the env var first (`os.environ.get(..., DEFAULT_ENTITLEMENT_ID)`), the `.env` override shadowed the correct `ScriptMate Pro` default. Any Premium subscriber hitting `/api/users/{device_id}/revenuecat/sync` therefore produced `is_premium: False` — the backend was looking up a key RevenueCat never emits.
+
+This chain break explains the **backend-sync-after-restore** failure mode (a restored user staying `subscription_tier=free` in Mongo → `/api/rehearsals` returning 403 for Performance/Loop). It does **NOT** explain the on-device "No Purchases Found" alert, which is purely SDK ↔ RevenueCat.
+
+### Code-side fix applied
+- Updated `backend/.env`: `REVENUECAT_PREMIUM_ENTITLEMENT_ID=ScriptMate Pro`
+- Added regression lock `backend/tests/test_revenuecat_env_entitlement_name_feb2026.py` — fails CI if the env drifts away from `ScriptMate Pro` or if `revenuecat_client.py` ever regains a runtime `ScriptM8 Pro` reference (3 tests, all pass)
+
+### Tests run after fix
+```
+backend/tests/test_revenuecat_env_entitlement_name_feb2026.py (new): 3 passed
+backend/tests/test_revenuecat_identity_fix_feb2026.py:              13 passed
+backend/tests/test_premium_downgrade_race_feb2026.py:               11 passed
+backend/tests/test_revenuecat_sync_backend_heal_feb2026.py:          7 passed
+backend/tests/test_frontend_entitlement_audit.py:                   27 passed
+--- Total: 61 passed, 0 failed, 24 warnings (baseline, unchanged) ---
+```
+Backend restarted cleanly post-fix; API `/api/` health check returns 200.
+
+### What this fix changes vs. does NOT change
+- ✅ Fixes: future "restore worked but backend remained free" cases — once RC is correctly returning the entitlement, backend `/revenuecat/sync` will now recognise it
+- ❌ Does NOT fix: the current physical device "No Purchases Found" symptom, because the restore itself is not returning the entitlement from RC
+- ❌ Does NOT require a new APK — this is a `.env` change only
+- Production impact: operator must apply the same `.env` change in Manage Publishing → Secrets (Live) → `REVENUECAT_PREMIUM_ENTITLEMENT_ID=ScriptMate Pro` or remove the override entirely so the code default applies
+
+### Why the on-device symptom is NOT a code bug (evidence)
+`Purchases.restorePurchases()` is a direct SDK ↔ Google Play Billing ↔ RevenueCat round-trip:
+1. SDK calls Google Play `queryPurchases(SUBS)` for package `app.emergent.scriptmate870106af3`
+2. SDK forwards any receipts to RC's `/v1/receipts` endpoint
+3. RC validates with Google (using the configured service-account credentials for this Play app) and matches the purchased SKU against the RC Products list
+4. If the SKU matches a product with the `ScriptMate Pro` entitlement attached → entitlement is granted on the current customer
+5. SDK returns `customerInfo`; frontend checks `entitlements.active['ScriptMate Pro']`
+
+The frontend code at each step is correct and locked by tests. The failure must therefore be in one of:
+- **(a)** Google Play's `queryPurchases()` is returning zero receipts for this package → device-side Play Store state issue (clear Play Store cache / wrong Google account on device)
+- **(b)** RC received the receipt but could not resolve the product to its Products list → RC dashboard product/base-plan mapping (user brief notes `scriptmate_annual:3` is active and `scriptmate_yearly:yearly` is Inactive/monthly — if the real purchase token is for `scriptmate_yearly:yearly`, RC has no mapping to use)
+- **(c)** Package name mismatch between the RC Play Store app and the installed APK → user confirms `app.emergent.scriptmate870106af3` is correct
+
+### Evidence that remains unavailable (manual-only boundary)
+- `REVENUECAT_SECRET_KEY` is empty in the pod. I cannot query `GET https://api.revenuecat.com/v1/subscribers/S23%20Ultra-1790484231681-ngc4o4jc` to confirm which customer / product / entitlement RC has for this user. Emergent has no integration for the Google Play Developer API, no credential to the RC dashboard, and cannot modify either service.
+
+### Exact single next piece of evidence needed
+Open the RevenueCat dashboard → Customer History → search EXACTLY `S23 Ultra-1790484231681-ngc4o4jc` (URL-encode the space as `%20` if the search bar strips spaces). If the customer **does** exist, click into it and inspect the **Transactions** tab — look at the product identifier (not the package name) and the "Entitlement granted" column. If the product identifier is NOT a product RC has listed, or if the product has no entitlement attached, that is the dashboard config to fix. If the customer **does not** exist at all, the restore request never reached RC — have the user open the ScriptMate debug screen and screenshot the `[RevenueCat]` log lines on relaunch; those will show whether the SDK configure call completed and what app user id it registered.
+
+### PASS / FAIL
+- **Code-side chain audit:** PASS (frontend restore chain is correct, backend sync chain was broken by stale `.env` and is now locked)
+- **Automated regression suite after fix:** PASS (61/61)
+- **Physical device "No Purchases Found" symptom:** NOT RESOLVED (requires manual RC dashboard inspection — the single evidence request above)
+- **New APK required tonight?** NO — the fix is `.env` only; the physical restore failure is dashboard/Play side, not code
