@@ -26,6 +26,8 @@ import {
   CharacterVoiceAssignment,
   playSpeech,
   isElevenLabsConfigured,
+  inferGenderFromScript,
+  type GenderInferenceLine,
 } from '../services/elevenLabsService';
 import { DebugLog } from '../services/debugLogService';
 
@@ -42,6 +44,12 @@ interface VoiceAssignmentProps {
   userCharacter: string | null;
   isPremium: boolean;
   onUpgradePress: () => void;
+  // 2026-02 Physical QA Blocker 2 — the dialogue lines feed the
+  // deterministic gender inference used for auto-assignment so a
+  // male character doesn't get a female voice (and vice versa).
+  // Optional for backwards compat: callers that don't pass `lines`
+  // get the old mixed-gender round-robin.
+  lines?: GenderInferenceLine[];
 }
 
 export default function VoiceAssignment({
@@ -50,6 +58,7 @@ export default function VoiceAssignment({
   userCharacter,
   isPremium,
   onUpgradePress,
+  lines,
 }: VoiceAssignmentProps) {
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [showPicker, setShowPicker] = useState(false);
@@ -60,7 +69,12 @@ export default function VoiceAssignment({
 
   const voicesByGender = getVoicesByGender();
 
-  // Auto-assign voices to characters that don't have assignments
+  // Auto-assign voices to characters that don't have assignments.
+  // 2026-02 Physical QA Blocker 2: picks from the gender-matched pool
+  // using a deterministic inference over the script dialogue. If the
+  // inference returns 'unknown' (no clear signal) we fall back to the
+  // pre-existing mixed-gender round-robin so a conservative classifier
+  // can never block assignment.
   const autoAssignVoices = async () => {
     const otherChars = characters.filter(c => c.name !== userCharacter);
     const existingAssignments = await loadVoiceAssignments(scriptId);
@@ -80,26 +94,86 @@ export default function VoiceAssignment({
 
     // Get used voice keys to avoid duplicates
     const usedVoices = new Set(Object.values(existingMap));
-    
-    // Alternate between male and female voices for variety
-    const allVoices = [...voicesByGender.female, ...voicesByGender.male];
-    let voiceIndex = 0;
+
+    // Per-gender rotation pointers so male characters cycle through
+    // the male pool (and vice versa) rather than every character
+    // sharing one global index.
+    const malePool = voicesByGender.male;
+    const femalePool = voicesByGender.female;
+    const mixedPool = [...femalePool, ...malePool];
+    let maleIdx = 0;
+    let femaleIdx = 0;
+    let mixedIdx = 0;
+
+    // Helper: pick the next voice from a pool, skipping already-used
+    // voices. Falls through to the mixed pool when the preferred pool
+    // is exhausted so we never crash on a cast of 15 women.
+    const nextVoiceFromPool = (
+      pool: PresetVoice[],
+      startIdx: number,
+    ): { voice: PresetVoice; nextIdx: number } | null => {
+      if (pool.length === 0) return null;
+      for (let i = 0; i < pool.length; i++) {
+        const idx = (startIdx + i) % pool.length;
+        const v = pool[idx];
+        if (!usedVoices.has(v.key)) {
+          return { voice: v, nextIdx: (idx + 1) % pool.length };
+        }
+      }
+      return null;
+    };
 
     const newAssignments: Record<string, string> = { ...existingMap };
-    
+    const scriptLines: GenderInferenceLine[] = Array.isArray(lines) ? lines : [];
+
     for (const char of otherChars) {
-      if (!newAssignments[char.name]) {
-        // Find next available voice that hasn't been used
-        let attempts = 0;
-        while (usedVoices.has(allVoices[voiceIndex % allVoices.length].key) && attempts < allVoices.length) {
-          voiceIndex++;
-          attempts++;
+      if (newAssignments[char.name]) continue;
+
+      const inference = inferGenderFromScript(char.name, scriptLines);
+      let chosen: PresetVoice | null = null;
+
+      if (inference.gender === 'male') {
+        const picked = nextVoiceFromPool(malePool, maleIdx);
+        if (picked) {
+          chosen = picked.voice;
+          maleIdx = picked.nextIdx;
         }
-        
-        const voice = allVoices[voiceIndex % allVoices.length];
-        newAssignments[char.name] = voice.key;
-        usedVoices.add(voice.key);
-        voiceIndex++;
+      } else if (inference.gender === 'female') {
+        const picked = nextVoiceFromPool(femalePool, femaleIdx);
+        if (picked) {
+          chosen = picked.voice;
+          femaleIdx = picked.nextIdx;
+        }
+      }
+
+      // Fallback 1: inferred pool is exhausted (all voices used)
+      // Fallback 2: inference returned 'unknown'
+      if (!chosen) {
+        const picked = nextVoiceFromPool(mixedPool, mixedIdx);
+        if (picked) {
+          chosen = picked.voice;
+          mixedIdx = picked.nextIdx;
+        }
+      }
+
+      // Last resort: all 26 voices already used — reuse the first
+      // voice in the mixed pool (should essentially never happen).
+      if (!chosen && mixedPool.length > 0) {
+        chosen = mixedPool[0];
+      }
+
+      if (chosen) {
+        newAssignments[char.name] = chosen.key;
+        usedVoices.add(chosen.key);
+        DebugLog.log('DIAGNOSTIC', 'VoiceAssignment', 'VOICE_AUTO_ASSIGN', {
+          scriptId,
+          character: char.name,
+          inferredGender: inference.gender,
+          inferenceConfidence: inference.confidence,
+          inferenceSignals: inference.signals,
+          chosenVoiceKey: chosen.key,
+          chosenVoiceGender: chosen.gender,
+        });
       }
     }
 

@@ -59,6 +59,36 @@ Physical S23 Ultra QA build still exhibited residual DOCX text corruption after 
 
 ## Changelog
 
+### 2026-02 Physical QA Blocker 2 — Character Voice Gender Inference (Feb 2026)
+
+**Problem:** Physical S23 Ultra QA reported that character-aware reader voices were being assigned incorrectly — e.g. a female voice for a male character. Root cause (`frontend/components/VoiceAssignment.tsx`): the auto-assignment loop ran a blind, gender-ignorant round-robin over `[...female, ...male]` voices, so the first character always got a female voice regardless of their actual gender.
+
+**Fix (deterministic, no LLM/network):**
+1. **New pure helper `inferGenderFromScriptPure`** in `frontend/services/elevenLabsPure.ts`:
+   - **Signal priority** (strongest → weakest): honorific/role token in character name → stage-direction pronoun ratio → other-character dialogue pronoun ratio (with a ±1-sentence window around the character's name) → curated first-name allowlist.
+   - **Conservative:** returns `'unknown'` when no signal clears its confidence floor or signals conflict — the caller must then fall back to its mixed-gender rotation.
+   - **Honorific lists:** MR/MRS/MISS/SIR/LORD/LADY/KING/QUEEN/WAITRESS/BOY/GIRL/MAN/WOMAN and ~40 more per side.
+   - **First-name allowlist:** ~100 unambiguous male + ~100 unambiguous female common English names; mixed-gender names (Jordan, Taylor, Alex, Jamie) deliberately excluded.
+2. **`frontend/components/VoiceAssignment.tsx`** — `autoAssignVoices()` now:
+   - Accepts an optional `lines: GenderInferenceLine[]` prop so the inference has dialogue to read.
+   - Runs inference per character and picks from the matching gender pool with its own rotation pointer (male / female / mixed) so a cast of 15 women no longer collides at index 0.
+   - Falls back to the mixed-gender rotation when inference is 'unknown' — same behaviour as before, so backwards compatibility is preserved.
+   - Emits a `VOICE_AUTO_ASSIGN` diagnostic breadcrumb (character → inferred gender → chosen voice) so field reports can confirm the fix.
+3. **`frontend/app/script/[id].tsx`** — threads `lines={currentScript.lines}` into `<VoiceAssignment>`.
+
+**Explicit non-goals:**
+- Does NOT re-assign voices that are already in `script_voice_settings` (manual overrides remain intact).
+- Does NOT infer when `lines` is not supplied (backwards compatible).
+- Does NOT call any LLM, network, or external service.
+
+**Regression coverage:** `scripts/voice_gender_inference_smoketest.js` — 27 pure-Node tests, all green. Covers: honorific tokens (MR./MRS./MISS/WAITRESS/KING/QUEEN/BOY/GIRL/MRS.-with-DET.-prefix), stage-direction pronoun pinning (ALEX-is-male, TAYLOR-is-female), dialogue-window pronoun pinning (CASEY/RILEY with ±1-sentence window), first-name allowlist (JOHN/EMILY), signal priority (honorific overrides pronouns, stage-dir overrides first-name), ambiguous/empty inputs resolve to 'unknown', null/undefined-text lines don't crash. Pre-existing `voice_pipeline_smoketest.js` still 48/48 green.
+
+**TypeScript baseline:** unchanged at 31 pre-existing errors (zero new errors introduced).
+
+**Scope guarantees:** no backend changes, no dependency changes, no other frontend screens touched. Rehearsal playback pipeline unchanged.
+
+
+
 ### 2026-02 SEC-002 — Session enforcement on protected routes
 
 **Problem:** SEC-004 (Feb 2026) hardened only `POST /api/tts/elevenlabs/generate`. Every other protected route (scripts, notes, stats, daily-drill, …) still trusted a client-supplied `user_id` path/query/body parameter, so any caller could read or mutate another user's data by swapping that one field.

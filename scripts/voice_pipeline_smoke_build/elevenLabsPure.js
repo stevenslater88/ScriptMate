@@ -18,6 +18,7 @@ exports.classifyElevenLabsKeyPure = classifyElevenLabsKeyPure;
 exports.resolveVoiceForCharacter = resolveVoiceForCharacter;
 exports.selectProvider = selectProvider;
 exports.uint8ArrayToBase64 = uint8ArrayToBase64;
+exports.inferGenderFromScriptPure = inferGenderFromScriptPure;
 exports.makeAudioCacheKey = makeAudioCacheKey;
 exports.playCharacterLinePure = playCharacterLinePure;
 function readerStyleToElevenLabsSettingsPure(readerStyle, voiceSpeed) {
@@ -137,6 +138,218 @@ function uint8ArrayToBase64(bytes) {
                 '=';
     }
     return output;
+}
+// Honorific / role tokens that pin gender almost always.
+// Match is case-insensitive, word-boundary enforced, and the token
+// may optionally end with a '.' (so "MR." / "MR" both match).
+const MALE_HONORIFICS = [
+    'MR', 'MISTER', 'SIR', 'LORD', 'KING', 'PRINCE', 'DUKE', 'EARL',
+    'BARON', 'COUNT', 'FATHER', 'DAD', 'DADDY', 'PAPA', 'POP',
+    'GRANDPA', 'GRANDFATHER', 'GRANDAD', 'GRANDPAPA',
+    'BROTHER', 'SON', 'HUSBAND', 'BOYFRIEND', 'GROOM',
+    'UNCLE', 'NEPHEW', 'WIDOWER', 'GENTLEMAN', 'BOY',
+    'MAN', 'GUY', 'BLOKE', 'DUDE',
+    'WAITER', 'COWBOY', 'FISHERMAN', 'POLICEMAN',
+    'FIREMAN', 'MAILMAN', 'HANDYMAN', 'SALESMAN',
+    'ACTOR', 'MONK', 'PRIEST', 'FRIAR', 'RABBI',
+];
+const FEMALE_HONORIFICS = [
+    'MRS', 'MISSUS', 'MS', 'MISS', 'MADAM', 'MADAME', 'MA\'AM',
+    'LADY', 'DAME', 'QUEEN', 'PRINCESS', 'DUCHESS', 'COUNTESS',
+    'BARONESS', 'EMPRESS',
+    'MOTHER', 'MOM', 'MOMMY', 'MUMMY', 'MUM', 'MAMA', 'MA',
+    'GRANDMA', 'GRANDMOTHER', 'GRANNY', 'NANA', 'NANNA',
+    'SISTER', 'DAUGHTER', 'WIFE', 'GIRLFRIEND', 'BRIDE',
+    'AUNT', 'AUNTIE', 'AUNTY', 'NIECE', 'WIDOW',
+    'GIRL', 'WOMAN', 'GAL', 'LASS',
+    'WAITRESS', 'COWGIRL', 'POLICEWOMAN', 'FIREWOMAN',
+    'STEWARDESS', 'ACTRESS', 'NUN',
+];
+// Very conservative first-name allowlist. Only common unambiguous
+// English/Western names — anything mixed-gender ("Jordan", "Taylor",
+// "Alex", "Jamie") is deliberately excluded.
+const MALE_FIRST_NAMES = new Set([
+    'JOHN', 'JAMES', 'ROBERT', 'MICHAEL', 'WILLIAM', 'DAVID',
+    'RICHARD', 'JOSEPH', 'THOMAS', 'CHARLES', 'CHRISTOPHER',
+    'DANIEL', 'MATTHEW', 'ANTHONY', 'DONALD', 'MARK', 'PAUL',
+    'STEVEN', 'ANDREW', 'KENNETH', 'GEORGE', 'EDWARD', 'BRIAN',
+    'RONALD', 'KEVIN', 'JASON', 'JEFFREY', 'RYAN', 'GARY',
+    'NICHOLAS', 'ERIC', 'STEPHEN', 'JONATHAN', 'LARRY', 'JUSTIN',
+    'SCOTT', 'FRANK', 'BRANDON', 'BENJAMIN', 'GREGORY', 'SAMUEL',
+    'RAYMOND', 'PATRICK', 'JACK', 'DENNIS', 'JERRY', 'TYLER',
+    'AARON', 'HENRY', 'DOUGLAS', 'PETER', 'ADAM', 'NATHAN',
+    'ZACHARY', 'WALTER', 'HAROLD', 'KYLE', 'CARL', 'ARTHUR',
+    'GERALD', 'ROGER', 'KEITH', 'LAWRENCE', 'JEREMY', 'TERRY',
+    'SEAN', 'CHRISTIAN', 'ETHAN', 'LUCAS', 'NOAH', 'MASON',
+    'LIAM', 'OLIVER', 'ELIJAH', 'LOGAN', 'CALEB', 'HARRY',
+    'TOM', 'TIM', 'DANNY', 'TONY', 'MIKE', 'BOB', 'BILL',
+    'JIMMY', 'JOHNNY', 'JOEY', 'STEVE', 'DAVE', 'RICK',
+    'JEFF', 'CHRIS', 'JAKE', 'BEN', 'MATT', 'ALEXANDER',
+    'HARRISON', 'LEONARD', 'MARCUS', 'VINCENT', 'VICTOR',
+    'OSCAR', 'LEO', 'MAX', 'FELIX', 'HUGO', 'IVAN',
+]);
+const FEMALE_FIRST_NAMES = new Set([
+    'MARY', 'PATRICIA', 'JENNIFER', 'LINDA', 'ELIZABETH', 'BARBARA',
+    'SUSAN', 'JESSICA', 'SARAH', 'KAREN', 'LISA', 'NANCY',
+    'BETTY', 'HELEN', 'SANDRA', 'DONNA', 'CAROL', 'RUTH',
+    'SHARON', 'MICHELLE', 'LAURA', 'EMILY', 'KIMBERLY', 'DEBORAH',
+    'DOROTHY', 'AMY', 'ANGELA', 'ASHLEY', 'BRENDA', 'EMMA',
+    'OLIVIA', 'CYNTHIA', 'MARIE', 'JANET', 'CATHERINE', 'FRANCES',
+    'CHRISTINE', 'SAMANTHA', 'DEBRA', 'RACHEL', 'CAROLYN', 'JANET',
+    'VIRGINIA', 'MARIA', 'HEATHER', 'DIANE', 'JULIE', 'JOYCE',
+    'VICTORIA', 'KELLY', 'CHRISTINA', 'LAUREN', 'JOAN', 'EVELYN',
+    'JUDITH', 'MEGAN', 'CHERYL', 'ANDREA', 'HANNAH', 'JACQUELINE',
+    'MARTHA', 'GLORIA', 'TERESA', 'SARA', 'JANICE', 'JULIA',
+    'MARILYN', 'KATHRYN', 'FRANCES', 'KATHLEEN', 'PAMELA', 'NICOLE',
+    'ABIGAIL', 'MADISON', 'CHARLOTTE', 'SOFIA', 'SOPHIA', 'AVA',
+    'ISABELLA', 'MIA', 'ELLA', 'GRACE', 'CHLOE', 'ZOE',
+    'LILY', 'HAZEL', 'LUCY', 'AMELIA', 'ANNA', 'ANNE',
+    'KATE', 'KATIE', 'JEN', 'JENNY', 'JESS', 'LIZ',
+    'MOLLY', 'BETH', 'JANE', 'JILL', 'PAM', 'SUE',
+    'TINA', 'VICKY', 'WENDY', 'MEG', 'ABBY', 'PENELOPE',
+    'ROSE', 'VIOLET', 'DAISY', 'IRIS', 'RUBY', 'PEARL',
+    'MARGARET', 'ALICE', 'CLAIRE', 'ELAINE', 'ESTHER', 'FIONA',
+]);
+function _splitNameTokens(characterName) {
+    return characterName
+        .toUpperCase()
+        .replace(/[^A-Z'\s.]/g, ' ')
+        .split(/\s+/)
+        .map(t => t.replace(/\.+$/, '').trim())
+        .filter(t => t.length > 0);
+}
+function _honorificSignalFromName(tokens) {
+    // We scan every token (so "DET. MR. SMITH" still finds "MR").
+    for (const tok of tokens) {
+        if (MALE_HONORIFICS.includes(tok))
+            return { gender: 'male', signal: `honorific:${tok}` };
+        if (FEMALE_HONORIFICS.includes(tok))
+            return { gender: 'female', signal: `honorific:${tok}` };
+    }
+    return { gender: 'unknown', signal: null };
+}
+function _firstNameSignal(tokens) {
+    // Pick the first alphabetic token that isn't a known honorific
+    // (we'd already have returned on an honorific hit).
+    for (const tok of tokens) {
+        // Skip pure-honorific tokens so "MRS. SMITH" doesn't try "SMITH".
+        if (MALE_HONORIFICS.includes(tok) || FEMALE_HONORIFICS.includes(tok))
+            continue;
+        if (MALE_FIRST_NAMES.has(tok))
+            return { gender: 'male', signal: `first-name:${tok}` };
+        if (FEMALE_FIRST_NAMES.has(tok))
+            return { gender: 'female', signal: `first-name:${tok}` };
+    }
+    return { gender: 'unknown', signal: null };
+}
+// Count male vs female pronouns in a string.
+function _countPronouns(text) {
+    const t = ` ${text} `;
+    const male = (t.match(/\b(he|him|his|himself)\b/gi) || []).length;
+    const female = (t.match(/\b(she|her|hers|herself)\b/gi) || []).length;
+    return { male, female };
+}
+// Escape a character name for use in a RegExp.
+function _escapeRegex(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+/**
+ * Returns the best inferred gender for a character based on local,
+ * deterministic analysis of the character's name and dialogue lines.
+ * Never calls an LLM, network, or any platform API.
+ *
+ * The function is intentionally conservative — when signals conflict
+ * or no signal clears the confidence floor, it returns 'unknown' so
+ * the caller can fall back to its default (mixed-gender rotation).
+ */
+function inferGenderFromScriptPure(characterName, lines) {
+    const signals = [];
+    const name = (characterName || '').trim();
+    if (!name) {
+        return { gender: 'unknown', confidence: 0, signals: ['empty-name'] };
+    }
+    const tokens = _splitNameTokens(name);
+    // 1. Honorific in name — strongest, bail immediately.
+    const hon = _honorificSignalFromName(tokens);
+    if (hon.gender !== 'unknown' && hon.signal) {
+        signals.push(hon.signal);
+        return { gender: hon.gender, confidence: 0.95, signals };
+    }
+    // 2. Pronoun ratio in stage directions that reference the character.
+    //    Stage directions are strongest because they are narration ABOUT
+    //    the character rather than something the character says.
+    const sdPronouns = { male: 0, female: 0 };
+    const dialoguePronouns = { male: 0, female: 0 };
+    const nameRe = new RegExp(`\\b${_escapeRegex(name)}\\b`, 'i');
+    const upperName = name.toUpperCase();
+    const firstToken = tokens[0];
+    for (const line of lines) {
+        if (!line || typeof line.text !== 'string')
+            continue;
+        const isSd = !!line.is_stage_direction;
+        const isOwnLine = !isSd &&
+            typeof line.character === 'string' &&
+            (line.character.toUpperCase() === upperName ||
+                (firstToken && line.character.toUpperCase() === firstToken));
+        // Stage directions: scan whenever the character is mentioned.
+        if (isSd) {
+            if (nameRe.test(line.text) || (firstToken && new RegExp(`\\b${_escapeRegex(firstToken)}\\b`, 'i').test(line.text))) {
+                const c = _countPronouns(line.text);
+                sdPronouns.male += c.male;
+                sdPronouns.female += c.female;
+            }
+            continue;
+        }
+        // Other characters' dialogue: only count pronouns from a sentence
+        // that mentions this character by name — or the immediately
+        // following sentence, since pronouns often appear in the sentence
+        // AFTER the name ("Where is Casey? He said he'd be here.").
+        if (!isOwnLine) {
+            const sentences = line.text.split(/(?<=[.!?])\s+/);
+            const firstTokenRe = firstToken ? new RegExp(`\\b${_escapeRegex(firstToken)}\\b`, 'i') : null;
+            let mentionedInPrev = false;
+            for (const sent of sentences) {
+                const mentionedHere = nameRe.test(sent) ||
+                    (firstTokenRe !== null && firstTokenRe.test(sent));
+                if (mentionedHere || mentionedInPrev) {
+                    const c = _countPronouns(sent);
+                    dialoguePronouns.male += c.male;
+                    dialoguePronouns.female += c.female;
+                }
+                mentionedInPrev = mentionedHere;
+            }
+        }
+    }
+    // Evaluate stage-direction evidence first.
+    if (sdPronouns.male + sdPronouns.female >= 2) {
+        if (sdPronouns.male >= 2 && sdPronouns.male >= sdPronouns.female * 3) {
+            signals.push(`stage-dir-pronouns:m=${sdPronouns.male},f=${sdPronouns.female}`);
+            return { gender: 'male', confidence: 0.85, signals };
+        }
+        if (sdPronouns.female >= 2 && sdPronouns.female >= sdPronouns.male * 3) {
+            signals.push(`stage-dir-pronouns:m=${sdPronouns.male},f=${sdPronouns.female}`);
+            return { gender: 'female', confidence: 0.85, signals };
+        }
+    }
+    // Then other-character dialogue pronoun evidence.
+    if (dialoguePronouns.male + dialoguePronouns.female >= 3) {
+        if (dialoguePronouns.male >= 3 && dialoguePronouns.male >= dialoguePronouns.female * 3) {
+            signals.push(`dialogue-pronouns:m=${dialoguePronouns.male},f=${dialoguePronouns.female}`);
+            return { gender: 'male', confidence: 0.75, signals };
+        }
+        if (dialoguePronouns.female >= 3 && dialoguePronouns.female >= dialoguePronouns.male * 3) {
+            signals.push(`dialogue-pronouns:m=${dialoguePronouns.male},f=${dialoguePronouns.female}`);
+            return { gender: 'female', confidence: 0.75, signals };
+        }
+    }
+    // 4. First-name allowlist (last-resort heuristic).
+    const fn = _firstNameSignal(tokens);
+    if (fn.gender !== 'unknown' && fn.signal) {
+        signals.push(fn.signal);
+        return { gender: fn.gender, confidence: 0.6, signals };
+    }
+    signals.push('no-signal');
+    return { gender: 'unknown', confidence: 0, signals };
 }
 // ─── CACHE KEY ───────────────────────────────────────────────────────
 function makeAudioCacheKey(voiceId, text) {

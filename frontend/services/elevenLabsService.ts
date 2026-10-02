@@ -57,8 +57,12 @@ import {
   selectProvider as _selectProvider,
   uint8ArrayToBase64 as _uint8ArrayToBase64,
   makeAudioCacheKey as _makeAudioCacheKey,
+  inferGenderFromScriptPure as _inferGenderFromScriptPure,
   type VoiceResolution,
   type Provider,
+  type InferredGender,
+  type GenderInferenceLine,
+  type GenderInferenceResult,
 } from './elevenLabsPure';
 
 // Re-export the pure helpers so rehearsal (and tests) can keep the
@@ -67,7 +71,8 @@ export const resolveVoiceForCharacter = _resolveVoiceForCharacter;
 export const selectProvider = _selectProvider;
 export const uint8ArrayToBase64 = _uint8ArrayToBase64;
 export const makeAudioCacheKey = _makeAudioCacheKey;
-export type { VoiceResolution, Provider };
+export const inferGenderFromScript = _inferGenderFromScriptPure;
+export type { VoiceResolution, Provider, InferredGender, GenderInferenceLine, GenderInferenceResult };
 
 // 2026-02 SCRIPT M8 (Option A backend-proxy refactor)
 // -------------------------------------------------------------------

@@ -492,6 +492,7 @@ export default function ScriptDetailScreen() {
             characters={currentScript.characters}
             userCharacter={selectedCharacter}
             isPremium={isPremium}
+            lines={currentScript.lines}
             onUpgradePress={async () => {
               trackUpgradeTriggered('script_detail_multivoice');
               router.push('/premium');
