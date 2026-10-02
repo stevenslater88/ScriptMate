@@ -259,9 +259,34 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     
     try {
       const response = await axios.get(`${API_BASE_URL}/api/users/${deviceId}/limits`, { timeout: API_TIMEOUT });
-      set({ 
+      const backendIsPremium: boolean = !!response.data.is_premium;
+
+      // ─── 2026-02 Physical QA Blocker — Premium downgrade race ──────────────
+      // The backend is the authoritative long-term source of truth for the
+      // user's subscription tier, but it can lag RevenueCat when the
+      // server-side /subscribe step previously failed (observed symptom
+      // post ScriptM8 Pro → ScriptMate Pro entitlement rename: active RC
+      // subscription, backend row still 'free'). If we unconditionally
+      // overwrite the store's `isPremium` with `backendIsPremium`, a user
+      // whose RC entitlement is active but whose backend row is stale will
+      // see Performance / Loop locked even though they're paid up.
+      //
+      // Fix: when the backend says false, re-ask the local RevenueCat SDK
+      // (and the dev-test flag) before demoting. If either reports an
+      // active entitlement, keep the user premium in the UI. Backend-side
+      // feature gates (check_user_limits()) still enforce real access.
+      let effectiveIsPremium = backendIsPremium;
+      if (!backendIsPremium) {
+        const [devMode, rcPremium] = await Promise.all([
+          isDevTestMode(),
+          checkPremiumAccess(),
+        ]);
+        effectiveIsPremium = devMode || rcPremium;
+      }
+
+      set({
         limits: response.data.limits,
-        isPremium: response.data.is_premium,
+        isPremium: effectiveIsPremium,
       });
     } catch (error: any) {
       console.error('Error fetching limits:', error);
