@@ -2255,6 +2255,119 @@ async def cancel_subscription(
     
     return {"message": "Subscription cancelled. Access continues until end date."}
 
+
+class RevenueCatSyncRequest(BaseModel):
+    """Body for /users/{device_id}/revenuecat/sync.
+
+    SEC-003 (Feb 2026): the backend performs the authoritative RC-REST
+    verification itself. The client can only *ask* the backend to look
+    up its own entitlement — it cannot grant Premium by sending flags.
+    """
+    revenuecat_app_user_id: str
+
+
+@api_router.post("/users/{device_id}/revenuecat/sync")
+async def sync_revenuecat_entitlement(
+    device_id: str,
+    body: RevenueCatSyncRequest,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    """Reconcile the user row with RevenueCat's authoritative state.
+
+    Fixes the Feb-2026 physical-QA Blocker 2 where a user who held an
+    active `ScriptMate Pro` RevenueCat entitlement but whose backend
+    `subscription_tier` was still `free` (because the server-side
+    `/subscribe` step never succeeded under the previously-misnamed
+    `ScriptM8 Pro` entitlement) was 403-rejected by backend feature
+    gates for Performance / Loop rehearsal modes.
+
+    Semantics:
+    * Active entitlement in RC → user row is upserted to premium with
+      the correct `subscription_end` and the caller's RC app_user_id;
+      returns `{synced: true, is_premium: true, ...}`.
+    * No active entitlement → NO mutation; returns
+      `{synced: true, is_premium: false, ...}`. This endpoint cannot
+      demote a legitimately-premium backend row — downgrades are the
+      job of /cancel-subscription or natural subscription_end expiry.
+    * RC unreachable or secret missing → 503 so the client retries
+      later; backend row is NEVER changed on 503.
+
+    SEC-002: path `device_id` must match the authenticated bearer so a
+    caller cannot sync Premium onto another user's row.
+    SEC-003: entitlement is confirmed server-side via `fetch_premium_entitlement`;
+    the client's self-report is NEVER trusted.
+
+    Idempotent — safe to call every launch.
+    """
+    enforce_user_id_match(device_id, authenticated_user_id)
+    user = await db.users.find_one({"device_id": device_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not body.revenuecat_app_user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="revenuecat_app_user_id is required for server-side verification",
+        )
+
+    try:
+        entitlement = await fetch_premium_entitlement(body.revenuecat_app_user_id)
+    except RevenueCatNotConfigured as exc:
+        logger.error("[RC-SYNC] not configured: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Subscription verification is temporarily unavailable",
+        ) from exc
+    except RevenueCatUnavailable as exc:
+        logger.warning("[RC-SYNC] RC unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Subscription verification is temporarily unavailable",
+        ) from exc
+
+    if not entitlement.active:
+        logger.info(
+            "[RC-SYNC] no active entitlement for device_id=%s rc_user=%s",
+            device_id, body.revenuecat_app_user_id,
+        )
+        return {
+            "synced": True,
+            "is_premium": False,
+            "subscription_end": None,
+        }
+
+    # Active entitlement → upsert premium.
+    now = datetime.utcnow()
+    sub_end = entitlement.expires_at
+    if sub_end is None:
+        # Lifetime entitlement — far-future sentinel so downstream
+        # expiry checks (`datetime.utcnow() > subscription_end`) stay
+        # false. Mirrors the convention in /subscribe above.
+        sub_end = now + timedelta(days=36500)
+    else:
+        sub_end = sub_end.astimezone(timezone.utc).replace(tzinfo=None)
+
+    await db.users.update_one(
+        {"device_id": device_id},
+        {"$set": {
+            "subscription_tier": "premium",
+            "subscription_end": sub_end,
+            "revenuecat_app_user_id": body.revenuecat_app_user_id,
+            "updated_at": now,
+        }},
+    )
+
+    logger.info(
+        "[RC-SYNC] lifted device_id=%s to premium (expires=%s)",
+        device_id, sub_end.isoformat(),
+    )
+
+    return {
+        "synced": True,
+        "is_premium": True,
+        "subscription_end": sub_end.isoformat(),
+    }
+
 # ==================== SCRIPT ROUTES ====================
 
 @api_router.post("/scripts", response_model=Script)

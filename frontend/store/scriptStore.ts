@@ -168,6 +168,7 @@ interface ScriptStore {
   subscribe: (plan: string) => Promise<boolean>;
   setRegion: (region: string) => void;
   refreshPremiumStatus: () => Promise<void>; // Refresh after purchase
+  syncRevenueCatEntitlement: () => Promise<void>; // Backend self-heal when RC says premium but backend row is stale free
   
   // Script Actions
   fetchScripts: () => Promise<void>;
@@ -246,6 +247,21 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       
       // Fetch limits and subscription plans
       await get().fetchUserLimits();
+
+      // 2026-02 Physical QA Blocker 2 — if the client-side RevenueCat
+      // SDK reports an active entitlement but the backend row has
+      // never been marked premium (observed symptom: a user whose
+      // purchase pre-dated the ScriptM8 Pro → ScriptMate Pro rename,
+      // so /subscribe never completed), ask the backend to self-heal.
+      // The backend verifies the entitlement authoritatively via SEC-003
+      // RC-REST before writing anything. Fire-and-forget so UI load
+      // doesn't block on the extra round-trip.
+      if (rcPremium && user.subscription_tier !== 'premium') {
+        get().syncRevenueCatEntitlement().catch((err) => {
+          console.warn('[ScriptStore] syncRevenueCatEntitlement failed (non-fatal)', err);
+        });
+      }
+
       await get().fetchSubscriptionPlans();
     } catch (error: any) {
       console.error('Error initializing user:', error);
@@ -396,6 +412,48 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       set({ isPremium: backendPremium || devMode || rcPremium });
     } catch (error) {
       console.error('[ScriptStore] Error refreshing premium status:', error);
+    }
+  },
+
+  // 2026-02 Physical QA Blocker 2 — backend self-heal entry point.
+  // Asks the backend to re-fetch this device's RevenueCat entitlement
+  // via SEC-003 server-side verification and lift subscription_tier
+  // to 'premium' if active. Repairs the stale-free-row state that
+  // caused Performance/Loop rehearsal modes to 403 even when the user
+  // held an active ScriptMate Pro entitlement.
+  //
+  // Idempotent and safe to call on every launch — the backend never
+  // demotes an already-premium row from this endpoint.
+  syncRevenueCatEntitlement: async () => {
+    const { deviceId } = get();
+    if (!deviceId) return;
+
+    try {
+      const Purchases = (await import('react-native-purchases')).default;
+      const revenuecat_app_user_id = await Purchases.getAppUserID();
+      if (!revenuecat_app_user_id) {
+        console.log('[ScriptStore] syncRevenueCatEntitlement: no RC app_user_id, skipping');
+        return;
+      }
+
+      const response = await axios.post(
+        `${API_BASE_URL}/api/users/${deviceId}/revenuecat/sync`,
+        { revenuecat_app_user_id },
+        { timeout: API_TIMEOUT },
+      );
+
+      if (response.data?.is_premium) {
+        console.log('[ScriptStore] syncRevenueCatEntitlement: lifted backend to premium');
+        set({ isPremium: true });
+        // Re-fetch limits so PREMIUM_TIER_LIMITS (unlimited scripts,
+        // all modes, etc.) replace FREE_TIER_LIMITS in the store.
+        await get().fetchUserLimits();
+      }
+    } catch (err: any) {
+      // Silent: next launch will retry. Backend 404/503 are both
+      // non-fatal — the client-side RC fallback in fetchUserLimits
+      // keeps UI unlocked while we wait.
+      console.warn('[ScriptStore] syncRevenueCatEntitlement failed', err?.response?.status ?? err?.message);
     }
   },
 
