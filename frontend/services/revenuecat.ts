@@ -159,9 +159,25 @@ export interface PurchaseResult {
 }
 
 /**
- * Purchase a package
+ * Purchase a package.
+ *
+ * 2026-02: when Google Play / RevenueCat returns a "product already
+ * owned" error (typically because the user previously subscribed on
+ * this same Play account and the backend row is stale, OR because the
+ * SDK's cached customerInfo missed the entitlement) we automatically
+ * invoke `restorePurchases()` EXACTLY ONCE and surface the restore
+ * outcome instead of the raw error. This prevents the user from
+ * seeing "You already own this product" with no recovery path.
+ *
+ * The recovery is strictly single-shot — the recursive call uses
+ * `_isAutoRestoreRetry = true` so restore itself never attempts a
+ * further purchase/restore chain. Normal purchases continue
+ * unchanged.
  */
-export const purchasePackage = async (pkg: PurchasesPackage): Promise<PurchaseResult> => {
+export const purchasePackage = async (
+  pkg: PurchasesPackage,
+  _isAutoRestoreRetry: boolean = false,
+): Promise<PurchaseResult> => {
   if (!isRevenueCatConfigured()) {
     return { success: false, error: 'RevenueCat not configured' };
   }
@@ -189,6 +205,40 @@ export const purchasePackage = async (pkg: PurchasesPackage): Promise<PurchaseRe
     if (purchaseError.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) {
       console.log('[RevenueCat] Purchase cancelled by user');
       return { success: false, cancelled: true, errorCode: purchaseError.code };
+    }
+
+    // 2026-02 Auto-recovery: Google Play says the product is already
+    // owned. Try `restorePurchases()` once to re-attach the existing
+    // entitlement to the current RC customer. Guarded so we never
+    // recurse — the retry flag is only set by this branch.
+    const isAlreadyOwned =
+      purchaseError.code === PURCHASES_ERROR_CODE.PRODUCT_ALREADY_PURCHASED_ERROR ||
+      purchaseError.code === PURCHASES_ERROR_CODE.RECEIPT_ALREADY_IN_USE_ERROR;
+    if (isAlreadyOwned && !_isAutoRestoreRetry) {
+      console.log('[RevenueCat] Purchase reported already-owned — attempting one-shot restore');
+      try {
+        const restored = await restorePurchases();
+        if (restored.success && restored.restored && restored.customerInfo) {
+          console.log('[RevenueCat] Auto-restore after already-owned succeeded');
+          return {
+            success: true,
+            customerInfo: restored.customerInfo,
+            restored: true,
+          };
+        }
+        // Restore ran but found nothing — surface a helpful hint
+        // rather than the raw "already own this product" message.
+        return {
+          success: false,
+          error:
+            restored.error ||
+            'This subscription is attached to a different account. Try signing in with the Google account you originally purchased with.',
+          errorCode: purchaseError.code,
+        };
+      } catch (restoreErr) {
+        console.warn('[RevenueCat] Auto-restore after already-owned failed', restoreErr);
+        // Fall through to the original error path.
+      }
     }
 
     console.error('[RevenueCat] Purchase error:', purchaseError.message);

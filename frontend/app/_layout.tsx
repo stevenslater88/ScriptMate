@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet, Platform, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Device from 'expo-device';
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { AuthProvider } from '../contexts/AuthContext';
 import { logError } from '../services/debugService';
@@ -21,6 +23,43 @@ import { DebugLog } from '../services/debugLogService';
 // BUILD FINGERPRINT — unique string to prove this code is in the compiled build.
 // If you see this on the debug screen, the code is present. If not, the build is stale.
 export const BUILD_FINGERPRINT = 'SM8-1110-QA';
+
+// ─── STABLE REVENUECAT APP USER ID ────────────────────────────────────
+// 2026-02 Physical QA Blocker — the previous build called
+// `Purchases.configure({ apiKey })` with no appUserID, so RevenueCat
+// generated a brand-new `$RCAnonymousID:<uuid>` on every reinstall.
+// That broke restorePurchases(): the Google Play subscription stays
+// attached to the ORIGINAL anonymous id, and the fresh install's new
+// anonymous id has no entitlements → "No Purchases Found".
+//
+// Fix: use the same `device_id` the rest of the app already treats as
+// the user identifier (same key as `store/scriptStore.ts::getDeviceId`,
+// and the key the backend expects as `revenuecat_app_user_id`). This
+// is stable across normal app restarts.
+//
+// LIMITATION — intentionally documented: AsyncStorage is wiped on
+// uninstall / Clear App Data. A reinstall will mint a new device_id
+// (and therefore a new RC id). Recovering a subscription attached to
+// the previous device_id requires either (a) RevenueCat dashboard
+// transfer_behavior = TRANSFER_TO_CURRENT_USER, or (b) a stable
+// cross-install login (Google Sign-In) which is out of scope for
+// this patch per the standing "no new auth architecture" rule.
+async function getStableRevenueCatAppUserId(): Promise<string> {
+  try {
+    const existing = await AsyncStorage.getItem('device_id');
+    if (existing) return existing;
+    // First launch — mint a device id with the same shape used by
+    // scriptStore so a later getDeviceId() call reads this very row.
+    const uniq = Device.modelId || Device.deviceName || 'unknown';
+    const fresh = `${uniq}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await AsyncStorage.setItem('device_id', fresh);
+    return fresh;
+  } catch {
+    // AsyncStorage unavailable (edge case) — return a fallback so the
+    // RC configure call still succeeds; the next launch will retry.
+    return `fallback-${Date.now()}`;
+  }
+}
 
 // ─── GLOBAL ERROR HANDLERS ───────────────────────────────────────────────
 // Install once at module load. Captures uncaught JS errors and unhandled
@@ -146,10 +185,33 @@ export default function RootLayout() {
           return;
         }
 
-        // Configure RevenueCat
-        await Purchases.configure({ apiKey });
+        // Configure RevenueCat with the stable, device-persisted app
+        // user id so purchases survive app restarts and are picked up
+        // by restorePurchases() under the SAME identity the backend
+        // uses for /revenuecat/sync. Idempotent on normal relaunch:
+        // the deviceId is read from the same AsyncStorage row every
+        // time, so the RC customer never flaps.
+        const stableAppUserId = await getStableRevenueCatAppUserId();
+        await Purchases.configure({ apiKey, appUserID: stableAppUserId });
         markRevenueCatConfigured();
-        
+
+        // Idempotency safety net: on some SDK versions `configure`
+        // is a no-op when called twice, so if a previous launch had
+        // already configured anonymously, the current RC customer
+        // may still be `$RCAnonymousID:*`. In that case issue a one
+        // -shot `logIn(stableAppUserId)` to alias the anonymous
+        // subscriber onto the stable id (RC's alias semantics
+        // migrate the anonymous purchases automatically).
+        try {
+          const currentId = await Purchases.getAppUserID();
+          if (currentId && currentId !== stableAppUserId) {
+            console.log(`[RevenueCat] Aliasing anonymous ${currentId.substring(0, 20)}... -> stable id`);
+            await Purchases.logIn(stableAppUserId);
+          }
+        } catch (loginErr) {
+          console.warn('[RevenueCat] logIn fallback failed (non-fatal):', loginErr);
+        }
+
         console.log(`[RevenueCat] ${Platform.OS} configured successfully (${__DEV__ ? 'DEV' : 'PROD'} mode)`);
 
         // Set user ID for Sentry tracking
