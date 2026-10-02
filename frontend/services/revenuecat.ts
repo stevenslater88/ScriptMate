@@ -8,6 +8,27 @@ import Purchases, {
   PURCHASES_ERROR_CODE,
 } from 'react-native-purchases';
 import { AppConfig } from './appConfig';
+import { DebugLog } from './debugLogService';
+
+// 2026-02 Overnight RC investigation (S23 Ultra "No Purchases Found"):
+// the physical diagnostic report contained ZERO RevenueCat events —
+// the entire RC chain previously logged only via `console.log`
+// (logcat-only) and `Sentry.addBreadcrumb` (dashboard-only), neither
+// of which is included in `DebugLog.getLogs()` → `RECENT LOG` in the
+// exported ChatGPT report. These `DebugLog.log('PURCHASE_EVENT', ...)`
+// calls are PURELY ADDITIVE instrumentation: they do not change any
+// RC SDK behaviour, do not add network calls, and `DebugLog` already
+// masks `apiKey` / `token` / `purchase_token` / `receipt` fields at
+// write time. See
+// `backend/tests/test_revenuecat_debuglog_instrumentation_feb2026.py`
+// for the regression lock.
+const _rcLog = (event: string, metadata?: Record<string, unknown>): void => {
+  try {
+    DebugLog.log('PURCHASE_EVENT', 'RevenueCat', event, metadata);
+  } catch {
+    // DebugLog must never crash the RC chain; swallow silently.
+  }
+};
 
 // RevenueCat API Keys — resolved from centralized config (env → extra → hardcoded)
 const REVENUECAT_APPLE_API_KEY = AppConfig.REVENUECAT_APPLE_API_KEY;
@@ -216,6 +237,11 @@ export const purchasePackage = async (
       purchaseError.code === PURCHASES_ERROR_CODE.RECEIPT_ALREADY_IN_USE_ERROR;
     if (isAlreadyOwned && !_isAutoRestoreRetry) {
       console.log('[RevenueCat] Purchase reported already-owned — attempting one-shot restore');
+      _rcLog('PURCHASE_ALREADY_OWNED_AUTO_RESTORE_TRIGGERED', {
+        productId: pkg.product?.identifier,
+        packageId: pkg.identifier,
+        errorCode: purchaseError.code,
+      });
       try {
         const restored = await restorePurchases();
         if (restored.success && restored.restored && restored.customerInfo) {
@@ -269,12 +295,37 @@ export const purchasePackage = async (
  */
 export const restorePurchases = async (): Promise<PurchaseResult> => {
   if (!isRevenueCatConfigured()) {
+    _rcLog('RESTORE_ABORTED', { reason: 'rc_not_configured' });
     return { success: false, error: 'RevenueCat not configured' };
   }
 
+  _rcLog('RESTORE_START', {});
   try {
     const customerInfo = await Purchases.restorePurchases();
+    const activeEntitlementIds = Object.keys(customerInfo.entitlements.active || {});
+    const activeSubs = Array.isArray(customerInfo.activeSubscriptions)
+      ? customerInfo.activeSubscriptions
+      : [];
+    const nonSubsTxns = Array.isArray(customerInfo.nonSubscriptionTransactions)
+      ? customerInfo.nonSubscriptionTransactions.map(t => ({
+          productId: t.productIdentifier,
+          purchaseDate: t.purchaseDate,
+        }))
+      : [];
     const isPremium = customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
+
+    _rcLog('RESTORE_RESULT', {
+      isPremium,
+      lookupKey: PREMIUM_ENTITLEMENT_ID,
+      originalAppUserId: customerInfo.originalAppUserId,
+      activeEntitlementIds,
+      activeSubscriptionsCount: activeSubs.length,
+      activeSubscriptions: activeSubs,
+      nonSubscriptionTransactionsCount: nonSubsTxns.length,
+      nonSubscriptionTransactions: nonSubsTxns,
+      firstSeen: customerInfo.firstSeen,
+      requestDate: customerInfo.requestDate,
+    });
 
     if (isPremium) {
       console.log('[RevenueCat] Purchases restored successfully');
@@ -290,6 +341,12 @@ export const restorePurchases = async (): Promise<PurchaseResult> => {
   } catch (error) {
     const purchaseError = error as PurchasesError;
     console.error('[RevenueCat] Restore error:', purchaseError.message);
+    _rcLog('RESTORE_ERROR', {
+      errorCode: purchaseError.code,
+      errorMessage: purchaseError.message,
+      underlyingErrorMessage: (purchaseError as any).underlyingErrorMessage,
+      userCancelled: (purchaseError as any).userCancelled,
+    });
     return {
       success: false,
       error: purchaseError.message || 'Failed to restore purchases.',

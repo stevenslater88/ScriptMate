@@ -18,6 +18,7 @@ import { useScriptStore } from '../store/scriptStore';
 import { useRevenueCat } from '../hooks/useRevenueCat';
 import * as Localization from 'expo-localization';
 import { PurchasesPackage } from 'react-native-purchases';
+import { DebugLog } from '../services/debugLogService';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PREMIUM FEATURES - Value-Driven Copy
@@ -212,9 +213,19 @@ export default function PremiumScreen() {
   };
 
   const handleRestore = async () => {
+    // 2026-02 Overnight RC investigation: anchor the restore chain
+    // in `DebugLog` so the diagnostic report shows the user actually
+    // pressed Restore AND the subsequent SDK events.
+    DebugLog.buttonPress('restore-purchases-btn', 'PremiumScreen');
+    DebugLog.log('PURCHASE_EVENT', 'RevenueCat', 'USER_RESTORE_TAPPED', {});
     setLoading(true);
     const result = await restore();
     setLoading(false);
+    DebugLog.log('PURCHASE_EVENT', 'RevenueCat', 'USER_RESTORE_ALERT_SHOWN', {
+      success: result.success,
+      restored: result.restored,
+      hasError: !!result.error,
+    });
     
     if (result.success && result.restored) {
       Alert.alert('Restored!', 'Your purchase has been restored.');

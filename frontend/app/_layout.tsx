@@ -156,13 +156,34 @@ export default function RootLayout() {
   // Initialize RevenueCat on app start
   // ZERO ABSTRACTION: API key is a literal string in this function body.
   // No imports, no resolution functions, no process.env, no Constants.expoConfig.
+  //
+  // 2026-02 Overnight RC investigation (S23 Ultra "No Purchases Found"):
+  // the physical diagnostic report contained ZERO RevenueCat events.
+  // The `rcDebugLog` helper mirrors every operational step into
+  // `DebugLog` so the next exported report shows the exact point
+  // where configure / logIn / offerings / customerInfo breaks.
+  // Behaviour is unchanged — the helper is a wrapper around
+  // `DebugLog.log('PURCHASE_EVENT', 'RevenueCat', ...)` and swallows
+  // its own errors so it cannot destabilise RC init.
+  const rcDebugLog = (event: string, metadata?: Record<string, unknown>): void => {
+    try {
+      DebugLog.log('PURCHASE_EVENT', 'RevenueCat', event, metadata);
+    } catch { /* never crash init */ }
+  };
   useEffect(() => {
     const initRevenueCat = async () => {
       // Skip on web
       if (Platform.OS === 'web') {
         console.log('[RevenueCat] Web platform - skipping initialization');
+        rcDebugLog('INIT_SKIPPED_WEB', { platform: Platform.OS });
         return;
       }
+
+      rcDebugLog('INIT_START', {
+        platform: Platform.OS,
+        buildFingerprint: BUILD_FINGERPRINT,
+        buildId: BUILD_ID,
+      });
 
       try {
         if (__DEV__) {
@@ -181,6 +202,10 @@ export default function RootLayout() {
 
         if (!apiKey || apiKey.length < 10) {
           console.warn('[RevenueCat] Invalid or missing API key');
+          rcDebugLog('INIT_INVALID_API_KEY', {
+            platform: Platform.OS,
+            keyLength: apiKey?.length ?? 0,
+          });
           logRevenueCatInitError('Invalid or missing API key');
           return;
         }
@@ -192,8 +217,15 @@ export default function RootLayout() {
         // the deviceId is read from the same AsyncStorage row every
         // time, so the RC customer never flaps.
         const stableAppUserId = await getStableRevenueCatAppUserId();
+        rcDebugLog('CONFIGURE_START', {
+          platform: Platform.OS,
+          apiKeyPrefix: apiKey.substring(0, 5),
+          apiKeyLength: apiKey.length,
+          stableAppUserId,
+        });
         await Purchases.configure({ apiKey, appUserID: stableAppUserId });
         markRevenueCatConfigured();
+        rcDebugLog('CONFIGURE_SUCCESS', { stableAppUserId });
 
         // Idempotency safety net: on some SDK versions `configure`
         // is a no-op when called twice, so if a previous launch had
@@ -204,12 +236,27 @@ export default function RootLayout() {
         // migrate the anonymous purchases automatically).
         try {
           const currentId = await Purchases.getAppUserID();
+          rcDebugLog('APPUSERID_AFTER_CONFIGURE', {
+            currentId,
+            stableAppUserId,
+            matchesStable: currentId === stableAppUserId,
+            isAnonymous: typeof currentId === 'string' && currentId.startsWith('$RCAnonymousID'),
+          });
           if (currentId && currentId !== stableAppUserId) {
             console.log(`[RevenueCat] Aliasing anonymous ${currentId.substring(0, 20)}... -> stable id`);
-            await Purchases.logIn(stableAppUserId);
+            rcDebugLog('LOGIN_ALIAS_START', { fromId: currentId, toId: stableAppUserId });
+            const loginResult = await Purchases.logIn(stableAppUserId);
+            rcDebugLog('LOGIN_ALIAS_RESULT', {
+              created: loginResult.created,
+              resolvedAppUserId: loginResult.customerInfo?.originalAppUserId,
+              activeEntitlementIds: Object.keys(loginResult.customerInfo?.entitlements?.active || {}),
+            });
           }
         } catch (loginErr) {
           console.warn('[RevenueCat] logIn fallback failed (non-fatal):', loginErr);
+          rcDebugLog('LOGIN_ALIAS_ERROR', {
+            errorMessage: loginErr instanceof Error ? loginErr.message : String(loginErr),
+          });
         }
 
         console.log(`[RevenueCat] ${Platform.OS} configured successfully (${__DEV__ ? 'DEV' : 'PROD'} mode)`);
@@ -228,28 +275,63 @@ export default function RootLayout() {
         try {
           const offerings = await Purchases.getOfferings();
           updateOfferingsCache(offerings);
-          
+
+          const currentOfferingId = offerings.current?.identifier;
+          const currentPkgs = offerings.current?.availablePackages?.map(p => ({
+            packageId: p.identifier,
+            productId: p.product?.identifier,
+            priceString: p.product?.priceString,
+            subscriptionPeriod: p.product?.subscriptionPeriod,
+          })) ?? [];
+          rcDebugLog('OFFERINGS_LOADED', {
+            currentOfferingId,
+            currentPackagesCount: currentPkgs.length,
+            currentPackages: currentPkgs,
+            allOfferingIds: Object.keys(offerings.all || {}),
+          });
+
           // Check product availability
           const productCheck = await checkProductAvailability();
           if (!productCheck.allPresent) {
             console.warn('[RevenueCat] Missing products:', productCheck.missing);
+            rcDebugLog('PRODUCTS_MISSING', { missing: productCheck.missing });
           }
         } catch (offeringsError) {
           console.warn('[RevenueCat] Failed to fetch offerings:', offeringsError);
+          rcDebugLog('OFFERINGS_ERROR', {
+            errorMessage: offeringsError instanceof Error ? offeringsError.message : String(offeringsError),
+          });
         }
 
         // Get customer info
         try {
           const customerInfo = await Purchases.getCustomerInfo();
           updateCustomerInfoCache(customerInfo);
+          rcDebugLog('CUSTOMERINFO_LOADED', {
+            originalAppUserId: customerInfo.originalAppUserId,
+            activeEntitlementIds: Object.keys(customerInfo.entitlements?.active || {}),
+            allEntitlementIds: Object.keys(customerInfo.entitlements?.all || {}),
+            activeSubscriptionsCount: Array.isArray(customerInfo.activeSubscriptions)
+              ? customerInfo.activeSubscriptions.length
+              : 0,
+            activeSubscriptions: Array.isArray(customerInfo.activeSubscriptions)
+              ? customerInfo.activeSubscriptions
+              : [],
+            firstSeen: customerInfo.firstSeen,
+            requestDate: customerInfo.requestDate,
+          });
         } catch (e) {
           console.warn('[RevenueCat] Failed to get customer info:', e);
+          rcDebugLog('CUSTOMERINFO_ERROR', {
+            errorMessage: e instanceof Error ? e.message : String(e),
+          });
         }
         
       } catch (error) {
         // Log error but don't crash the app
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error('[RevenueCat] Configuration error:', errorMessage);
+        rcDebugLog('INIT_ERROR', { errorMessage });
         logError('RevenueCat Init', error instanceof Error ? error : new Error(errorMessage));
         logRevenueCatInitError(errorMessage);
         captureRevenueCatError(error instanceof Error ? error : new Error(errorMessage), {

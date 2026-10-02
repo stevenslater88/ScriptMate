@@ -2123,3 +2123,110 @@ Open the RevenueCat dashboard → Customer History → search EXACTLY `S23 Ultra
 - **Automated regression suite after fix:** PASS (61/61)
 - **Physical device "No Purchases Found" symptom:** NOT RESOLVED (requires manual RC dashboard inspection — the single evidence request above)
 - **New APK required tonight?** NO — the fix is `.env` only; the physical restore failure is dashboard/Play side, not code
+
+## 2026-02 — Overnight RC Investigation (Phase 2): DebugLog Instrumentation
+
+### Why
+The physical diagnostic report pasted back from the S23 Ultra contained
+ZERO RevenueCat events — only ElevenLabs / audio activity and a separate
+`playSpeech returned null` error. Read-only static audit proved the gap
+was observability, not behaviour:
+
+* `services/diagnosticsService.ts::formatChatGPTDiagnosticReport` builds
+  its `RECENT LOG` section strictly from `DebugLog.getLogs()`.
+* The entire RevenueCat chain previously logged via `console.log`
+  (logcat-only) and `Sentry.addBreadcrumb` (Sentry dashboard-only). It
+  never wrote to `DebugLog`.
+* Result: no matter what RC did on the device, the exported report
+  could not contain any RC events — making it impossible to determine
+  from the user's own diagnostic whether configure, logIn,
+  restorePurchases, or the entitlement lookup was the failing step.
+
+The diagnosticsService did maintain in-memory `revenueCatInitError`,
+`offerings`, and `customerInfo` snapshots, but those are NOT emitted
+by `formatChatGPTDiagnosticReport` — only `DebugLog` entries are.
+
+### Change (purely additive, no RC behaviour change)
+Added `DebugLog.log('PURCHASE_EVENT', 'RevenueCat', <event>, <meta>)`
+instrumentation across every RC-chain step, each wrapped so a DebugLog
+failure can never destabilise RC init / restore:
+
+**`frontend/app/_layout.tsx` (init chain):**
+`INIT_START` · `CONFIGURE_START` · `CONFIGURE_SUCCESS` ·
+`APPUSERID_AFTER_CONFIGURE` · `LOGIN_ALIAS_START` ·
+`LOGIN_ALIAS_RESULT` · `LOGIN_ALIAS_ERROR` · `OFFERINGS_LOADED` ·
+`OFFERINGS_ERROR` · `PRODUCTS_MISSING` · `CUSTOMERINFO_LOADED` ·
+`CUSTOMERINFO_ERROR` · `INIT_ERROR` · `INIT_INVALID_API_KEY` ·
+`INIT_SKIPPED_WEB`.
+
+**`frontend/services/revenuecat.ts` (restore / purchase chain):**
+`RESTORE_START` · `RESTORE_RESULT` (with `activeEntitlementIds`,
+`lookupKey`, `originalAppUserId`, `activeSubscriptions`,
+`nonSubscriptionTransactions`, `firstSeen`, `requestDate`) ·
+`RESTORE_ERROR` · `RESTORE_ABORTED` ·
+`PURCHASE_ALREADY_OWNED_AUTO_RESTORE_TRIGGERED`.
+
+**`frontend/app/premium.tsx` (UI anchor):**
+`DebugLog.buttonPress('restore-purchases-btn', ...)` ·
+`USER_RESTORE_TAPPED` · `USER_RESTORE_ALERT_SHOWN` (with which of
+Restored / No Purchases Found / Error alert was shown).
+
+### Safety guarantees
+* The `rcDebugLog` (in `_layout.tsx`) and `_rcLog` (in
+  `services/revenuecat.ts`) helpers both wrap `DebugLog.log` in
+  try/catch so a DebugLog failure never destabilises RC.
+* `DebugLog.maskSensitiveData` already masks keys matching
+  `apiKey`, `token`, `secret`, `auth`, `bearer`, `purchase_token`,
+  `credential`, `private`, `session` before persistence.
+* The `addCustomerInfoUpdateListener` listener is untouched — no new
+  listener registrations, no new network calls.
+* All existing `console.log` lines are preserved for logcat parity.
+
+### Regression lock
+`backend/tests/test_revenuecat_debuglog_instrumentation_feb2026.py`
+asserts every required event name exists, both helpers are
+crash-safe, and the `RESTORE_RESULT` payload carries the five fields
+needed to pinpoint the chain break (10 tests, all pass).
+
+### Baseline parity verified
+* 71/71 RC regression tests pass (10 new + 61 existing).
+* TypeScript errors: 31 (identical to the frozen pre-existing
+  baseline — ZERO new errors introduced by the instrumentation).
+* Backend lint baseline: untouched per directive.
+* No new dependencies, no lockfile regeneration.
+
+### What the next physical diagnostic report will show
+When the next APK includes this instrumentation and the user taps
+Restore on the physical device, the exported ChatGPT report's
+`RECENT LOG` section will contain a timestamped RC chain that
+pinpoints the exact break:
+
+```
+[PURCHASE_EVENT] RevenueCat: INIT_START { platform, buildFingerprint }
+[PURCHASE_EVENT] RevenueCat: CONFIGURE_START { apiKeyPrefix, stableAppUserId }
+[PURCHASE_EVENT] RevenueCat: CONFIGURE_SUCCESS { stableAppUserId }
+[PURCHASE_EVENT] RevenueCat: APPUSERID_AFTER_CONFIGURE { currentId, matchesStable, isAnonymous }
+[PURCHASE_EVENT] RevenueCat: OFFERINGS_LOADED { currentOfferingId, currentPackages: [{productId, priceString, ...}], allOfferingIds }
+[PURCHASE_EVENT] RevenueCat: CUSTOMERINFO_LOADED { originalAppUserId, activeEntitlementIds, activeSubscriptions, ... }
+[BUTTON_PRESS] PremiumScreen: Button pressed: restore-purchases-btn
+[PURCHASE_EVENT] RevenueCat: USER_RESTORE_TAPPED {}
+[PURCHASE_EVENT] RevenueCat: RESTORE_START {}
+[PURCHASE_EVENT] RevenueCat: RESTORE_RESULT { isPremium: false, lookupKey: "ScriptMate Pro", originalAppUserId, activeEntitlementIds: [...], activeSubscriptions: [...], nonSubscriptionTransactions: [...] }
+[PURCHASE_EVENT] RevenueCat: USER_RESTORE_ALERT_SHOWN { success: true, restored: false }
+```
+
+This immediately reveals whether:
+* `activeSubscriptions` is empty — Google Play `queryPurchases()` is
+  returning nothing (device-side Play state issue).
+* `activeSubscriptions` has a SKU but `activeEntitlementIds` is empty
+  — RC Products dashboard has no mapping for the SKU in the receipt.
+* `activeEntitlementIds` contains a different name than
+  `"ScriptMate Pro"` — RC dashboard entitlement rename drift.
+* RC_ERROR fires before `RESTORE_RESULT` — RC backend / network
+  failure.
+
+### APK required?
+YES, specifically for this instrumentation to appear in the next
+physical diagnostic. No new RC configuration, no new secrets, no
+Google Play changes required.
+
