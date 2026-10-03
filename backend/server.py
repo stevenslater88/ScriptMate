@@ -1476,6 +1476,40 @@ def _normalize_cue(s: str) -> str:
     return s.strip(_INVISIBLE_TRAILERS)
 
 
+# ─── 2026-02 PHYSICAL BUILD — NUMBERED CHARACTER-CUE NORMALISATION ───
+# PyPDF2 extraction of theater/stage-play PDFs with embedded line
+# numbers (common formatting aid for actors) produces character cues
+# with a leading numeric prefix:
+#
+#     "1 JACK"      -> "JACK"
+#     "2 EMILY"     -> "EMILY"
+#     "61 — JACK"   -> "JACK"   (em-dash U+2014)
+#     "192 - JACK"  -> "JACK"   (ASCII hyphen)
+#     "1. JACK"     -> "JACK"
+#     "3  BELLA"    -> "BELLA"  (multiple spaces)
+#
+# Pattern: one-or-more leading digits, followed by at least ONE
+# separator character from {space, dot, hyphen, en-dash U+2013,
+# em-dash U+2014}, followed by a non-digit remainder.
+#
+# Conservative: the leading-separator requirement is intentional so
+# that purely-numeric strings ("100"), digit-letter concatenations
+# ("J4CK"), and names with trailing numbers ("SARAH 2") are NEVER
+# modified. The function returns the input unchanged when it does not
+# match the pattern or when stripping would produce an empty string.
+_LEADING_LINE_NUMBER_RE = re.compile(r"^\d+[\s.\-\u2013\u2014]+")
+
+
+def _strip_leading_line_number(s: str) -> str:
+    """Strip a leading page/line number from a PyPDF2-extracted
+    character cue. See `_LEADING_LINE_NUMBER_RE` block comment for
+    the exact pattern and conservative guards."""
+    candidate = _LEADING_LINE_NUMBER_RE.sub("", s, count=1).strip()
+    if not candidate or candidate == s:
+        return s
+    return candidate
+
+
 # Front-matter / cast-list / section-header labels that appear in
 # user-authored scripts (stage plays, Fountain-style drafts, "my first
 # screenplay" templates). All-uppercase prefixes that must NEVER be
@@ -1555,6 +1589,71 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             _title_header_idx = _i
             break
 
+    # ─── 2026-02 PHYSICAL BUILD — IMPLICIT TITLE / SUBTITLE BLOCK ─────
+    # When the PDF has NO explicit `TITLE:` header the parser is blind
+    # to the on-page title. PyPDF2 extracts the centered title (and any
+    # subtitle) as standalone uppercase lines at the top, which pass
+    # the character-cue heuristic (uppercase, <=3 words, not a scene
+    # heading, no header-keyword prefix) and are wrongly promoted to
+    # speaking characters alongside the real cast.
+    #
+    # Structural rule (conservative, NOT a broad uppercase heuristic):
+    #   Only trigger when ALL of:
+    #     - no explicit `TITLE:` header exists in the document
+    #     - the first non-empty lines of the script contain >=2
+    #       CONSECUTIVE cue-shaped uppercase lines
+    #     - no scene heading, header keyword, or non-uppercase dialogue
+    #       line has appeared between them
+    #   A single leading uppercase line followed by non-uppercase
+    #   dialogue is a REAL character cue and is NEVER suppressed.
+    #
+    # The scan is bounded to the first 20 lines so a mid-script string
+    # of uppercase cues (dialogue-heavy argument scene) is unaffected.
+    _implicit_title_indices: set = set()
+    if _title_header_idx < 0:
+        _run: list = []
+        _scan_limit = min(20, len(lines))
+        for _i in range(_scan_limit):
+            _s = lines[_i].strip()
+            if not _s:
+                continue
+            if _looks_like_scene_heading(_s):
+                break
+            _lu = _s.upper()
+            _is_hk = False
+            for _hk in _HEADER_KEYWORDS:
+                if (
+                    _lu == _hk
+                    or _lu == _hk + ":"
+                    or _lu.startswith((_hk + ":", _hk + " "))
+                ):
+                    _is_hk = True
+                    break
+            if _is_hk:
+                break
+            _passes_cue_shape = (
+                _s.isupper()
+                and len(_s) > 1
+                and not _s.startswith(('(', '['))
+                and not _normalize_cue(_s).endswith(('.', '!', '?'))
+                and len(_s.split()) <= 3
+            )
+            if _passes_cue_shape:
+                _run.append(_i)
+                continue
+            # Non-uppercase line. If the previous uppercase line looked
+            # like a cue, it is a REAL character cue (this line is their
+            # dialogue). Drop it from the run so legitimate characters
+            # are preserved.
+            if _run:
+                _run.pop()
+            break
+        # Only suppress when 2+ consecutive uppercase cue-shaped lines
+        # are found at the very top with no dialogue between them. One
+        # leading uppercase line is almost always a real character.
+        if len(_run) >= 2:
+            _implicit_title_indices = set(_run)
+
     for _idx, line in enumerate(lines):
         line = line.strip()
         if not line:
@@ -1568,6 +1667,25 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             and _idx < _title_header_idx
             and line.upper() == _title_value_upper
         ):
+            if current_character and current_text:
+                lines_data.append({
+                    "character": current_character,
+                    "text": _repair(_smart_join_dialogue(current_text)),
+                    "is_stage_direction": False
+                })
+                current_text = []
+            current_character = ""
+            lines_data.append({
+                "character": "",
+                "text": _repair(line),
+                "is_stage_direction": True
+            })
+            continue
+
+        # Suppress lines identified by the pre-scan as the implicit
+        # title / subtitle block (scripts without an explicit `TITLE:`
+        # header). See the `_implicit_title_indices` block comment.
+        if _idx in _implicit_title_indices:
             if current_character and current_text:
                 lines_data.append({
                     "character": current_character,
@@ -1665,7 +1783,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                         "is_stage_direction": False
                     })
                     current_text = []
-                cue_name = _normalize_cue(_strip_character_cue_extension(cue_raw))
+                cue_name = _normalize_cue(_strip_character_cue_extension(_strip_leading_line_number(cue_raw)))
                 characters.add(cue_name)
                 current_character = cue_name
                 lines_data.append({
@@ -1695,7 +1813,10 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                 })
             # Normalise trailing character-cue extensions so the
             # character-select UI shows `JACK`, not `JACK (V.O.)`.
-            current_character = _normalize_cue(_strip_character_cue_extension(potential_char))
+            # Also strip leading page/line numbers inserted by PyPDF2
+            # on numbered-dialogue theater PDFs so `1 JACK`, `2 JACK`,
+            # `61 — JACK` all dedupe to a single `JACK` entry.
+            current_character = _normalize_cue(_strip_character_cue_extension(_strip_leading_line_number(potential_char)))
             current_text = []
             characters.add(current_character)
         elif line.startswith('(') or line.startswith('['):
