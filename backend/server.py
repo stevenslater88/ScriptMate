@@ -1630,6 +1630,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                 cue_raw.isupper()
                 and len(cue_raw.split()) <= 3
                 and len(cue_raw) > 1
+                and not cue_raw.endswith(('.', '!', '?'))
                 and cue_upper not in _HEADER_KEYWORDS
                 and not _looks_like_scene_heading(cue_raw)
                 and dialogue_text
@@ -1661,6 +1662,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             and len(potential_char.split()) <= 3
             and len(potential_char) > 1
             and not potential_char.startswith(('(', '['))
+            and not potential_char.endswith(('.', '!', '?'))
             and not _looks_like_scene_heading(potential_char)
         ):
             if current_character and current_text:

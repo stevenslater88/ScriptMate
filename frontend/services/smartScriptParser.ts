@@ -146,6 +146,18 @@ function isLikelyCharacterName(line: string): { likely: boolean; confidence: num
   const cleaned = trimmed.replace(/\s*\(.*\)\s*$/, '').trim();
   if (cleaned.length === 0) return { likely: false, confidence: 0 };
 
+  // 2026-10 physical build 1.1.0 regression — ScriptM8_The_Great_Snack_Heist.
+  // Character cues never end with sentence-terminating punctuation.
+  // `WHERE?`, `APPARENTLY.`, `OH!`, `JACK!`, `MUD.`, `FINE.`, `MAYBE.`,
+  // `TWO.` are dialogue, not character names. The existing invalid-char
+  // counter below accepts `?`/`!` as 1 invalid char and `.` as 0 (it is
+  // in the safe set for `(V.O.)` suffixes, which are already stripped
+  // above), so WITHOUT this guard those lines pass the predicate at
+  // confidence 0.95 and get wrongly promoted to characters.
+  if (/[.!?]$/.test(cleaned)) {
+    return { likely: false, confidence: 0 };
+  }
+
   // Must contain at least one letter
   if (!/[a-zA-Z]/.test(cleaned)) {
     return { likely: false, confidence: 0 };
