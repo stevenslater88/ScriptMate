@@ -214,6 +214,7 @@ def test_frontend_parser_has_trailing_terminator_guard() -> None:
     # the regex-based form which is the smallest, cleanest fix.
     acceptable_patterns = [
         r"\/\[\.\!\?\]\$\/\.test\(cleaned\)",            # /[.!?]$/.test(cleaned)
+        r"\/\[\.\!\?\]\$\/\.test\(cleanedTail\)",         # /[.!?]$/.test(cleanedTail) — hardened variant
         r"\/\[\!\?\\\.\]\$\/\.test\(cleaned\)",           # /[!?\.]$/.test(cleaned)
         r"cleaned\.match\(\s*\/\[\.\!\?\]\$\/\s*\)",      # cleaned.match(/[.!?]$/)
         r"endsWith\(['\"]\.['\"]\)\s*\|\|\s*cleaned\.endsWith\(['\"]!['\"]\)",

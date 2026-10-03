@@ -154,7 +154,15 @@ function isLikelyCharacterName(line: string): { likely: boolean; confidence: num
   // in the safe set for `(V.O.)` suffixes, which are already stripped
   // above), so WITHOUT this guard those lines pass the predicate at
   // confidence 0.95 and get wrongly promoted to characters.
-  if (/[.!?]$/.test(cleaned)) {
+  //
+  // Hardened 2026-10 physical build 1.1.0/VC1130: PyPDF2 can append an
+  // invisible trailing character (U+00A0 non-breaking space, U+200B
+  // zero-width space, U+200C/U+200D zero-width joiners, U+FEFF BOM)
+  // AFTER the real sentence terminator. `cleaned.endsWith('.')` would
+  // then be false even for `NO.\u00A0` and the guard would silently
+  // let the line through. We strip those invisible trailers first.
+  const cleanedTail = cleaned.replace(/[\u00A0\u200B\u200C\u200D\uFEFF\s]+$/, '');
+  if (/[.!?]$/.test(cleanedTail)) {
     return { likely: false, confidence: 0 };
   }
 

@@ -1454,6 +1454,28 @@ def _strip_character_cue_extension(name: str) -> str:
     return stripped or name
 
 
+# 2026-10 physical build 1.1.0 / VC1130 regression — PyPDF2 can leave an
+# invisible trailing character (U+00A0 non-breaking space, U+200B zero-
+# width space, U+200C/U+200D zero-width joiners, U+FEFF BOM) AFTER a
+# real sentence terminator. Without stripping those first, `endswith(
+# ('.', '!', '?'))` returns False for `NO.\u00A0` / `WHERE?\u200B` and
+# the trailing-terminator guard added in commit 740be84 is silently
+# bypassed on PDF-extracted text. The same invisible chars cause
+# whitespace-variant collisions in the character set (`JACK` vs
+# `JACK\u00A0` deduplicate to two entries). Normalise once with this
+# helper and apply BOTH before the terminator check AND before adding
+# to the characters set.
+_INVISIBLE_TRAILERS = "\u00A0\u200B\u200C\u200D\uFEFF \t"
+
+
+def _normalize_cue(s: str) -> str:
+    """Strip invisible-whitespace trailers / leaders from a potential
+    character-cue string, including U+00A0 NBSP, U+200B/C/D ZWSP/J/NJ
+    and U+FEFF BOM, plus ordinary whitespace. Used both for the
+    terminator guard AND for character-set dedup."""
+    return s.strip(_INVISIBLE_TRAILERS)
+
+
 # Front-matter / cast-list / section-header labels that appear in
 # user-authored scripts (stage plays, Fountain-style drafts, "my first
 # screenplay" templates). All-uppercase prefixes that must NEVER be
@@ -1630,7 +1652,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                 cue_raw.isupper()
                 and len(cue_raw.split()) <= 3
                 and len(cue_raw) > 1
-                and not cue_raw.endswith(('.', '!', '?'))
+                and not _normalize_cue(cue_raw).endswith(('.', '!', '?'))
                 and cue_upper not in _HEADER_KEYWORDS
                 and not _looks_like_scene_heading(cue_raw)
                 and dialogue_text
@@ -1643,7 +1665,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                         "is_stage_direction": False
                     })
                     current_text = []
-                cue_name = _strip_character_cue_extension(cue_raw)
+                cue_name = _normalize_cue(_strip_character_cue_extension(cue_raw))
                 characters.add(cue_name)
                 current_character = cue_name
                 lines_data.append({
@@ -1662,7 +1684,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             and len(potential_char.split()) <= 3
             and len(potential_char) > 1
             and not potential_char.startswith(('(', '['))
-            and not potential_char.endswith(('.', '!', '?'))
+            and not _normalize_cue(potential_char).endswith(('.', '!', '?'))
             and not _looks_like_scene_heading(potential_char)
         ):
             if current_character and current_text:
@@ -1673,7 +1695,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                 })
             # Normalise trailing character-cue extensions so the
             # character-select UI shows `JACK`, not `JACK (V.O.)`.
-            current_character = _strip_character_cue_extension(potential_char)
+            current_character = _normalize_cue(_strip_character_cue_extension(potential_char))
             current_text = []
             characters.add(current_character)
         elif line.startswith('(') or line.startswith('['):
