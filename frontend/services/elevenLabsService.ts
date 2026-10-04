@@ -536,7 +536,7 @@ export const generateSpeechToFile = async (
   // the pre-fix path.
   let rcAppUserId: string | null = null;
   try {
-    const Purchases = require('react-native-purchases').default;
+    const Purchases = (await import('react-native-purchases')).default;
     rcAppUserId = await Purchases.getAppUserID();
   } catch {
     rcAppUserId = null;
@@ -627,8 +627,11 @@ export const generateSpeechToFile = async (
 
   if (!response.ok) {
     let bodyPreview = '';
+    let bodyJson: any = null;
     try {
-      bodyPreview = (await response.text()).substring(0, 200);
+      const bodyText = await response.text();
+      bodyPreview = bodyText.substring(0, 200);
+      try { bodyJson = JSON.parse(bodyText); } catch { /* non-json */ }
     } catch { /* ignore */ }
     DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_RESPONSE', {
       voiceId,
@@ -637,6 +640,33 @@ export const generateSpeechToFile = async (
       bodyPreview,
       stage: 'http-status',
     });
+
+    // 2026-02 SCRIPT M8 LAUNCH-SAFETY — known-good fallback voice.
+    // Backend now returns structured 422 `voice_unavailable` when the
+    // requested voice is not in the ElevenLabs account library. Instead
+    // of returning silence (which produces an unusable rehearsal), retry
+    // ONCE with a known-good premium voice (gender-matched). This is a
+    // launch-time safeguard; the full catalogue filter still lives on
+    // the backend `/available-voices` endpoint for the picker UI.
+    const errCode = bodyJson?.detail?.code || bodyJson?.code;
+    const alreadyFallback = (options as any)?.__isFallbackRetry === true;
+    if (response.status === 422 && errCode === 'voice_unavailable' && !alreadyFallback) {
+      const sourceMeta = Object.values(PRESET_VOICES).find(v => v.id === voiceId);
+      const fallbackKey = sourceMeta?.gender === 'female' ? 'sarah' : 'george';
+      const fallback = PRESET_VOICES[fallbackKey];
+      if (fallback && fallback.id !== voiceId) {
+        DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_FALLBACK_VOICE', {
+          failedVoiceId: voiceId,
+          fallbackVoiceId: fallback.id,
+          fallbackKey,
+          reason: 'voice_unavailable',
+        });
+        return generateSpeechToFile(text, fallback.id, {
+          ...(options || {}),
+          __isFallbackRetry: true,
+        } as any);
+      }
+    }
     return null;
   }
 

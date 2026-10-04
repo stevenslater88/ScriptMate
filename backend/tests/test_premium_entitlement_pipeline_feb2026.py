@@ -325,6 +325,20 @@ def test_authclient_attaches_rc_header(auth_client_source: str):
     assert "...rcHeader" in auth_client_source
 
 
+def test_authclient_uses_dynamic_import_proven_on_metro(auth_client_source: str):
+    """Launch-safety: use the same dynamic-import pattern that scriptStore
+    uses successfully on Metro, not static `require(...).default` which
+    is flaky when the native module ships a mixed CJS/ESM default export."""
+    assert "(await import('react-native-purchases')).default" in auth_client_source
+    assert "require('react-native-purchases').default" not in auth_client_source
+
+
+def test_elevenlabsservice_uses_dynamic_import_proven_on_metro(el_service_source: str):
+    """Same launch-safety contract on the TTS /generate path."""
+    assert "(await import('react-native-purchases')).default" in el_service_source
+    assert "require('react-native-purchases').default" not in el_service_source
+
+
 def test_authclient_does_not_declare_a_client_tier(auth_client_source: str):
     assert "'X-Premium-Tier'" not in auth_client_source
     assert '"X-Premium-Tier"' not in auth_client_source
@@ -335,6 +349,19 @@ def test_elevenlabsservice_attaches_rc_header_on_both_requests(el_service_source
     assert "'X-RC-App-User-Id': rcAppUserId" in el_service_source
     assert "headers: buildHeaders(bearer)" in el_service_source
     assert "headers: buildHeaders(retryBearer)" in el_service_source
+
+
+def test_launch_safety_voice_unavailable_falls_back_to_known_good(el_service_source: str):
+    """Launch-safety: when backend returns 422 `voice_unavailable` for a
+    character's assigned voice, the client must retry ONCE with a
+    gender-matched known-good premium voice (Sarah / George) so the
+    rehearsal is never silent. The retry carries `__isFallbackRetry`
+    to prevent an infinite loop."""
+    assert "'ELEVENLABS_FALLBACK_VOICE'" in el_service_source
+    assert "errCode === 'voice_unavailable'" in el_service_source
+    assert "__isFallbackRetry" in el_service_source
+    # Gender-matched fallback keys.
+    assert "sourceMeta?.gender === 'female' ? 'sarah' : 'george'" in el_service_source
 
 
 def test_authclient_header_cache_resettable_for_tests(auth_client_source: str):

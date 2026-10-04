@@ -49,10 +49,10 @@ let _rcAppUserIdCache: string | null = null;
 async function readRevenueCatAppUserId(): Promise<string | null> {
   if (_rcAppUserIdCache !== null) return _rcAppUserIdCache;
   try {
-    // react-native-purchases is a native module; dynamic-require so this
-    // helper stays importable from pure-JS test harnesses that do not
-    // run the native bridge. The require is deferred until first use.
-    const Purchases = require('react-native-purchases').default;
+    // Use the same dynamic-import pattern as scriptStore.ts (proven to
+    // work on this Metro config). Static `require(...).default` is
+    // flaky when the module ships a mixed CJS/ESM default export.
+    const Purchases = (await import('react-native-purchases')).default;
     const id = await Purchases.getAppUserID();
     if (typeof id === 'string' && id.length > 0 && id.length <= 256) {
       _rcAppUserIdCache = id;

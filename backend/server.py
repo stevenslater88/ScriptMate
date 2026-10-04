@@ -975,6 +975,10 @@ async def resolve_authoritative_tier(
     user = await db.users.find_one({"id": user_id})
     if not user:
         user = await db.users.find_one({"device_id": user_id})
+    # Fall back to authenticated_users (Google/Apple sign-in) so this
+    # resolver matches the pre-fix `_resolve_tier_for_tts` lookup set.
+    if not user:
+        user = await db.authenticated_users.find_one({"id": user_id})
 
     tier = "free"
     if user:
