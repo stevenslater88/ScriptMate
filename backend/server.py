@@ -4254,6 +4254,90 @@ async def elevenlabs_health():
     }
 
 
+# 2026-02 SCRIPT M8 — authoritative account-available voice catalogue.
+# Zero-cost (vendor `/v1/voices` LIST is not metered). Returns the
+# intersection of the backend PRESET_VOICES catalogue and the voices
+# actually accessible to the configured ElevenLabs account/key.
+# Fixes "some voices work, others fail": legacy preset IDs that are
+# no longer in the account library were silently 500ing from
+# /generate — the client now has an authoritative list to filter the
+# picker against so a user never selects a dead voice.
+_AVAILABLE_VOICE_CACHE: Dict[str, Any] = {"ids": None, "fetched_at": 0.0}
+_AVAILABLE_VOICE_TTL_SECONDS = 300  # 5 min — vendor library rarely changes
+
+
+def _time_monotonic() -> float:
+    """Monotonic clock wrapper (lives next to the voice cache to avoid
+    adding a module-level time import outside this feature's blast radius)."""
+    import time as _time
+    return _time.monotonic()
+
+
+async def _fetch_account_available_voice_ids() -> Optional[set]:
+    """Return the set of ElevenLabs voice_ids the configured account can use.
+
+    Returns None if the probe cannot be completed (network error, bad key).
+    Never raises — callers degrade to presenting the full preset catalogue.
+    """
+    if not ELEVENLABS_API_KEY:
+        return None
+    now = _time_monotonic()
+    cached = _AVAILABLE_VOICE_CACHE.get("ids")
+    fetched_at = _AVAILABLE_VOICE_CACHE.get("fetched_at", 0.0)
+    if cached is not None and (now - fetched_at) < _AVAILABLE_VOICE_TTL_SECONDS:
+        return cached
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://api.elevenlabs.io/v1/voices",
+                headers={"xi-api-key": ELEVENLABS_API_KEY},
+            )
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        ids = {v.get("voice_id") for v in data.get("voices", []) if v.get("voice_id")}
+        _AVAILABLE_VOICE_CACHE["ids"] = ids
+        _AVAILABLE_VOICE_CACHE["fetched_at"] = now
+        return ids
+    except Exception:
+        return None
+
+
+@api_router.get("/tts/elevenlabs/available-voices")
+async def elevenlabs_available_voices():
+    """Return the preset catalogue annotated with per-voice availability.
+
+    Each entry: { key, id, name, accent, gender, description, available }.
+    `available` is False for IDs the current ElevenLabs account cannot use
+    (e.g. legacy preset voices no longer in the default library).
+
+    `probe_ok` is False when the vendor /v1/voices probe failed — in that
+    case `available` falls back to True for every entry (do not punish the
+    user for a vendor outage; /generate will still error correctly).
+
+    SECURITY: never echoes the API key, no credential-derived metadata.
+    """
+    available_ids = await _fetch_account_available_voice_ids()
+    probe_ok = available_ids is not None
+    entries = []
+    for key, meta in PRESET_VOICES.items():
+        vid = meta.get("id", "")
+        is_available = (not probe_ok) or (vid in available_ids)
+        entries.append({
+            "key": key,
+            "id": vid,
+            "name": meta.get("name", ""),
+            "accent": meta.get("accent", ""),
+            "gender": meta.get("gender", ""),
+            "description": meta.get("description", ""),
+            "available": is_available,
+        })
+    return {
+        "probe_ok": probe_ok,
+        "voices": entries,
+    }
+
+
 @api_router.post("/tts/elevenlabs/generate")
 async def generate_elevenlabs_tts(
     request: ElevenLabsTTSRequest,
@@ -4367,6 +4451,33 @@ async def generate_elevenlabs_tts(
         if ELEVENLABS_API_KEY and ELEVENLABS_API_KEY in safe_err:
             safe_err = safe_err.replace(ELEVENLABS_API_KEY, "***REDACTED***")
         logger.error(f"ElevenLabs TTS error: {safe_err}")
+
+        # 2026-02 SCRIPT M8 — differentiate "voice not available in this
+        # account" from infrastructure errors. The ElevenLabs SDK raises
+        # ApiError('voice_not_found' / 400 / 404) for legacy preset voice
+        # IDs that are no longer in the account library. Previously these
+        # all returned a generic 500 which the client misread as a
+        # transient failure and silently fell back to expo-speech. The
+        # structured 422 lets the client show "This voice is unavailable
+        # — please pick another" and refresh the picker. Still never
+        # echoes any portion of the API key.
+        err_lower = safe_err.lower()
+        is_voice_unavailable = (
+            "voice_not_found" in err_lower
+            or "voice not found" in err_lower
+            or "voice does not exist" in err_lower
+            or "status_code: 400" in err_lower and "voice" in err_lower
+            or "status_code: 404" in err_lower
+        )
+        if is_voice_unavailable:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "voice_unavailable",
+                    "voice_id": voice_id if "voice_id" in dir() else request.voice_id,
+                    "message": "This voice is no longer available in the ElevenLabs account. Please pick another voice.",
+                },
+            )
         raise HTTPException(status_code=500, detail="Voice generation failed. Please try again.")
 
 @api_router.get("/scripts/{script_id}/voices")

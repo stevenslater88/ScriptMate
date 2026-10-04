@@ -35,16 +35,51 @@ failures, fix the "nuclear parser" false character bugs, and address the
 - EAS APK build verified via Expo GraphQL.
 
 ## Completed (this session, Feb 2026)
-- **Adaptive Recall `scriptId` guard** — `frontend/app/recall.tsx`:
-  - `needsScriptSelection = !scriptId || !script` computed at top.
-  - `useEffect` → `router.replace('/scripts')` when guard trips.
-  - `loadProgress` effect gated on `!needsScriptSelection`.
-  - Early return with dedicated redirect view (`testID="recall-redirect-screen"`),
-    preventing transient 0-line Recall sessions.
-  - Rules-of-Hooks preserved: all hooks execute before the conditional early return.
-- Added `backend/tests/test_recall_scriptid_guard_feb2026.py` (10 tests, all passing).
-- Full regression bundle green: 114/114 across Recall guard + invisible-char parser +
-  SCRIPTM8 parity + Daily Drill SEC-002 bearer identity.
+
+### Adaptive Recall navigation (V1 release blocker)
+- `recall.tsx` guard: `needsScriptSelection = !scriptId || !script` ⇒
+  `router.replace('/scripts?returnTo=recall')`; redirect view with testIDs;
+  Rules-of-Hooks preserved.
+- `scripts.tsx` reads `returnTo` query param; selection dispatches through
+  `handleSelectScript(id)`. When `returnTo === 'recall'`, it calls
+  `router.replace({ pathname: '/recall', params: { scriptId: id } })`.
+  Otherwise preserves the pre-existing Rehearsal push (`/script/${id}`).
+- Header title flips to "Pick a Script to Recall" in Recall-return mode.
+- Script cards flip testID to `recall-pick-script-<id>` in Recall-return mode.
+- No new picker screen; reuses the existing `/scripts` library route.
+
+### ElevenLabs voice pipeline hardening (V1 release blocker)
+- **Root cause:** legacy preset voice IDs (Rachel/Drew/Clyde/Paul/Antoni/
+  Fin/Dave/etc.) are no longer in the default ElevenLabs library for new
+  accounts. Vendor returns `voice_not_found`; backend was squashing every
+  SDK exception into a generic 500, so the client silently fell back to
+  expo-speech → "some voices work, others fail".
+- **Backend fix 1:** new `GET /api/tts/elevenlabs/available-voices` endpoint
+  returns PRESET_VOICES annotated with per-voice `available: bool` by
+  intersecting with the account's `/v1/voices` set. Zero vendor cost.
+  Fail-open on probe failure (`probe_ok=false` ⇒ `available=true` for all).
+  5-minute monotonic cache. Never leaks the API key.
+- **Backend fix 2:** `/api/tts/elevenlabs/generate` differentiates
+  `voice_not_found` / 400-with-voice / 404 from infrastructure errors and
+  returns structured 422 `{code: 'voice_unavailable', voice_id, message}`
+  so the client can show the correct user-facing error.
+- **Frontend fix:** `elevenLabsService.ts::fetchAvailableVoices()` fetches
+  the authoritative catalogue once (in-flight dedupe + memoised cache).
+  `VoiceAssignment.tsx` fetches it on mount, filters both picker gender
+  lists AND auto-assign pools against it, fails open while the probe is in
+  flight. Preserves stable voiceId end-to-end — storage never uses display
+  names.
+- Frontend ↔ backend preset-ID parity verified across all 26 voices.
+
+### Tests
+- `backend/tests/test_recall_scriptid_guard_feb2026.py` — 10/10 PASS.
+- `backend/tests/test_recall_picker_returnTo_feb2026.py` — 13/13 PASS.
+- `backend/tests/test_elevenlabs_voice_pipeline_feb2026.py` — 13/13 PASS.
+- Full regression bundle 151/151 PASS across the above + invisible-char
+  parser + SCRIPTM8 parity + Daily Drill SEC-002 bearer identity +
+  SCRIPTM8 physical acceptance.
+- Pre-existing frozen baseline (ElevenLabs dev-key quota exhausted,
+  `~70 known test warnings`) left untouched per user mandate.
 
 ## In-Progress / Blockers
 - **P1 — Google Play AAB signing certificate mismatch** — BLOCKED on platform
@@ -53,10 +88,15 @@ failures, fix the "nuclear parser" false character bugs, and address the
 - **P2 — Live secrets config missing in production** — BLOCKED on
   user/operator pasting `REVENUECAT_SECRET_KEY` and `ADMIN_TOKEN` into the
   Live secrets panel.
+- **P1 — ElevenLabs account library hygiene** — several catalogued legacy
+  voices (Rachel/Drew/Clyde/Paul/Antoni/Fin/Dave) may still return
+  `voice_unavailable`. UX now handles this correctly, but the user may want
+  to "Add to Library" the missing voices in ElevenLabs or trim the preset
+  catalogue to the account-available subset for a cleaner picker.
 
 ## Backlog (prioritized)
-- **P0** — Physical device verification of the Adaptive Recall guard
-  (navigation smoke test on real device).
+- **P0** — Physical device verification of the Recall picker return-to flow
+  AND the voice-availability-filtered picker.
 - **P1** — Phase 5: Learn (line hiding + active recall advanced features).
 - **P1** — Phase 6: Physical QA tracking harness.
 - **P3** — Phase 8: Progress / Stats.
@@ -64,23 +104,35 @@ failures, fix the "nuclear parser" false character bugs, and address the
 - **P3** — Phases 10–14: AI Line Coach, Rehearsal Partner, ElevenLabs, Dialect Coach.
 
 ## Frozen / Do-Not-Touch
-- ~70 pre-existing backend test failures and lint warnings — user strictly
-  forbids fixing these. They are obsolete/environment-only false alarms.
+- Pre-existing backend test failures and lint warnings. Includes
+  `test_sec004_tts_hardening::test_tts_valid_bearer_passes_auth_gate` and
+  `test_tts_text_at_exactly_2000_chars_passes_validation` — both fail
+  because the dev-pod ElevenLabs key `Scriptmate Secure` is at 0/2000
+  credits (vendor returns `quota_exceeded`). Environmental, not a code bug.
 
 ## Key Files
-- `backend/server.py` — Daily Drill SEC-002 endpoints, parser, digit guard.
+- `backend/server.py` — Daily Drill SEC-002 endpoints, parser, digit guard,
+  new `/tts/elevenlabs/available-voices`, structured 422 for voice_unavailable.
 - `backend/auth.py` — centralized bearer auth.
-- `backend/tests/` — regression suites (invisible-char, SCRIPTM8, Daily Drill, Recall guard).
+- `backend/tests/` — regression suites (invisible-char, SCRIPTM8, Daily
+  Drill, Recall guard, Recall picker return-to, ElevenLabs pipeline).
+- `frontend/services/elevenLabsService.ts` — `fetchAvailableVoices` +
+  memoised catalogue cache.
 - `frontend/services/smartScriptParser.ts` — frontend parser parity.
-- `frontend/app/recall.tsx` — Adaptive Recall + new scriptId guard.
+- `frontend/app/recall.tsx` — Adaptive Recall + scriptId guard + returnTo redirect.
+- `frontend/app/scripts.tsx` — library screen w/ Recall-return mode.
 - `frontend/app/index.tsx` — Home-screen tool cards (Recall still routes to `/recall`).
-- `frontend/app/scripts.tsx` — library screen (redirect target).
+- `frontend/components/VoiceAssignment.tsx` — picker + auto-assign filtered
+  by account-available voices.
 - `frontend/store/scriptStore.ts` — Zustand script store.
 
 ## Key API Endpoints
 - `POST /api/scripts` — parse and persist.
 - `GET /api/daily-drill/{user_id}` — SEC-002 bearer identity.
 - `POST /api/daily-drill/{user_id}/feedback`.
+- `GET /api/tts/elevenlabs/health` — binary config verdict.
+- `GET /api/tts/elevenlabs/available-voices` — authoritative catalogue.
+- `POST /api/tts/elevenlabs/generate` — now returns structured 422 on `voice_unavailable`.
 
 ## DB Schema
 - `scripts`: `characters`, `lines` (authoritative from parser), `scenes?`.

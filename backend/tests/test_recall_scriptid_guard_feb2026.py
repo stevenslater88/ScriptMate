@@ -65,16 +65,18 @@ def test_guard_variable_is_computed_from_both_missing_id_and_missing_script(reca
 
 
 def test_guard_redirects_to_existing_library_route(recall_source: str):
-    """Guard must call `router.replace('/scripts')` — reusing the existing route."""
-    # The redirect effect: calls router.replace('/scripts') only when guard trips.
+    """Guard must call `router.replace('/scripts?returnTo=recall')` — reusing the
+    existing library route AND signalling it to route the selection back to
+    Recall instead of its default Rehearsal destination."""
+    # The redirect effect: calls router.replace with returnTo=recall only when guard trips.
     pattern = re.compile(
         r"useEffect\(\(\)\s*=>\s*\{\s*if\s*\(needsScriptSelection\)\s*\{\s*"
-        r"router\.replace\(['\"]/scripts['\"]\);?\s*\}\s*\},\s*\[needsScriptSelection\]\);",
+        r"router\.replace\(['\"]/scripts\?returnTo=recall['\"]\);?\s*\}\s*\},\s*\[needsScriptSelection\]\);",
         re.DOTALL,
     )
     assert pattern.search(recall_source), (
-        "Expected a useEffect that calls router.replace('/scripts') when "
-        "needsScriptSelection is true, keyed on [needsScriptSelection]."
+        "Expected a useEffect that calls router.replace('/scripts?returnTo=recall') "
+        "when needsScriptSelection is true, keyed on [needsScriptSelection]."
     )
 
 

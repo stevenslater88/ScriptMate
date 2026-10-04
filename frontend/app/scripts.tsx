@@ -11,12 +11,29 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useScriptStore } from '../store/scriptStore';
+
+// 2026-02 V1 RELEASE: when the library is launched from Recall (no scriptId),
+// selecting a script must return to Recall configuration — not open Rehearsal.
+// `returnTo=recall` is the only accepted detour value; anything else keeps the
+// pre-existing Rehearsal default so My Scripts / Upload flows are unchanged.
+const RETURN_TO_RECALL = 'recall';
 
 export default function ScriptsScreen() {
   const { scripts, fetchScripts, deleteScript, loading } = useScriptStore();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const [refreshing, setRefreshing] = useState(false);
+
+  const isReturnToRecall = returnTo === RETURN_TO_RECALL;
+
+  const handleSelectScript = (id: string) => {
+    if (isReturnToRecall) {
+      router.replace({ pathname: '/recall', params: { scriptId: id } });
+      return;
+    }
+    router.push(`/script/${id}`);
+  };
 
   useEffect(() => {
     fetchScripts();
@@ -62,7 +79,9 @@ export default function ScriptsScreen() {
         >
           <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Scripts</Text>
+        <Text style={styles.headerTitle} testID="scripts-header-title">
+          {isReturnToRecall ? 'Pick a Script to Recall' : 'My Scripts'}
+        </Text>
         <TouchableOpacity
           onPress={() => router.push('/upload')}
           style={styles.addButton}
@@ -107,8 +126,9 @@ export default function ScriptsScreen() {
             <TouchableOpacity
               key={script.id}
               style={styles.scriptCard}
-              onPress={() => router.push(`/script/${script.id}`)}
+              onPress={() => handleSelectScript(script.id)}
               activeOpacity={0.8}
+              testID={isReturnToRecall ? `recall-pick-script-${script.id}` : `open-script-${script.id}`}
             >
               <View style={styles.scriptIcon}>
                 <Ionicons name="document-text" size={28} color="#6366f1" />

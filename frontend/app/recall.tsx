@@ -76,9 +76,11 @@ export default function RecallScreen() {
   }, [sceneId, needsScriptSelection]);
 
   // SEC/V1-RELEASE: redirect side effect (hook runs unconditionally; action is conditional).
+  // Pass `returnTo=recall` so the script library routes the selection back to the
+  // Recall configuration screen instead of its default (Rehearsal) destination.
   useEffect(() => {
     if (needsScriptSelection) {
-      router.replace('/scripts');
+      router.replace('/scripts?returnTo=recall');
     }
   }, [needsScriptSelection]);
 

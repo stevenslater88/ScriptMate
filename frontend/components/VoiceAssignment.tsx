@@ -27,6 +27,8 @@ import {
   playSpeech,
   isElevenLabsConfigured,
   inferGenderFromScript,
+  fetchAvailableVoices,
+  type AvailableVoiceCatalogue,
   type GenderInferenceLine,
 } from '../services/elevenLabsService';
 import { DebugLog } from '../services/debugLogService';
@@ -66,8 +68,42 @@ export default function VoiceAssignment({
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
   const [currentSound, setCurrentSound] = useState<Audio.Sound | null>(null);
   const [loading, setLoading] = useState(true);
+  // 2026-02 SCRIPT M8 — authoritative set of voice KEYS available to the
+  // current ElevenLabs account. null = catalogue not yet loaded (fail-open:
+  // treat every preset as available until the probe lands). Empty set is a
+  // valid "nothing available" state, distinct from null.
+  const [availableVoiceKeys, setAvailableVoiceKeys] = useState<Set<string> | null>(null);
 
   const voicesByGender = getVoicesByGender();
+
+  const isVoiceAvailable = (voiceKey: string): boolean => {
+    // Fail-open while the probe is in flight so the UI never flickers.
+    if (availableVoiceKeys === null) return true;
+    return availableVoiceKeys.has(voiceKey);
+  };
+
+  // Load the authoritative available-voice catalogue once. We never block
+  // auto-assignment on it (that would delay the first paint); we filter
+  // the picker + the auto-assign pools ONCE it resolves.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const catalogue: AvailableVoiceCatalogue | null = await fetchAvailableVoices();
+      if (cancelled) return;
+      if (!catalogue) {
+        // Vendor probe failed or offline — fail-open: all voices stay
+        // selectable; /generate still surfaces the structured 422 if a
+        // given voice is dead.
+        setAvailableVoiceKeys(null);
+        return;
+      }
+      const keys = new Set(
+        catalogue.voices.filter(v => v.available).map(v => v.key),
+      );
+      setAvailableVoiceKeys(keys);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Auto-assign voices to characters that don't have assignments.
   // 2026-02 Physical QA Blocker 2: picks from the gender-matched pool
@@ -98,8 +134,12 @@ export default function VoiceAssignment({
     // Per-gender rotation pointers so male characters cycle through
     // the male pool (and vice versa) rather than every character
     // sharing one global index.
-    const malePool = voicesByGender.male;
-    const femalePool = voicesByGender.female;
+    // 2026-02 SCRIPT M8: pools are pre-filtered by account availability
+    // so auto-assign cannot pick a dead voice. If the probe hasn't
+    // resolved yet, isVoiceAvailable() fails-open and we assign from
+    // the full pool exactly like before.
+    const malePool = voicesByGender.male.filter(v => isVoiceAvailable(v.key));
+    const femalePool = voicesByGender.female.filter(v => isVoiceAvailable(v.key));
     const mixedPool = [...femalePool, ...malePool];
     let maleIdx = 0;
     let femaleIdx = 0;
@@ -371,9 +411,10 @@ export default function VoiceAssignment({
             <ScrollView style={styles.voiceList}>
               {/* Female Voices */}
               <Text style={styles.genderHeader}>Female Voices</Text>
-              {voicesByGender.female.map((voice) => (
+              {voicesByGender.female.filter(v => isVoiceAvailable(v.key)).map((voice) => (
                 <TouchableOpacity
                   key={voice.key}
+                  testID={`voice-option-${voice.key}`}
                   style={[
                     styles.voiceOption,
                     assignments[selectedCharacter || ''] === voice.key && styles.voiceOptionSelected,
@@ -404,9 +445,10 @@ export default function VoiceAssignment({
 
               {/* Male Voices */}
               <Text style={styles.genderHeader}>Male Voices</Text>
-              {voicesByGender.male.map((voice) => (
+              {voicesByGender.male.filter(v => isVoiceAvailable(v.key)).map((voice) => (
                 <TouchableOpacity
                   key={voice.key}
+                  testID={`voice-option-${voice.key}`}
                   style={[
                     styles.voiceOption,
                     assignments[selectedCharacter || ''] === voice.key && styles.voiceOptionSelected,

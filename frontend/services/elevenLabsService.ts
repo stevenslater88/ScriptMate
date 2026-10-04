@@ -84,6 +84,7 @@ export type { VoiceResolution, Provider, InferredGender, GenderInferenceLine, Ge
 const BACKEND_URL = (AppConfig as any).BACKEND_URL || '';
 const TTS_ENDPOINT = `${BACKEND_URL}/api/tts/elevenlabs/generate`;
 const TTS_HEALTH_ENDPOINT = `${BACKEND_URL}/api/tts/elevenlabs/health`;
+const TTS_AVAILABLE_VOICES_ENDPOINT = `${BACKEND_URL}/api/tts/elevenlabs/available-voices`;
 const DEVICE_SESSION_ENDPOINT = `${BACKEND_URL}/api/auth/device-session`;
 
 // 2026-02 Android no-audio RCA
@@ -918,6 +919,80 @@ export const _refreshElevenLabsConfig = async (): Promise<void> => {
   await probeBackendElevenLabs();
 };
 
+// ─── AUTHORITATIVE AVAILABLE-VOICE CATALOGUE ──────────────────────────
+// 2026-02 SCRIPT M8 — nuclear fix: "some ElevenLabs voices work, others
+// fail". Root cause is legacy preset voice IDs (Rachel/Drew/Clyde/Paul
+// /Antoni/Fin/Dave/etc.) that are no longer present in the current
+// ElevenLabs account library — vendor returns `voice_not_found` and the
+// backend used to mask the whole class with a generic 500. The backend
+// now exposes GET /api/tts/elevenlabs/available-voices which echoes
+// PRESET_VOICES annotated with `available: bool`. We call it ONCE and
+// cache the result — the picker uses this list to filter out dead
+// voices BEFORE the user can select one. Zero vendor cost.
+export interface AvailableVoiceEntry {
+  key: string;
+  id: string;
+  name: string;
+  accent: string;
+  gender: string;
+  description: string;
+  available: boolean;
+}
+export interface AvailableVoiceCatalogue {
+  probe_ok: boolean;
+  voices: AvailableVoiceEntry[];
+}
+
+let _availableCache: AvailableVoiceCatalogue | null = null;
+let _availableInFlight: Promise<AvailableVoiceCatalogue | null> | null = null;
+
+export const fetchAvailableVoices = async (
+  _fetch: typeof fetch = fetch,
+): Promise<AvailableVoiceCatalogue | null> => {
+  if (_availableCache) return _availableCache;
+  if (_availableInFlight) return _availableInFlight;
+  _availableInFlight = (async () => {
+    try {
+      const res = await _fetch(TTS_AVAILABLE_VOICES_ENDPOINT, { method: 'GET' });
+      if (!res.ok) {
+        DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'VOICE_CATALOGUE_FETCH_FAILED', {
+          httpStatus: res.status,
+          stage: 'http-status',
+        });
+        return null;
+      }
+      const body = (await res.json()) as AvailableVoiceCatalogue;
+      if (!body || !Array.isArray(body.voices)) {
+        DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'VOICE_CATALOGUE_FETCH_FAILED', {
+          stage: 'bad-body',
+        });
+        return null;
+      }
+      _availableCache = body;
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'VOICE_CATALOGUE_LOADED', {
+        probeOk: body.probe_ok,
+        totalPreset: body.voices.length,
+        totalAvailable: body.voices.filter(v => v.available).length,
+      });
+      return body;
+    } catch (e: any) {
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'VOICE_CATALOGUE_FETCH_FAILED', {
+        error: e?.message || String(e),
+        stage: 'network',
+      });
+      return null;
+    } finally {
+      _availableInFlight = null;
+    }
+  })();
+  return _availableInFlight;
+};
+
+export const _resetAvailableVoicesCacheForTests = (): void => {
+  _availableCache = null;
+  _availableInFlight = null;
+};
+
 export default {
   PRESET_VOICES,
   getVoicesByGender,
@@ -937,4 +1012,5 @@ export default {
   uint8ArrayToBase64,
   makeAudioCacheKey,
   ensurePlaybackAudioMode,
+  fetchAvailableVoices,
 };
