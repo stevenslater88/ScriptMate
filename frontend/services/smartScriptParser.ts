@@ -125,6 +125,27 @@ function normalizeCue(s: string): string {
 }
 export const _normalizeCueForTest = normalizeCue;
 
+// ─── 2026-02 PHYSICAL BUILD — INVISIBLE INTRA-TOKEN WORD-COUNT FIX ──
+// PyPDF2 can inject U+00A0 NBSP, U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ
+// or U+FEFF BOM BETWEEN tokens of a document title/subtitle during
+// text extraction. JavaScript's `\s` matches NBSP but does NOT match
+// ZWSP / ZWNJ / ZWJ / BOM, so `split(/\s+/)` sees a 4-word subtitle
+// like `SCRIPT M8 STRESS-TEST SCRIPT` (with a single ZWSP somewhere
+// between tokens) as only 3 words. The <=3-word character-cue
+// rejection is bypassed and the subtitle is wrongly promoted to a
+// speaking character on the physical device.
+//
+// This helper replaces invisible intra-token characters with a plain
+// ASCII space for the SOLE purpose of the word-count decision. The
+// stored line text and the character-cue identity (via `normalizeCue`)
+// are UNCHANGED.
+const INVISIBLE_INTRA_TOKEN_RE = /[\u00A0\u200B\u200C\u200D\uFEFF]/g;
+
+function wordcountNormalize(s: string): string {
+  return s.replace(INVISIBLE_INTRA_TOKEN_RE, ' ');
+}
+export const _wordcountNormalizeForTest = wordcountNormalize;
+
 const LEADING_LINE_NUMBER_RE = /^\d+[\s.\-\u2013\u2014]+/;
 
 function stripLeadingLineNumber(s: string): string {
@@ -207,8 +228,13 @@ function isLikelyCharacterName(line: string): { likely: boolean; confidence: num
   // MAX_CHARACTER_NAME_LEN) and gets promoted to a speaking character.
   // Also strip leading PDF line/page numbers BEFORE the word count so
   // `61 — JACK` (3 tokens) counts as `JACK` (1 token).
+  // 2026-02 physical build — invisible intra-token word-count fix.
+  // PyPDF2 can inject ZWSP/NBSP/ZWJ/ZWNJ/BOM BETWEEN tokens; `\s`
+  // does not match ZWSP/ZWJ/ZWNJ/BOM in JavaScript, so without
+  // `wordcountNormalize` a 4-word subtitle with an embedded ZWSP
+  // counts as 3 words and leaks through as a character.
   const wordCountSource = stripLeadingLineNumber(cleaned);
-  if (wordCountSource.split(/\s+/).length > 3) {
+  if (wordcountNormalize(wordCountSource).split(/\s+/).length > 3) {
     return { likely: false, confidence: 0 };
   }
 
@@ -361,7 +387,7 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
         s === s.toUpperCase() &&
         /[A-Z]/.test(s) &&
         !/[.!?]$/.test(normalizeCue(s)) &&
-        s.split(/\s+/).length <= 3;
+        wordcountNormalize(s).split(/\s+/).length <= 3;
       if (passesCueShape) {
         run.push(k);
         continue;

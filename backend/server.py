@@ -1476,6 +1476,32 @@ def _normalize_cue(s: str) -> str:
     return s.strip(_INVISIBLE_TRAILERS)
 
 
+# ─── 2026-02 PHYSICAL BUILD — INVISIBLE INTRA-TOKEN WORD-COUNT FIX ──
+# PyPDF2 can inject U+00A0 NBSP, U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ
+# or U+FEFF BOM BETWEEN tokens of a document title/subtitle during
+# text extraction. Python's `str.split()` without args does NOT treat
+# ZWSP/ZWNJ/ZWJ/BOM as whitespace (NBSP is treated as whitespace in
+# Python 3 but is NOT by `\s` in JavaScript — the frontend parser
+# shares this bug). As a result, a 4-word subtitle like
+# "SCRIPT M8 STRESS-TEST SCRIPT" with a single ZWSP somewhere between
+# tokens is counted as 3 words, bypasses the <=3-word character-cue
+# rejection, and is wrongly promoted to a speaking character.
+#
+# This helper replaces invisible intra-token characters with ordinary
+# spaces for the SOLE purpose of the word-count decision. The stored
+# line text and the character-cue identity (via `_normalize_cue`) are
+# UNCHANGED.
+_INVISIBLE_INTRA_TOKEN_RE = re.compile(r"[\u00A0\u200B\u200C\u200D\uFEFF]")
+
+
+def _wordcount_normalize(s: str) -> str:
+    """Return `s` with invisible intra-token separators replaced by a
+    plain ASCII space so that `.split()` sees the real word boundary.
+    Used only for the character-cue `<= 3 words` decision; the input
+    is never persisted."""
+    return _INVISIBLE_INTRA_TOKEN_RE.sub(" ", s)
+
+
 # ─── 2026-02 PHYSICAL BUILD — NUMBERED CHARACTER-CUE NORMALISATION ───
 # PyPDF2 extraction of theater/stage-play PDFs with embedded line
 # numbers (common formatting aid for actors) produces character cues
@@ -1636,7 +1662,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                 and len(_s) > 1
                 and not _s.startswith(('(', '['))
                 and not _normalize_cue(_s).endswith(('.', '!', '?'))
-                and len(_s.split()) <= 3
+                and len(_wordcount_normalize(_s).split()) <= 3
             )
             if _passes_cue_shape:
                 _run.append(_i)
@@ -1768,7 +1794,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             cue_upper = cue_raw.upper()
             if (
                 cue_raw.isupper()
-                and len(cue_raw.split()) <= 3
+                and len(_wordcount_normalize(cue_raw).split()) <= 3
                 and len(cue_raw) > 1
                 and not _normalize_cue(cue_raw).endswith(('.', '!', '?'))
                 and cue_upper not in _HEADER_KEYWORDS
@@ -1799,7 +1825,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
         # prefixes.
         if (
             potential_char.isupper()
-            and len(potential_char.split()) <= 3
+            and len(_wordcount_normalize(potential_char).split()) <= 3
             and len(potential_char) > 1
             and not potential_char.startswith(('(', '['))
             and not _normalize_cue(potential_char).endswith(('.', '!', '?'))

@@ -18,6 +18,24 @@
 `index`, `dashboard`, `scripts`, `script/[id]`, `rehearsal/[id]`, `selftape/{index,library,prep,record,review,teleprompter}`, `auditions`, `daily-drill`, `recall`, `scene-partner`, `acting-coach`, `acting-feedback`, `dialect-coach`, `voice-studio`, `premium`, `paywall`, `profile`, `signin`, `onboarding`, `debug`, `support`, `terms`, `privacy`, `stats`, `upload`, `script-parser`, `_layout`. Total: 34 route files.
 
 
+### 2026-02 — P0 Parser Fix: Invisible Intra-Token Characters (Feb 2026)
+
+**Physical defect:** APK's Preview & Fix screen listed `SCRIPT M8 STRESS-TEST SCRIPT` as a 5th character on the ScriptM8 Great-Snack-Heist PDF, alongside correct JACK/EMILY/BELLA/LILY.
+
+**Root cause:** PyPDF2 injects invisible intra-token characters (U+200B ZWSP / U+00A0 NBSP / U+200D ZWJ / U+200C ZWNJ / U+FEFF BOM) BETWEEN tokens during text extraction. Python's `str.split()` does NOT treat ZWSP/ZWNJ/ZWJ/BOM as whitespace, and JavaScript's `/\s+/` matches NBSP but none of the other four. A 4-word subtitle with a single invisible character embedded between tokens therefore counted as 3 words and bypassed the `<=3-word` character-cue rejection in both parsers. The companion title `THE GREAT SNACK HEIST` had no embedded invisibles, so it was still correctly rejected — matching the asymmetric symptom in the APK.
+
+**Fix (minimal scope):**
+- `backend/server.py` — new `_wordcount_normalize()` helper + `_INVISIBLE_INTRA_TOKEN_RE`; applied at three word-count sites: `_implicit_title_indices` cue-shape, inline-cue (`NAME: dialogue`), and the main character-cue block. Line text and `_normalize_cue` identity path unchanged.
+- `frontend/services/smartScriptParser.ts` — mirror `wordcountNormalize()` helper + `INVISIBLE_INTRA_TOKEN_RE`; applied at two word-count sites: `isLikelyCharacterName` and the implicit-title cue-shape run.
+
+**Regression coverage added (45 new tests, all green):**
+- `backend/tests/test_invisible_intra_token_wordcount_feb2026.py` (24 tests) — covers all 5 invisibles × 3 injection positions in the subtitle, NBSP in the title line, plain-ASCII baseline, and helper invariants.
+- `backend/tests/test_invisible_intra_token_frontend_parity_feb2026.py` (21 tests) — same shapes executed through the frontend TS parser via the Node shim, plus FE/BE identity-set agreement assertions.
+
+**Scope guardrails honoured:** no APK/AAB build; no deploy; no dependency/SDK/native changes; RevenueCat/ElevenLabs/auth/TTS untouched; frozen ~75 baseline failures NOT touched; parser not redesigned.
+
+
+
 ### 2026-02 — DOCX Script Text Integrity — Final Hardening (Feb 2026)
 
 Physical S23 Ultra QA build still exhibited residual DOCX text corruption after the Nov-2025 intra-word repair pass:
