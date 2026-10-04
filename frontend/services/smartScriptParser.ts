@@ -100,6 +100,59 @@ const HEADER_KEYWORDS: ReadonlySet<string> = new Set([
 
 const INLINE_CUE_RE = /^([A-Z][A-Z0-9 .'\-]{0,30}):\s+(.+)$/;
 
+// ─── 2026-10 FRONTEND PARITY WITH BACKEND fallback_parse_script ────────
+// PyPDF2 extraction of PDF scripts injects three distinct contamination
+// classes into the raw text that both the frontend review parser and
+// the backend persistence parser MUST normalise consistently, or the
+// character set shown on the review screen will differ from the one
+// saved to the rehearsal. Mirrors backend/server.py:
+//   _INVISIBLE_TRAILERS       — invisible-whitespace trailers
+//   _normalize_cue            — strip invisible-trailer characters
+//   _LEADING_LINE_NUMBER_RE   — strip leading PDF line/page numbers
+//   _strip_leading_line_number
+//   _implicit_title_indices   — suppress implicit title/subtitle blocks
+//
+// Parity is locked by
+// backend/tests/test_frontend_backend_parser_parity_feb2026.py
+// and the ScriptM8 regression test file.
+const INVISIBLE_TRAILERS_RE = /[\u00A0\u200B\u200C\u200D\uFEFF\s]+$|^[\u00A0\u200B\u200C\u200D\uFEFF\s]+/g;
+
+function normalizeCue(s: string): string {
+  // Strip invisible-whitespace trailers / leaders: NBSP, ZWSP/J/NJ, BOM,
+  // and ordinary whitespace. Used both for terminator guards AND for
+  // character-identity dedup.
+  return s.replace(INVISIBLE_TRAILERS_RE, '');
+}
+export const _normalizeCueForTest = normalizeCue;
+
+const LEADING_LINE_NUMBER_RE = /^\d+[\s.\-\u2013\u2014]+/;
+
+function stripLeadingLineNumber(s: string): string {
+  // Strip a leading page/line number from a character cue extracted by
+  // PyPDF2 from numbered-dialogue theater PDFs:
+  //
+  //   "1 JACK"      -> "JACK"
+  //   "2 EMILY"     -> "EMILY"
+  //   "61 — JACK"   -> "JACK"   (em-dash U+2014)
+  //   "192 - JACK"  -> "JACK"   (ASCII hyphen)
+  //   "1. JACK"     -> "JACK"
+  //   "3  BELLA"    -> "BELLA"  (multiple spaces)
+  //
+  // Pattern: one-or-more leading digits followed by at least ONE
+  // separator from {space, dot, hyphen, en-dash U+2013, em-dash U+2014}.
+  //
+  // Conservative guards:
+  //   - requires a separator so purely-numeric strings ("100"),
+  //     digit-letter concatenations ("J4CK"), and trailing-number
+  //     names ("SARAH 2") are NEVER modified
+  //   - returns the input unchanged when stripping would produce an
+  //     empty string
+  const stripped = s.replace(LEADING_LINE_NUMBER_RE, '').trim();
+  if (stripped.length === 0 || stripped === s) return s;
+  return stripped;
+}
+export const _stripLeadingLineNumberForTest = stripLeadingLineNumber;
+
 function isHeaderLine(trimmed: string): boolean {
   const upper = trimmed.toUpperCase();
   for (const kw of HEADER_KEYWORDS) {
@@ -146,6 +199,19 @@ function isLikelyCharacterName(line: string): { likely: boolean; confidence: num
   const cleaned = trimmed.replace(/\s*\(.*\)\s*$/, '').trim();
   if (cleaned.length === 0) return { likely: false, confidence: 0 };
 
+  // 2026-10 physical build 1.1.0 — hard word-count rejection to match
+  // backend fallback_parse_script's `len(potential_char.split()) <= 3`
+  // requirement. Without this, 4+ word uppercase prose like
+  // `THE GREAT SNACK HEIST` or `SCRIPT M8 STRESS-TEST SCRIPT` passes
+  // the heuristic (all-uppercase, no trailing punctuation, within
+  // MAX_CHARACTER_NAME_LEN) and gets promoted to a speaking character.
+  // Also strip leading PDF line/page numbers BEFORE the word count so
+  // `61 — JACK` (3 tokens) counts as `JACK` (1 token).
+  const wordCountSource = stripLeadingLineNumber(cleaned);
+  if (wordCountSource.split(/\s+/).length > 3) {
+    return { likely: false, confidence: 0 };
+  }
+
   // 2026-10 physical build 1.1.0 regression — ScriptM8_The_Great_Snack_Heist.
   // Character cues never end with sentence-terminating punctuation.
   // `WHERE?`, `APPARENTLY.`, `OH!`, `JACK!`, `MUD.`, `FINE.`, `MAYBE.`,
@@ -154,7 +220,12 @@ function isLikelyCharacterName(line: string): { likely: boolean; confidence: num
   // in the safe set for `(V.O.)` suffixes, which are already stripped
   // above), so WITHOUT this guard those lines pass the predicate at
   // confidence 0.95 and get wrongly promoted to characters.
-  if (/[.!?]$/.test(cleaned)) {
+  // Hardened variant — normalise invisible trailers first (PyPDF2
+  // injects U+00A0 NBSP / U+200B ZWSP after short uppercase dialogue)
+  // so `WHERE?\u00A0` still triggers the terminator guard. The
+  // `cleanedTail` form is locked by the frontend parity test.
+  const cleanedTail = normalizeCue(cleaned);
+  if (/[.!?]$/.test(cleanedTail)) {
     return { likely: false, confidence: 0 };
   }
 
@@ -257,6 +328,58 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
     }
   }
 
+  // ─── 2026-10 PHYSICAL BUILD — IMPLICIT TITLE / SUBTITLE BLOCK ─────
+  // Mirrors backend/server.py::_implicit_title_indices. When a PDF
+  // has NO explicit `TITLE:` header, PyPDF2 extracts the centered
+  // title (and any subtitle) as standalone uppercase cue-shaped
+  // lines at the top (e.g. "THE GREAT SNACK HEIST" /
+  // "SCRIPT M8 STRESS-TEST SCRIPT"). These pass the character-cue
+  // heuristic and are wrongly promoted to speaking characters.
+  //
+  // Structural rule (conservative, NOT a broad uppercase heuristic):
+  //   Trigger only when ALL of:
+  //     - no explicit `TITLE:` header exists in the document
+  //     - the first non-empty lines of the script contain >=2
+  //       CONSECUTIVE cue-shaped uppercase lines (<=3 words each)
+  //     - no scene heading, header keyword, or non-uppercase dialogue
+  //       line has appeared between them
+  //   A single leading uppercase line followed by non-uppercase
+  //   dialogue is a REAL character cue and is NEVER suppressed.
+  const implicitTitleIndices = new Set<number>();
+  if (titleHeaderIdx < 0) {
+    const run: number[] = [];
+    const scanLimit = Math.min(20, rawLines.length);
+    for (let k = 0; k < scanLimit; k++) {
+      const s = rawLines[k].trim();
+      if (s.length === 0) continue;
+      if (HEADING_RE.test(s)) break;
+      if (isHeaderLine(s)) break;
+      const passesCueShape =
+        s.length > 1 &&
+        !s.startsWith('(') &&
+        !s.startsWith('[') &&
+        s === s.toUpperCase() &&
+        /[A-Z]/.test(s) &&
+        !/[.!?]$/.test(normalizeCue(s)) &&
+        s.split(/\s+/).length <= 3;
+      if (passesCueShape) {
+        run.push(k);
+        continue;
+      }
+      // Non-uppercase / non-cue line. If the previous uppercase line
+      // looked like a cue, it is a REAL character cue (this line is
+      // its dialogue). Drop it from the run so legitimate characters
+      // are preserved.
+      if (run.length > 0) run.pop();
+      break;
+    }
+    // Only suppress when 2+ consecutive uppercase cue-shaped lines are
+    // found at the very top with no dialogue separating them.
+    if (run.length >= 2) {
+      for (const idx of run) implicitTitleIndices.add(idx);
+    }
+  }
+
   for (let i = 0; i < rawLines.length; i++) {
     const line = rawLines[i];
     const trimmed = line.trim();
@@ -274,6 +397,21 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
       i < titleHeaderIdx &&
       trimmed.toUpperCase() === titleValueUpper
     ) {
+      parsedLines.push({
+        id: uid(),
+        type: 'ACTION',
+        characterName: null,
+        text: trimmed,
+        confidence: 0.9,
+      });
+      inDialogueBlock = false;
+      currentCharacter = null;
+      continue;
+    }
+
+    // Implicit title / subtitle block (no explicit TITLE: header) —
+    // suppress from character detection, route to action path.
+    if (implicitTitleIndices.has(i)) {
       parsedLines.push({
         id: uid(),
         type: 'ACTION',
@@ -349,12 +487,27 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
         !HEADING_RE.test(cueRaw) &&
         dialogueText.length > 0
       ) {
-        // Normalize cue name the same way the two-line path does
-        // (strip parenthetical extensions like `(V.O.)`).
-        const normalized = cueRaw
-          .replace(/\s*\(.*\)\s*$/, '')
-          .trim()
-          .toUpperCase();
+        // Normalize cue name the same way the two-line path does:
+        //   1. strip leading PDF page/line number (`1 JACK` → `JACK`)
+        //   2. strip trailing parenthetical extension (`(V.O.)`, etc.)
+        //   3. strip invisible-whitespace trailers (NBSP, ZWSP, BOM)
+        //   4. uppercase for case-insensitive identity dedup
+        const normalized = normalizeCue(
+          stripLeadingLineNumber(cueRaw)
+            .replace(/\s*\(.*\)\s*$/, '')
+            .trim()
+        ).toUpperCase();
+        if (normalized.length === 0) {
+          // Normalization emptied the cue — treat line as action.
+          parsedLines.push({
+            id: uid(),
+            type: 'ACTION',
+            characterName: null,
+            text: trimmed,
+            confidence: 0.4,
+          });
+          continue;
+        }
         currentCharacter = normalized;
         currentCharConfidence = 0.95;
         inDialogueBlock = true;
@@ -405,15 +558,36 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
         : Math.max(0.2, confidence - 0.2);
 
       if (adjustedConf >= 0.4) {
-        // Normalize character name: strip (V.O.) etc. for grouping,
-        // AND strip the trailing colon so `JACK:` and `JACK` cannot
-        // be stored as separate characters (physical build 1.0.65
-        // regression — mirrors the backend's `.replace(':', '')`).
-        const normalized = trimmed
-          .replace(/\s*\(.*\)\s*$/, '')
-          .replace(/:\s*$/, '')
-          .trim()
-          .toUpperCase();
+        // Normalize character name:
+        //   1. strip leading PDF page/line number (`1 JACK`, `61 — JACK`
+        //      → `JACK`) — PyPDF2 injects these from theater scripts
+        //      with embedded line numbers. Without this, "1 JACK" and
+        //      "5 JACK" dedupe as two separate characters.
+        //   2. strip trailing parenthetical extension (`(V.O.)`, etc.)
+        //   3. strip trailing colon so `JACK:` and `JACK` cannot be
+        //      stored as separate characters (physical build 1.0.65
+        //      regression — mirrors the backend's `.replace(':', '')`).
+        //   4. strip invisible-whitespace trailers (NBSP, ZWSP, BOM)
+        //      so `JACK\u00A0` and `JACK` dedupe to one identity.
+        //   5. uppercase for case-insensitive identity dedup.
+        const normalized = normalizeCue(
+          stripLeadingLineNumber(trimmed)
+            .replace(/\s*\(.*\)\s*$/, '')
+            .replace(/:\s*$/, '')
+            .trim()
+        ).toUpperCase();
+
+        if (normalized.length === 0) {
+          // Normalization emptied the cue — treat as action.
+          parsedLines.push({
+            id: uid(),
+            type: 'ACTION',
+            characterName: null,
+            text: trimmed,
+            confidence: 0.4,
+          });
+          continue;
+        }
 
         currentCharacter = normalized;
         currentCharConfidence = adjustedConf;

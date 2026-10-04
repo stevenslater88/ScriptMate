@@ -115,6 +115,36 @@ export default function ScriptParserScreen() {
   const characters = parseResult.detectedCharacters;
   const lowConfidence = characters.length === 0 || characters.every(c => c.avgConfidence < 0.5);
 
+  // ─── 2026-10 OBSERVABILITY FIX — parser diagnostic metadata ──────
+  // Physical diagnostic previously reported `parser: unknown /
+  // fileType: unknown / fileName: unknown` on PDF-import success.
+  // Emit a single structured record once the parser completes so
+  // diagnostics show the actual parser name/version, filename, file
+  // type, and parse counts. Fires once per unique rawText/title.
+  useEffect(() => {
+    if (!rawText || rawText.length === 0) return;
+    const inferredFileType = /\.pdf$/i.test(title || '')
+      ? 'application/pdf'
+      : /\.docx$/i.test(title || '')
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : /\.txt$/i.test(title || '')
+          ? 'text/plain'
+          : 'text/plain';
+    DebugLog.importStage('parser-complete', {
+      parser: 'smartScriptParser.v2',
+      parserStage: 'frontend-review-parse-complete',
+      fileName: title || 'unknown',
+      fileType: inferredFileType,
+      charactersCount: characters.length,
+      linesCount: parseResult.parsedLines.length,
+      dialogueCount: parseResult.stats.dialogueLines,
+      actionCount: parseResult.stats.actionLines,
+      parentheticalCount: parseResult.stats.parentheticalLines,
+      headingCount: parseResult.stats.headingLines,
+      warningsCount: parseResult.warnings.length,
+    });
+  }, [rawText, title, characters.length, parseResult.parsedLines.length, parseResult.stats, parseResult.warnings.length]);
+
   // Reclassify a line
   const reclassifyLine = useCallback((lineId: string, newType: LineType) => {
     const current = editedLines || [...parseResult.parsedLines];
