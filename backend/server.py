@@ -9,7 +9,7 @@ import tempfile
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 import PyPDF2
@@ -915,23 +915,189 @@ def get_tier_limits(tier: str) -> Dict:
         return PREMIUM_TIER_LIMITS
     return FREE_TIER_LIMITS
 
-async def check_user_limits(user_id: str, action: str) -> Dict[str, Any]:
-    """Check if user can perform an action based on their tier"""
+
+# ─── 2026-02 SCRIPT M8 — CANONICAL PREMIUM ENTITLEMENT RESOLVER ─────────
+#
+# Single source-of-truth for the Premium decision across EVERY paid
+# feature gate (rehearsal modes, TTS tier caps, dialect coach, etc.).
+#
+# Previously each gate read `user.subscription_tier` from Mongo and
+# relied on a one-shot fire-and-forget `/users/{id}/revenuecat/sync`
+# POST at app launch to flip the row. That sync was racy (user could
+# tap Performance before sync landed) and silently 503'd when
+# REVENUECAT_SECRET_KEY was missing in prod. Result: an ACTIVE
+# `ScriptMate Pro` RevenueCat entitlement coexisted with a `free`
+# Mongo row → every rehearsal/TTS request got rejected as free.
+#
+# This resolver turns the gate itself into the sync point:
+#   1. Mongo row says premium (and not expired)  → premium.
+#   2. Else, if the request carries `X-RC-App-User-Id` AND the server
+#      has a working RC secret, verify authoritatively against
+#      RevenueCat's REST API. If the ScriptMate Pro entitlement is
+#      active, LIFT the Mongo row to premium AND return premium.
+#      This is the self-healing path.
+#   3. Else free.
+#
+# Security:
+#   * The client NEVER declares its tier — only its RC app_user_id.
+#     The server does the verification with its own secret.
+#   * On RC unavailable / 5xx we DO NOT weaken the Mongo-based decision
+#     (fail-safe). The gate behaves exactly as before the fix.
+#   * Short-lived in-process cache (60s) keyed on rc_app_user_id so
+#     burst requests don't hammer RevenueCat. Cache stores only the
+#     verdict + expiry; never any secret.
+#   * QA_PREMIUM bypass is layered ON TOP, unchanged. SEC-003
+#     fail-closed-in-production semantics preserved.
+RC_HEADER_NAME = "X-RC-App-User-Id"
+_TIER_CACHE: Dict[str, Tuple[str, float]] = {}
+_TIER_CACHE_TTL_SECONDS = 60.0
+
+
+def _tier_cache_clear() -> None:  # test hook — never called in prod paths
+    _TIER_CACHE.clear()
+
+
+async def resolve_authoritative_tier(
+    user_id: str,
+    rc_app_user_id: Optional[str] = None,
+) -> str:
+    """Return 'premium' or 'free' for `user_id`, consulting RevenueCat
+    as the authoritative source when the Mongo row still says free.
+
+    * `user_id` is the EFFECTIVE id already stripped of the "device:"
+      prefix by `get_effective_user_id`.
+    * `rc_app_user_id` is the stable RevenueCat app_user_id supplied
+      by the client via the `X-RC-App-User-Id` header. May be `None`
+      (unauthenticated / pre-SDK requests) — in which case we rely
+      entirely on the Mongo row.
+    """
+    # ── (1) Mongo row — primary source. ────────────────────────────────
     user = await db.users.find_one({"id": user_id})
     if not user:
         user = await db.users.find_one({"device_id": user_id})
-    
+
     tier = "free"
     if user:
         tier = user.get("subscription_tier", "free")
-        # Check if premium subscription is still valid
-        if tier == "premium" and user.get("subscription_end"):
-            if datetime.utcnow() > user["subscription_end"]:
-                tier = "free"
-                await db.users.update_one(
-                    {"id": user["id"]},
-                    {"$set": {"subscription_tier": "free"}}
+        sub_end = user.get("subscription_end")
+        if tier == "premium" and sub_end and datetime.utcnow() > sub_end:
+            tier = "free"
+            # Demote the stale row so the next request skips this branch.
+            await db.users.update_one(
+                {"id": user["id"]}, {"$set": {"subscription_tier": "free"}}
+            )
+
+    # Short-circuit: Mongo already premium → done.
+    if tier == "premium":
+        return "premium"
+
+    # ── (2) Live RevenueCat verification — self-healing path. ──────────
+    rcid = (rc_app_user_id or "").strip()
+    if not rcid and user:
+        # Fall back to the id that a prior /revenuecat/sync persisted,
+        # if any. Lets us self-heal even for clients that forgot the
+        # header (older frontend builds).
+        rcid = (user.get("revenuecat_app_user_id") or "").strip()
+
+    if rcid and os.environ.get("REVENUECAT_SECRET_KEY"):
+        now = _time_monotonic()
+        cached = _TIER_CACHE.get(rcid)
+        if cached and cached[1] > now:
+            # Cache hit — we have ALREADY verified this rcid against RC
+            # within the last _TIER_CACHE_TTL_SECONDS seconds; the cache
+            # entry is itself the proof of a prior fetch_premium_entitlement
+            # success. No row-write on cache hit; the write happens on the
+            # verifying call below. SEC-003 contract preserved.
+            if cached[0] == "premium":
+                return "premium"
+        else:
+            try:
+                entitlement = await fetch_premium_entitlement(rcid)
+            except (RevenueCatUnavailable, RevenueCatNotConfigured) as exc:
+                # Fail-safe: do not weaken the Mongo-derived decision.
+                logger.info(
+                    "[PREMIUM-RESOLVER] RC lookup unavailable for rcid=%s: %s",
+                    rcid, exc,
                 )
+                entitlement = None
+
+            if entitlement is not None and entitlement.active:
+                _TIER_CACHE[rcid] = ("premium", now + _TIER_CACHE_TTL_SECONDS)
+                if user:
+                    # SEC-003: this write is REACHED only after a successful
+                    # live fetch_premium_entitlement call above returned
+                    # `active=True`. The lift is idempotent — safe to call on
+                    # every self-heal — and never demotes an already-premium
+                    # row (we short-circuit at the top of this function).
+                    now_dt = datetime.utcnow()
+                    if entitlement.expires_at is None:
+                        sub_end = now_dt + timedelta(days=36500)  # lifetime
+                    else:
+                        sub_end = entitlement.expires_at.astimezone(
+                            timezone.utc,
+                        ).replace(tzinfo=None)
+                    try:
+                        await db.users.update_one(
+                            {"id": user["id"]},
+                            {"$set": {
+                                "subscription_tier": "premium",
+                                "subscription_end": sub_end,
+                                "revenuecat_app_user_id": rcid,
+                                "updated_at": now_dt,
+                            }},
+                        )
+                    except Exception as exc:  # DB blip must not block the gate
+                        logger.warning(
+                            "[PREMIUM-RESOLVER] row-lift write failed: %s", exc,
+                        )
+                logger.info(
+                    "[PREMIUM-RESOLVER] self-heal: lifted user_id=%s to "
+                    "premium via live RC verification",
+                    user_id,
+                )
+                return "premium"
+            # Non-active response → remember briefly so a burst of free
+            # requests from the same user doesn't fan-out N RC calls.
+            _TIER_CACHE[rcid] = ("free", now + _TIER_CACHE_TTL_SECONDS)
+
+    return tier
+
+
+async def extract_rc_app_user_id_header(
+    x_rc_app_user_id: Optional[str] = Header(
+        default=None, alias=RC_HEADER_NAME,
+    ),
+) -> Optional[str]:
+    """FastAPI dependency: extract the client's stable RevenueCat
+    app_user_id from the `X-RC-App-User-Id` header. Never trusts the
+    client's tier claim — only its RC identity, which the server then
+    verifies independently."""
+    if not x_rc_app_user_id:
+        return None
+    value = x_rc_app_user_id.strip()
+    # Defensive length cap — stable RC ids are UUIDs or short alphanum
+    # strings. Cap avoids pathological inputs from reaching RC.
+    if len(value) > 256:
+        return None
+    return value
+
+
+async def check_user_limits(user_id: str, action: str, rc_app_user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Check if user can perform an action based on their tier.
+
+    2026-02 SCRIPT M8: now consults the canonical
+    `resolve_authoritative_tier` so an active RevenueCat entitlement
+    unlocks the gate even when the Mongo row's `subscription_tier` has
+    not yet been flipped by the one-shot startup sync. Pass
+    `rc_app_user_id` extracted from the `X-RC-App-User-Id` request
+    header; omit for background / internal callers (behaviour then
+    matches pre-fix exactly)."""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        user = await db.users.find_one({"device_id": user_id})
+
+    # Canonical entitlement decision (self-heals the Mongo row when needed).
+    tier = await resolve_authoritative_tier(user_id, rc_app_user_id)
 
     # ─── QA BYPASS (isolated, env-gated, fail-closed in production) ─────────
     # Setting QA_PREMIUM=true in the backend .env grants the caller full
@@ -2147,19 +2313,21 @@ async def get_user(
 async def get_user_limits(
     device_id: str,
     authenticated_user_id: str = Depends(get_authenticated_user_id),
+    rc_app_user_id: Optional[str] = Depends(extract_rc_app_user_id_header),
 ):
     """Get user's current limits and usage.
 
-    SEC-002 (2026-02): path `device_id` must match authenticated bearer."""
+    SEC-002 (2026-02): path `device_id` must match authenticated bearer.
+    SCRIPT M8 (2026-02): tier is resolved via `resolve_authoritative_tier`
+    so an active ScriptMate Pro RevenueCat entitlement is reflected here
+    even if the Mongo row has not yet been flipped by the startup sync."""
     enforce_user_id_match(device_id, authenticated_user_id)
     user = await db.users.find_one({"device_id": device_id})
-    
-    tier = "free"
+
+    tier = await resolve_authoritative_tier(device_id, rc_app_user_id)
+    # Re-read user after possible row-lift so subscription_end reflects truth.
     if user:
-        tier = user.get("subscription_tier", "free")
-        if tier == "premium" and user.get("subscription_end"):
-            if datetime.utcnow() > user["subscription_end"]:
-                tier = "free"
+        user = await db.users.find_one({"device_id": device_id})
 
     # ─── QA BYPASS (isolated, env-gated, mirrors check_user_limits) ──────────
     # See docstring on check_user_limits() above. When QA_PREMIUM=true the
@@ -2909,14 +3077,20 @@ async def delete_script(
 async def create_rehearsal(
     rehearsal_data: RehearsalCreate,
     user_id: str = Depends(get_effective_user_id),
+    rc_app_user_id: Optional[str] = Depends(extract_rc_app_user_id_header),
 ):
     """Create a new rehearsal session.
 
     SEC-002 (2026-02): effective owner is the authenticated bearer;
     any `rehearsal_data.user_id` from the client is IGNORED. Script
-    ownership is enforced (cross-user script-id rehearsal returns 404)."""
-    # Check user limits (bearer-derived identity)
-    limits_check = await check_user_limits(user_id, "create_rehearsal")
+    ownership is enforced (cross-user script-id rehearsal returns 404).
+
+    SCRIPT M8 (2026-02): the Premium gate below consults the canonical
+    `resolve_authoritative_tier`, which self-heals a free Mongo row by
+    live-verifying the caller's RevenueCat entitlement when the client
+    supplies its stable `X-RC-App-User-Id` header."""
+    # Check user limits (bearer-derived identity + RC-authoritative tier)
+    limits_check = await check_user_limits(user_id, "create_rehearsal", rc_app_user_id)
     if not limits_check["allowed"]:
         raise HTTPException(status_code=403, detail=limits_check["upgrade_reason"])
     
@@ -3861,33 +4035,25 @@ def _env_int(name: str) -> int:
     return max(0, v)
 
 
-async def _resolve_tier_for_tts(user_id: str) -> str:
+async def _resolve_tier_for_tts(user_id: str, rc_app_user_id: Optional[str] = None) -> str:
     """Resolve 'free' or 'premium' for a bearer-derived user_id.
 
-    Mirrors the first ~15 lines of `check_user_limits` but strips the
-    per-action branches — the budget check only needs the tier string.
-    Honours the SEC-003 fail-closed QA_PREMIUM gate via
-    `_qa_premium_enabled()`.
+    2026-02 SCRIPT M8: delegates to the canonical
+    `resolve_authoritative_tier` so TTS tier matches the rehearsal
+    gate's decision exactly — no more "performance mode allowed but
+    TTS still free" split-brain. Honours SEC-003 fail-closed
+    QA_PREMIUM via `_qa_premium_enabled()`.
 
     `user_id` arrives in the raw form produced by `get_authenticated_user_id`
-    (either "device:<id>" or a UUID for authenticated accounts). We query
-    both collections because a device can later be linked to an account."""
+    (either "device:<id>" or a UUID for authenticated accounts)."""
     effective = effective_user_id(user_id)
-    tier = "free"
-    user = await db.users.find_one({"device_id": effective})
-    if not user:
-        user = await db.authenticated_users.find_one({"id": effective})
-    if user:
-        tier = user.get("subscription_tier", "free")
-        sub_end = user.get("subscription_end")
-        if tier == "premium" and sub_end and datetime.now(timezone.utc).replace(tzinfo=None) > sub_end:
-            tier = "free"
+    tier = await resolve_authoritative_tier(effective, rc_app_user_id)
     if _qa_premium_enabled() and tier != "premium":
         tier = "premium"
     return tier
 
 
-async def _tts_check_character_budget(user_id: str, requested_chars: int) -> None:
+async def _tts_check_character_budget(user_id: str, requested_chars: int, rc_app_user_id: Optional[str] = None) -> None:
     """SEC-004 / Phase P2 enforcement.
 
     Raises:
@@ -3940,7 +4106,8 @@ async def _tts_check_character_budget(user_id: str, requested_chars: int) -> Non
 
     # ── (2) and (3) Per-user caps — needs tier.
     #       Resolve tier once; honours SEC-003 fail-closed QA_PREMIUM.
-    tier = await _resolve_tier_for_tts(user_id)
+    #       SCRIPT M8 2026-02: tier now matches the rehearsal gate (RC-authoritative).
+    tier = await _resolve_tier_for_tts(user_id, rc_app_user_id)
 
     # Per-user DAILY cap. Uses tts_usage_user_date_uniq (point lookup).
     daily_cap = premium_daily_cap if tier == "premium" else free_daily_cap
@@ -4342,6 +4509,7 @@ async def elevenlabs_available_voices():
 async def generate_elevenlabs_tts(
     request: ElevenLabsTTSRequest,
     user_id: str = Depends(get_authenticated_user_id),
+    rc_app_user_id: Optional[str] = Depends(extract_rc_app_user_id_header),
 ):
     """Generate TTS audio using ElevenLabs (Premium feature).
 
@@ -4354,9 +4522,13 @@ async def generate_elevenlabs_tts(
       * Per-user sliding-window rate limit (60 calls / 10 min).
       * Response is raw MP3 (audio/mpeg) — the client writes the
         bytes directly to a file for Android ExoPlayer playback.
+      * Premium decision now matches the rehearsal gate: an active
+        `ScriptMate Pro` RevenueCat entitlement (verified via the
+        caller's `X-RC-App-User-Id` header) unlocks the premium
+        character budget even when the Mongo row is still stale free.
     """
     _tts_check_rate_limit(user_id)
-    await _tts_check_character_budget(user_id, len(request.text))
+    await _tts_check_character_budget(user_id, len(request.text), rc_app_user_id)
 
     if not eleven_client:
         raise HTTPException(status_code=503, detail="ElevenLabs service not configured")

@@ -25,6 +25,55 @@ import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 
 import { ensureTtsBearerToken } from './elevenLabsService';
 
+// 2026-02 SCRIPT M8 — canonical Premium entitlement header.
+//
+// The backend's premium gate (rehearsal modes, TTS tier caps, dialect
+// coach, etc.) now consults `resolve_authoritative_tier`, which verifies
+// the caller's RevenueCat `ScriptMate Pro` entitlement live against the
+// vendor REST API using the server's own secret. The client never
+// declares its tier — it only identifies which stable RC app_user_id
+// should be queried.
+//
+// We attach the current `Purchases.getAppUserID()` as `X-RC-App-User-Id`
+// on every authenticated request so a user who holds an active
+// entitlement is NEVER rejected as free by a stale Mongo row (the
+// physical failure that produced "performance mode requires Premium"
+// alongside `activeEntitlementIds=['ScriptMate Pro']`).
+//
+// The id is cached in-process after the first SDK call to keep the
+// axios/fetch helpers synchronous-ish. Returned header map stays `{}`
+// if RC never configured.
+const RC_HEADER_NAME = 'X-RC-App-User-Id';
+let _rcAppUserIdCache: string | null = null;
+
+async function readRevenueCatAppUserId(): Promise<string | null> {
+  if (_rcAppUserIdCache !== null) return _rcAppUserIdCache;
+  try {
+    // react-native-purchases is a native module; dynamic-require so this
+    // helper stays importable from pure-JS test harnesses that do not
+    // run the native bridge. The require is deferred until first use.
+    const Purchases = require('react-native-purchases').default;
+    const id = await Purchases.getAppUserID();
+    if (typeof id === 'string' && id.length > 0 && id.length <= 256) {
+      _rcAppUserIdCache = id;
+      return id;
+    }
+  } catch {
+    // RC SDK not available (Expo Go / dev) — do not attach the header.
+  }
+  return null;
+}
+
+// Test-only hook to reset the module-level cache. Never used in prod paths.
+export function _resetRevenueCatAppUserIdCacheForTests(value: string | null = null): void {
+  _rcAppUserIdCache = value;
+}
+
+async function getRevenueCatHeader(): Promise<Record<string, string>> {
+  const id = await readRevenueCatAppUserId();
+  return id ? { [RC_HEADER_NAME]: id } : {};
+}
+
 /**
  * Resolve the current bearer, minting a new device-session if needed.
  * Returns `null` only when the backend was unreachable during minting
@@ -41,10 +90,18 @@ export async function getAuthBearerToken(): Promise<string | null> {
  * Build an `Authorization: Bearer <token>` header, or `{}` if no bearer
  * is available. Never throws — the returned object can be spread into
  * any `headers` map safely.
+ *
+ * 2026-02 SCRIPT M8: also attaches `X-RC-App-User-Id` when the
+ * RevenueCat SDK knows the stable app_user_id, so the backend can
+ * self-heal a stale free Mongo row against the live RC entitlement.
  */
 export async function getAuthHeader(): Promise<Record<string, string>> {
   const token = await getAuthBearerToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const rcHeader = await getRevenueCatHeader();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...rcHeader,
+  };
 }
 
 /**

@@ -528,6 +528,27 @@ export const generateSpeechToFile = async (
     return null;
   }
 
+  // 2026-02 SCRIPT M8 — RC-authoritative tier gating.
+  // Attach `X-RC-App-User-Id` so the backend's `_resolve_tier_for_tts`
+  // can live-verify the ScriptMate Pro entitlement when the Mongo row
+  // still says free. Fail-safe: if the SDK is unavailable we send no
+  // header and the backend falls back to the Mongo row exactly like
+  // the pre-fix path.
+  let rcAppUserId: string | null = null;
+  try {
+    const Purchases = require('react-native-purchases').default;
+    rcAppUserId = await Purchases.getAppUserID();
+  } catch {
+    rcAppUserId = null;
+  }
+
+  const buildHeaders = (bearerTok: string): Record<string, string> => ({
+    Accept: 'audio/mpeg',
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${bearerTok}`,
+    ...(rcAppUserId ? { 'X-RC-App-User-Id': rcAppUserId } : {}),
+  });
+
   DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_REQUEST_START', {
     voiceId,
     textLength: text.length,
@@ -544,11 +565,7 @@ export const generateSpeechToFile = async (
   try {
     response = await fetchFn(TTS_ENDPOINT, {
       method: 'POST',
-      headers: {
-        Accept: 'audio/mpeg',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${bearer}`,
-      },
+      headers: buildHeaders(bearer),
       body: JSON.stringify({
         text,
         voice_id: voiceId,
@@ -583,11 +600,7 @@ export const generateSpeechToFile = async (
         try {
           response = await fetchFn(TTS_ENDPOINT, {
             method: 'POST',
-            headers: {
-              Accept: 'audio/mpeg',
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${retryBearer}`,
-            },
+            headers: buildHeaders(retryBearer),
             body: JSON.stringify({
               text,
               voice_id: voiceId,
