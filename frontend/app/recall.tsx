@@ -35,12 +35,18 @@ export default function RecallScreen() {
   const { scriptId, sceneIndex } = useLocalSearchParams<{ scriptId: string; sceneIndex: string }>();
   const { scripts } = useScriptStore();
   const { isPremium } = useRevenueCat();
-  
+
   const script = scripts.find(s => s.id === scriptId);
+  // SEC/V1-RELEASE: Guard against missing or invalid scriptId.
+  // Without this, Recall would silently initialise a 0-line session when the
+  // user navigates to /recall from Home (no scriptId param) or with a stale id.
+  // Redirect to the existing script library instead of creating an empty session.
+  const needsScriptSelection = !scriptId || !script;
+
   const scenes = script?.scenes || [{ name: 'Full Script', lines: script?.lines || [] }];
   const currentScene = scenes[parseInt(sceneIndex || '0')];
   const sceneId = `${scriptId}_${sceneIndex || '0'}`;
-  
+
   // Settings
   const [difficulty, setDifficulty] = useState(30); // 10-100%
   const [speed, setSpeed] = useState(1.0); // 0.5-2.0
@@ -62,10 +68,19 @@ export default function RecallScreen() {
   const startTimeRef = useRef<number>(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  // Load existing progress
+  // Load existing progress (skip if we're redirecting due to missing script)
   useEffect(() => {
-    loadProgress();
-  }, [sceneId]);
+    if (!needsScriptSelection) {
+      loadProgress();
+    }
+  }, [sceneId, needsScriptSelection]);
+
+  // SEC/V1-RELEASE: redirect side effect (hook runs unconditionally; action is conditional).
+  useEffect(() => {
+    if (needsScriptSelection) {
+      router.replace('/scripts');
+    }
+  }, [needsScriptSelection]);
 
   const loadProgress = async () => {
     const progress = await getSceneProgress(sceneId);
@@ -198,6 +213,23 @@ export default function RecallScreen() {
   const lines = currentScene?.lines || [];
   const accuracy = totalHidden > 0 ? Math.round((correctCount / totalHidden) * 100) : 0;
   const levelInfo = sceneProgress ? MASTERY_LEVELS[sceneProgress.masteryLevel] : MASTERY_LEVELS.ROOKIE;
+
+  // SEC/V1-RELEASE: short-circuit render when scriptId is missing or stale.
+  // The redirect useEffect above triggers router.replace('/scripts'); this view
+  // prevents a transient 0-line Recall session from being rendered meanwhile.
+  if (needsScriptSelection) {
+    return (
+      <SafeAreaView style={styles.container} testID="recall-redirect-screen">
+        <View style={styles.redirectContainer}>
+          <Ionicons name="library-outline" size={48} color="#6366f1" />
+          <Text style={styles.redirectTitle} testID="recall-redirect-title">
+            Choose a script to practise
+          </Text>
+          <Text style={styles.redirectSubtitle}>Opening your library…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // Settings screen
   if (!gameStarted) {
@@ -470,6 +502,9 @@ export default function RecallScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0f' },
+  redirectContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
+  redirectTitle: { fontSize: 18, fontWeight: '600', color: '#fff', textAlign: 'center' },
+  redirectSubtitle: { fontSize: 14, color: '#9ca3af', textAlign: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a1a2e' },
   backButton: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: '600', color: '#fff' },
