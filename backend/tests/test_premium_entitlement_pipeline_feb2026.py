@@ -169,10 +169,16 @@ def test_mongo_free_rc_active_lifts_row_and_returns_premium(srv, monkeypatch):
                       AsyncMock(return_value=rc_entitlement)):
         tier = _run(srv.resolve_authoritative_tier("uid-C", "rc-user-C"))
     assert tier == "premium"
-    assert update_mock.await_count == 1
-    args, _ = update_mock.call_args
-    set_doc = args[1]["$set"]
-    assert set_doc["subscription_tier"] == "premium"
+    # SCRIPT M8 LAUNCH-SAFETY: resolver eagerly persists the rcid BEFORE
+    # the live RC call, then lifts the row to premium after RC confirms
+    # active. Expect >=1 write; exactly one must set premium.
+    assert update_mock.await_count >= 1
+    premium_writes = [
+        c for c in update_mock.await_args_list
+        if c.args[1].get("$set", {}).get("subscription_tier") == "premium"
+    ]
+    assert len(premium_writes) == 1
+    set_doc = premium_writes[0].args[1]["$set"]
     assert set_doc["revenuecat_app_user_id"] == "rc-user-C"
     assert "subscription_end" in set_doc
 
@@ -188,7 +194,14 @@ def test_mongo_free_rc_inactive_returns_free_no_write(srv, monkeypatch):
                       AsyncMock(return_value=rc_inactive)):
         tier = _run(srv.resolve_authoritative_tier("uid-D", "rc-user-D"))
     assert tier == "free"
-    assert update_mock.await_count == 0
+    # No tier promotion write. The resolver may eagerly persist the rcid
+    # (so a future RC-config fix can self-heal), but it must NEVER set
+    # subscription_tier=premium on an inactive RC response.
+    premium_writes = [
+        c for c in update_mock.await_args_list
+        if c.args[1].get("$set", {}).get("subscription_tier") == "premium"
+    ]
+    assert premium_writes == []
 
 
 def test_rc_unavailable_falls_back_safely(srv, monkeypatch):
@@ -240,6 +253,113 @@ def test_resolver_falls_back_to_persisted_rcid_when_header_absent(srv, monkeypat
     assert tier == "premium"
     assert rc_mock.await_count == 1
     assert rc_mock.await_args.args[0] == "stored-rc-id-H"
+
+
+# ─── 2.A LAUNCH-SAFETY — eager rcid persistence ──────────────────────
+
+def test_resolver_eagerly_persists_rcid_even_when_secret_missing(srv, monkeypatch):
+    """SCRIPT M8 LAUNCH-SAFETY: when `REVENUECAT_SECRET_KEY` is not yet
+    configured in prod, the resolver cannot verify RC — but it MUST
+    still persist the caller's rcid so a later request (once the
+    operator pastes the secret) can self-heal via the persisted-rcid
+    fallback WITHOUT the client needing to re-send the header."""
+    monkeypatch.delenv("REVENUECAT_SECRET_KEY", raising=False)
+    user_doc = {"id": "uid-EP1", "device_id": "uid-EP1",
+                "subscription_tier": "free"}
+    update_mock = AsyncMock()
+    users = _users_mock(user_doc, update_mock=update_mock)
+    with patch.object(srv.db, "users", users):
+        tier = _run(srv.resolve_authoritative_tier("uid-EP1", "rc-new-id"))
+    assert tier == "free"  # No premium promotion without verification.
+    # Exactly one write: the eager-persist of the rcid.
+    assert update_mock.await_count == 1
+    set_doc = update_mock.await_args.args[1]["$set"]
+    assert set_doc.get("revenuecat_app_user_id") == "rc-new-id"
+    # And CRITICALLY no tier promotion.
+    assert "subscription_tier" not in set_doc
+
+
+def test_resolver_eager_persist_skipped_when_rcid_already_matches(srv, monkeypatch):
+    """Idempotency: if the row's persisted rcid already matches the
+    caller's header, the eager-persist write is NOT re-fired."""
+    monkeypatch.delenv("REVENUECAT_SECRET_KEY", raising=False)
+    user_doc = {"id": "uid-EP2", "device_id": "uid-EP2",
+                "subscription_tier": "free",
+                "revenuecat_app_user_id": "rc-stable-id"}
+    update_mock = AsyncMock()
+    users = _users_mock(user_doc, update_mock=update_mock)
+    with patch.object(srv.db, "users", users):
+        tier = _run(srv.resolve_authoritative_tier("uid-EP2", "rc-stable-id"))
+    assert tier == "free"
+    assert update_mock.await_count == 0
+
+
+def test_resolver_eager_persist_also_fires_when_rc_unavailable(srv, monkeypatch):
+    """Even when the live RC call errors (5xx/timeout), the rcid is still
+    persisted so retries can self-heal once RC is back."""
+    monkeypatch.setenv("REVENUECAT_SECRET_KEY", "sk_test_dummy")
+    user_doc = {"id": "uid-EP3", "device_id": "uid-EP3",
+                "subscription_tier": "free"}
+    update_mock = AsyncMock()
+    users = _users_mock(user_doc, update_mock=update_mock)
+    with patch.object(srv.db, "users", users), \
+         patch.object(srv, "fetch_premium_entitlement",
+                      AsyncMock(side_effect=srv.RevenueCatUnavailable("timeout"))):
+        tier = _run(srv.resolve_authoritative_tier("uid-EP3", "rc-new-id"))
+    assert tier == "free"
+    # The eager-persist still happened.
+    rcid_writes = [
+        c for c in update_mock.await_args_list
+        if c.args[1].get("$set", {}).get("revenuecat_app_user_id") == "rc-new-id"
+    ]
+    assert len(rcid_writes) == 1
+    # And NO tier promotion.
+    premium_writes = [
+        c for c in update_mock.await_args_list
+        if c.args[1].get("$set", {}).get("subscription_tier") == "premium"
+    ]
+    assert premium_writes == []
+
+
+# ─── 2.B scriptStore sync-call bearer attachment (frontend contract) ──
+
+def test_scriptstore_sync_endpoint_attaches_auth_bearer():
+    """SCRIPT M8 LAUNCH-SAFETY: the frontend's `/revenuecat/sync` POST
+    MUST attach the standard `Authorization: Bearer <token>` header
+    (via `getAuthHeader`). Without this the backend's SEC-002
+    enforcement 401-rejects the call and the rcid is never persisted —
+    directly causing the TTS 402 free-tier physical failure."""
+    source = Path("/app/frontend/store/scriptStore.ts").read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"axios\.post\(\s*`\$\{API_BASE_URL\}/api/users/\$\{deviceId\}/revenuecat/sync`,"
+        r"[^;]*?headers:\s*await\s+getAuthHeader\(\)",
+        re.DOTALL,
+    )
+    assert pattern.search(source), (
+        "frontend scriptStore.ts syncRevenueCatEntitlement must call "
+        "axios.post with { headers: await getAuthHeader() }."
+    )
+
+
+def test_backend_sync_endpoint_persists_rcid_even_on_503(server_source: str):
+    """`/revenuecat/sync` must persist the caller's rcid on BOTH the
+    `RevenueCatNotConfigured` and `RevenueCatUnavailable` branches so a
+    later request can self-heal via the persisted-rcid fallback."""
+    start = server_source.find("async def sync_revenuecat_entitlement(")
+    end = server_source.find("# ==================== SCRIPT ROUTES ====================", start)
+    assert start != -1 and end != -1
+    block = server_source[start:end]
+    assert "except RevenueCatNotConfigured" in block
+    assert "except RevenueCatUnavailable" in block
+    rcid_writes = re.findall(
+        r'"revenuecat_app_user_id":\s*body\.revenuecat_app_user_id',
+        block,
+    )
+    assert len(rcid_writes) >= 3, (
+        f"Expected >=3 rcid writes (NotConfigured + Unavailable + success). "
+        f"Found {len(rcid_writes)}."
+    )
+
 
 
 # ─── 3. Physical scenario reproduction ─────────────────────────────────

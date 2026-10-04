@@ -439,7 +439,13 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       const response = await axios.post(
         `${API_BASE_URL}/api/users/${deviceId}/revenuecat/sync`,
         { revenuecat_app_user_id },
-        { timeout: API_TIMEOUT },
+        // 2026-02 SCRIPT M8 LAUNCH-SAFETY — SEC-002 requires a bearer on
+        // every write to the user's own row. The previous call sent no
+        // Authorization header, so prod 401-rejected it silently and the
+        // backend NEVER persisted `revenuecat_app_user_id`. Without the
+        // persisted rcid, the resolver's header-less fallback could not
+        // self-heal. Attach the standard auth header + the RC id header.
+        { timeout: API_TIMEOUT, headers: await getAuthHeader() },
       );
 
       if (response.data?.is_premium) {

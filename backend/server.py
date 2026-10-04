@@ -1003,7 +1003,47 @@ async def resolve_authoritative_tier(
         # header (older frontend builds).
         rcid = (user.get("revenuecat_app_user_id") or "").strip()
 
-    if rcid and os.environ.get("REVENUECAT_SECRET_KEY"):
+    # 2026-02 SCRIPT M8 LAUNCH-SAFETY — eager rcid persistence.
+    # Even if `REVENUECAT_SECRET_KEY` is not yet configured in prod OR
+    # the live RC call fails below, record the caller's rcid on the
+    # Mongo row NOW so a later request (once the operator pastes the
+    # secret, or RC comes back up) can self-heal via the persisted
+    # value WITHOUT the client having to re-send the header. This
+    # NEVER grants premium — only stores an identity hint. SEC-003
+    # verification contract preserved.
+    if (
+        user
+        and rcid
+        and (user.get("revenuecat_app_user_id") or "") != rcid
+    ):
+        try:
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$set": {
+                    "revenuecat_app_user_id": rcid,
+                    "updated_at": datetime.utcnow(),
+                }},
+            )
+            logger.info(
+                "[PREMIUM-RESOLVER] eager-persist rcid for user_id=%s",
+                user_id,
+            )
+        except Exception as exc:  # DB blip must not block the gate
+            logger.warning(
+                "[PREMIUM-RESOLVER] eager-persist write failed: %s", exc,
+            )
+
+    rc_secret_present = bool(os.environ.get("REVENUECAT_SECRET_KEY"))
+    if rcid and not rc_secret_present:
+        # Prod diagnostic — operator can grep logs to confirm the exact
+        # cause. We never log any portion of the secret itself.
+        logger.warning(
+            "[PREMIUM-RESOLVER] rcid present but REVENUECAT_SECRET_KEY is "
+            "unset — cannot verify entitlement. user_id=%s",
+            user_id,
+        )
+
+    if rcid and rc_secret_present:
         now = _time_monotonic()
         cached = _TIER_CACHE.get(rcid)
         if cached and cached[1] > now:
@@ -2678,12 +2718,38 @@ async def sync_revenuecat_entitlement(
         entitlement = await fetch_premium_entitlement(body.revenuecat_app_user_id)
     except RevenueCatNotConfigured as exc:
         logger.error("[RC-SYNC] not configured: %s", exc)
+        # 2026-02 SCRIPT M8 LAUNCH-SAFETY — even when we cannot verify
+        # RC right now, persist the caller's rcid so a later request
+        # (once the operator pastes REVENUECAT_SECRET_KEY) can self-heal
+        # via `resolve_authoritative_tier`'s persisted-rcid fallback. We
+        # NEVER promote tier here — only remember the identity hint.
+        try:
+            await db.users.update_one(
+                {"device_id": device_id},
+                {"$set": {
+                    "revenuecat_app_user_id": body.revenuecat_app_user_id,
+                    "updated_at": datetime.utcnow(),
+                }},
+            )
+        except Exception:
+            pass
         raise HTTPException(
             status_code=503,
             detail="Subscription verification is temporarily unavailable",
         ) from exc
     except RevenueCatUnavailable as exc:
         logger.warning("[RC-SYNC] RC unavailable: %s", exc)
+        # Same eager-persist safety net as the "not configured" branch.
+        try:
+            await db.users.update_one(
+                {"device_id": device_id},
+                {"$set": {
+                    "revenuecat_app_user_id": body.revenuecat_app_user_id,
+                    "updated_at": datetime.utcnow(),
+                }},
+            )
+        except Exception:
+            pass
         raise HTTPException(
             status_code=503,
             detail="Subscription verification is temporarily unavailable",
