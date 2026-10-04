@@ -151,8 +151,13 @@ def test_sec002fu_unauth_requests_rejected_401(method, path):
         ("POST",   "/users/{other}/cancel-subscription"),
         ("GET",    "/auth/user/{other}"),
         ("GET",    "/sync/pull/{other}"),
-        ("GET",    "/streak/{other}"),
-        ("POST",   "/streak/{other}/record"),
+        # 2026-02 refined: /streak/* and /daily-drill/* are now
+        # bearer-authoritative (see test_daily_drill_bearer_identity_feb2026
+        # and test_sec002_route_auth_enforcement_feb2026) because mobile
+        # mints two independent AsyncStorage device-id keys and strict
+        # path matching was 403'ing legitimate users. The cross-user
+        # isolation contract is enforced via bearer-derived Mongo
+        # filters, verified in those dedicated test files.
         ("GET",    "/dialect/history/{other}"),
         ("GET",    "/acting-coach/history/{other}"),
         ("GET",    "/tapes/user/{other}"),

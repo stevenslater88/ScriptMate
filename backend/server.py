@@ -4870,9 +4870,17 @@ async def get_daily_drill(
 ):
     """Get today's daily acting drill challenge.
 
-    SEC-002 (2026-02): the path `user_id` is validated against the
-    authenticated bearer; mismatches return 403."""
-    enforce_user_id_match(user_id, authenticated_user_id)
+    SEC-002 (2026-02, refined overnight 2026-02): the authoritative
+    identity is derived from the bearer; the path `{user_id}` is kept
+    for URL-shape compatibility with existing callers but is NO LONGER
+    required to match. Historical mobile builds mint the AsyncStorage
+    `device_id` independently of the `@scriptmate_device_id` key the
+    auth bearer is bound to, so a strict `enforce_user_id_match` here
+    legitimately 403'd authenticated users on their own data. The
+    bearer-derived `effective_user_id` is the ONLY identity used for
+    the Mongo filter — exactly like `/scripts`, which has operated on
+    this pattern since SEC-002 without any cross-user access ever
+    reported. Unauthenticated requests still 401 at the dependency."""
     user_id = effective_user_id(authenticated_user_id)
     today = datetime.utcnow().strftime("%Y-%m-%d")
     
@@ -4943,9 +4951,8 @@ async def complete_daily_drill(
 ):
     """Mark today's drill as complete and award XP.
 
-    SEC-002 (2026-02): path `user_id` is validated against the
-    authenticated bearer; mismatches return 403."""
-    enforce_user_id_match(user_id, authenticated_user_id)
+    SEC-002 (refined 2026-02 overnight): bearer-derived identity only;
+    see `get_daily_drill` for the full rationale."""
     user_id = effective_user_id(authenticated_user_id)
     today = datetime.utcnow().strftime("%Y-%m-%d")
     
@@ -5022,8 +5029,8 @@ async def get_streak(
 ):
     """Get user's training streak and XP.
 
-    SEC-002 (2026-02): path `user_id` must match authenticated bearer."""
-    enforce_user_id_match(user_id, authenticated_user_id)
+    SEC-002 (refined 2026-02 overnight): bearer-derived identity only;
+    see `get_daily_drill` for the full rationale."""
     user_id = effective_user_id(authenticated_user_id)
     today = datetime.utcnow().strftime("%Y-%m-%d")
     yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -5062,8 +5069,8 @@ async def record_streak_activity(
 ):
     """Record an activity for streak tracking (acting_coach, dialect_coach, rehearsal, etc).
 
-    SEC-002 (2026-02): path `user_id` must match authenticated bearer."""
-    enforce_user_id_match(user_id, authenticated_user_id)
+    SEC-002 (refined 2026-02 overnight): bearer-derived identity only;
+    see `get_daily_drill` for the full rationale."""
     user_id = effective_user_id(authenticated_user_id)
     await record_activity(user_id, activity_type, 10)
     return await get_streak(user_id, authenticated_user_id)
@@ -5084,9 +5091,8 @@ async def get_drill_feedback(
 ):
     """Get AI performance feedback for a daily drill.
 
-    SEC-002 (2026-02): path `user_id` is validated against the
-    authenticated bearer; mismatches return 403."""
-    enforce_user_id_match(user_id, authenticated_user_id)
+    SEC-002 (refined 2026-02 overnight): bearer-derived identity only;
+    see `get_daily_drill` for the full rationale."""
     user_id = effective_user_id(authenticated_user_id)
     feedback = None
     
