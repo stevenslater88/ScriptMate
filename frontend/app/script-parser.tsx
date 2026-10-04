@@ -130,6 +130,29 @@ export default function ScriptParserScreen() {
         : /\.txt$/i.test(title || '')
           ? 'text/plain'
           : 'text/plain';
+    // ─── 2026-02 OVERNIGHT — character-identity Unicode fingerprint ─
+    // Physical APK 1.0.81 showed `SCRIPT M8 STRESS-TEST SCRIPT` as a
+    // 5th character. The automated parity tests already pass against
+    // all plain + 5-invisible fixtures, so if the physical defect
+    // persists on the next build it is caused by a Unicode code point
+    // NOT yet in our invisible-char allow-list. Emit the full code
+    // point list of every detected character + the longest suspicious
+    // detected name so the next physical capture pins the exact
+    // code point for RCA. Pure instrumentation — zero behaviour
+    // change.
+    const characterFingerprints = characters.slice(0, 10).map(c => {
+      const name = c.name;
+      return {
+        name,
+        length: name.length,
+        wordCount: name.trim().split(/\s+/).length,
+        codePoints: Array.from(name).map(ch => {
+          const cp = ch.codePointAt(0) || 0;
+          return 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
+        }),
+        hasSuspiciousInvisible: /[\u00A0\u00AD\u034F\u061C\u180E\u200B\u200C\u200D\u2060-\u2064\uFEFF]/.test(name),
+      };
+    });
     DebugLog.importStage('parser-complete', {
       parser: 'smartScriptParser.v2',
       parserStage: 'frontend-review-parse-complete',
@@ -142,6 +165,7 @@ export default function ScriptParserScreen() {
       parentheticalCount: parseResult.stats.parentheticalLines,
       headingCount: parseResult.stats.headingLines,
       warningsCount: parseResult.warnings.length,
+      characterFingerprints,
     });
   }, [rawText, title, characters.length, parseResult.parsedLines.length, parseResult.stats, parseResult.warnings.length]);
 

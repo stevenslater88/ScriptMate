@@ -34,6 +34,11 @@ _INVISIBLE_CHARS = [
     ("ZWJ",   "\u200D"),
     ("ZWNJ",  "\u200C"),
     ("BOM",   "\uFEFF"),
+    ("WJ",    "\u2060"),
+    ("INVTIMES", "\u2062"),
+    ("CGJ",   "\u034F"),
+    ("ALM",   "\u061C"),
+    ("MVS",   "\u180E"),
 ]
 
 

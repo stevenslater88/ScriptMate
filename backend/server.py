@@ -1477,21 +1477,29 @@ def _normalize_cue(s: str) -> str:
 
 
 # ─── 2026-02 PHYSICAL BUILD — INVISIBLE INTRA-TOKEN WORD-COUNT FIX ──
-# PyPDF2 can inject U+00A0 NBSP, U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ
-# or U+FEFF BOM BETWEEN tokens of a document title/subtitle during
-# text extraction. Python's `str.split()` without args does NOT treat
-# ZWSP/ZWNJ/ZWJ/BOM as whitespace (NBSP is treated as whitespace in
-# Python 3 but is NOT by `\s` in JavaScript — the frontend parser
+# PyPDF2 can inject invisible format-category characters BETWEEN
+# tokens of a document title/subtitle during text extraction:
+#   U+00A0 NBSP, U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+FEFF BOM,
+#   U+2060 WORD JOINER, U+2061..U+2064 invisible operators,
+#   U+034F COMBINING GRAPHEME JOINER, U+061C ARABIC LETTER MARK,
+#   U+180E MONGOLIAN VOWEL SEPARATOR.
+# Python's `str.split()` without args does NOT treat ZWSP/ZWNJ/ZWJ/BOM
+# or the U+206x invisibles as whitespace (NBSP is treated as whitespace
+# in Python 3 but is NOT by `\s` in JavaScript — the frontend parser
 # shares this bug). As a result, a 4-word subtitle like
-# "SCRIPT M8 STRESS-TEST SCRIPT" with a single ZWSP somewhere between
-# tokens is counted as 3 words, bypasses the <=3-word character-cue
-# rejection, and is wrongly promoted to a speaking character.
+# "SCRIPT M8 STRESS-TEST SCRIPT" with a single such code point embedded
+# between tokens is counted as 3 words, bypasses the <=3-word
+# character-cue rejection, and is wrongly promoted to a speaking
+# character.
 #
 # This helper replaces invisible intra-token characters with ordinary
 # spaces for the SOLE purpose of the word-count decision. The stored
 # line text and the character-cue identity (via `_normalize_cue`) are
-# UNCHANGED.
-_INVISIBLE_INTRA_TOKEN_RE = re.compile(r"[\u00A0\u200B\u200C\u200D\uFEFF]")
+# UNCHANGED. We DO NOT include U+00AD (SOFT HYPHEN) because it has
+# legitimate text-wrapping semantics.
+_INVISIBLE_INTRA_TOKEN_RE = re.compile(
+    r"[\u00A0\u034F\u061C\u180E\u200B-\u200D\u2060-\u2064\uFEFF]"
+)
 
 
 def _wordcount_normalize(s: str) -> str:

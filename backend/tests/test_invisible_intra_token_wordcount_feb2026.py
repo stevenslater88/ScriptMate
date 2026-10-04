@@ -42,6 +42,11 @@ _INVISIBLE_CHARS = [
     ("ZWJ",   "\u200D"),
     ("ZWNJ",  "\u200C"),
     ("BOM",   "\uFEFF"),
+    ("WJ",    "\u2060"),  # WORD JOINER
+    ("INVTIMES", "\u2062"),  # INVISIBLE TIMES
+    ("CGJ",   "\u034F"),  # COMBINING GRAPHEME JOINER
+    ("ALM",   "\u061C"),  # ARABIC LETTER MARK
+    ("MVS",   "\u180E"),  # MONGOLIAN VOWEL SEPARATOR
 ]
 
 

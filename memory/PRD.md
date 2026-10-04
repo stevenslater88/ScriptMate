@@ -18,21 +18,34 @@
 `index`, `dashboard`, `scripts`, `script/[id]`, `rehearsal/[id]`, `selftape/{index,library,prep,record,review,teleprompter}`, `auditions`, `daily-drill`, `recall`, `scene-partner`, `acting-coach`, `acting-feedback`, `dialect-coach`, `voice-studio`, `premium`, `paywall`, `profile`, `signin`, `onboarding`, `debug`, `support`, `terms`, `privacy`, `stats`, `upload`, `script-parser`, `_layout`. Total: 34 route files.
 
 
-### 2026-02 — P0 Parser Fix: Invisible Intra-Token Characters (Feb 2026)
+### 2026-02 — P0 Parser Fix: Invisible Intra-Token Characters (Feb 2026, OVERNIGHT ITERATION)
 
-**Physical defect:** APK's Preview & Fix screen listed `SCRIPT M8 STRESS-TEST SCRIPT` as a 5th character on the ScriptM8 Great-Snack-Heist PDF, alongside correct JACK/EMILY/BELLA/LILY.
+**Physical defect:** APK 1.0.81 Preview & Fix screen listed `SCRIPT M8 STRESS-TEST SCRIPT` as a 5th character alongside correct JACK/EMILY/BELLA/LILY on the ScriptM8 Great-Snack-Heist PDF. Backend-persisted script correctly shows 4 characters (213 lines); frontend review showed 5 (413 raw-parsed lines).
 
-**Root cause:** PyPDF2 injects invisible intra-token characters (U+200B ZWSP / U+00A0 NBSP / U+200D ZWJ / U+200C ZWNJ / U+FEFF BOM) BETWEEN tokens during text extraction. Python's `str.split()` does NOT treat ZWSP/ZWNJ/ZWJ/BOM as whitespace, and JavaScript's `/\s+/` matches NBSP but none of the other four. A 4-word subtitle with a single invisible character embedded between tokens therefore counted as 3 words and bypassed the `<=3-word` character-cue rejection in both parsers. The companion title `THE GREAT SNACK HEIST` had no embedded invisibles, so it was still correctly rejected — matching the asymmetric symptom in the APK.
+**Root cause:** PyPDF2 injects invisible format-category characters BETWEEN tokens during text extraction. Python's `str.split()` does NOT treat ZWSP/ZWNJ/ZWJ/BOM/U+206x invisibles as whitespace, and JavaScript's `/\s+/` matches NBSP but none of the other invisibles. A 4-word subtitle with a single invisible character embedded between tokens therefore counted as 3 words and bypassed the `<=3-word` character-cue rejection in both parsers. The companion title `THE GREAT SNACK HEIST` had no embedded invisibles, so it was still correctly rejected — matching the asymmetric symptom in the APK.
 
-**Fix (minimal scope):**
-- `backend/server.py` — new `_wordcount_normalize()` helper + `_INVISIBLE_INTRA_TOKEN_RE`; applied at three word-count sites: `_implicit_title_indices` cue-shape, inline-cue (`NAME: dialogue`), and the main character-cue block. Line text and `_normalize_cue` identity path unchanged.
-- `frontend/services/smartScriptParser.ts` — mirror `wordcountNormalize()` helper + `INVISIBLE_INTRA_TOKEN_RE`; applied at two word-count sites: `isLikelyCharacterName` and the implicit-title cue-shape run.
+**Fix (minimal scope — defensive expansion applied overnight to cover 10 code points):**
+- `backend/server.py` — new `_wordcount_normalize()` helper + `_INVISIBLE_INTRA_TOKEN_RE` covering NBSP U+00A0, CGJ U+034F, ALM U+061C, MVS U+180E, ZWSP U+200B, ZWNJ U+200C, ZWJ U+200D, WORD JOINER U+2060, invisible-math U+2061-U+2064, BOM U+FEFF. Applied at 3 word-count sites: `_implicit_title_indices` cue-shape, inline-cue (`NAME: dialogue`), and the main character-cue block. Line text and `_normalize_cue` identity path unchanged. Soft Hyphen U+00AD deliberately excluded (legit wrap-point semantics).
+- `frontend/services/smartScriptParser.ts` — mirror `wordcountNormalize()` helper + `INVISIBLE_INTRA_TOKEN_RE` (same 10 code points); applied at 2 word-count sites: `isLikelyCharacterName` and the implicit-title cue-shape run.
+- `frontend/app/script-parser.tsx` — added `characterFingerprints` diagnostic (Unicode code points + word count + hasSuspiciousInvisible flag) emitted via `DebugLog.importStage('parser-complete', …)` so the NEXT physical capture pins the exact code point of any residual leak for immediate RCA. Purely additive instrumentation, zero behaviour change.
 
-**Regression coverage added (45 new tests, all green):**
-- `backend/tests/test_invisible_intra_token_wordcount_feb2026.py` (24 tests) — covers all 5 invisibles × 3 injection positions in the subtitle, NBSP in the title line, plain-ASCII baseline, and helper invariants.
-- `backend/tests/test_invisible_intra_token_frontend_parity_feb2026.py` (21 tests) — same shapes executed through the frontend TS parser via the Node shim, plus FE/BE identity-set agreement assertions.
+**413 vs 213 line-count semantics:** Expected. The frontend `parseResult.parsedLines` is a line-by-line review grid where EVERY raw line from the PDF is classified (CHARACTER cue line, DIALOGUE, ACTION, PARENTHETICAL, HEADING, UNKNOWN) — one entry per raw-text line. The backend `fallback_parse_script` returns `lines[]` where consecutive dialogue lines under a cue are joined into a single dialogue block + stage directions — one entry per dialogue block or stage direction. Both representations are internally consistent; the user-visible review screen uses frontend `parsedLines`, the persisted script uses backend `lines`. Documented, no code change.
 
-**Scope guardrails honoured:** no APK/AAB build; no deploy; no dependency/SDK/native changes; RevenueCat/ElevenLabs/auth/TTS untouched; frozen ~75 baseline failures NOT touched; parser not redesigned.
+**Regression coverage (49 total, all green):**
+- `backend/tests/test_invisible_intra_token_wordcount_feb2026.py` — 28 tests covering all 10 invisibles × 3 injection positions, NBSP in title, plain-ASCII baseline, helper invariants.
+- `backend/tests/test_invisible_intra_token_frontend_parity_feb2026.py` — 21 tests executing frontend parser via Node shim + FE/BE identity-set agreement.
+- 33/33 Node adversarial sanity test cases pass.
+- 477/477 combined parser+parity+PDF+RevenueCat suite passes.
+- Baseline diff: 84 failures/errors before AND after — **zero new regressions**.
+
+**P0 #1 — RevenueCat Entitlement NOT Attached (external action required):**
+- Evidence: `activeSubscriptionsCount=1`, `activeSubscriptions=["scriptmate_annual:3"]`, `activeEntitlementIds=[]`, `isPremium=false` on both purchase and restore paths.
+- Code is correct: entitlement ID `"ScriptMate Pro"` matches between `frontend/services/revenuecat.ts:42`, `backend/revenuecat_client.py:41`, dashboard spec. Configure→logIn→alias→restore ordering is sound. SEC-003 server-side verification path is correct.
+- Diagnosis: `activeSubscriptions` populated but `activeEntitlementIds` empty is the definitive RevenueCat signal that the product is NOT attached to the entitlement in the RC dashboard. The `:3` suffix is the Google Play base-plan ID.
+- **External action required (RC dashboard):** Products → ensure `scriptmate_annual` (or `scriptmate_annual:3`) exists in Products. Entitlements → `ScriptMate Pro` → Attach products → add `scriptmate_annual:3`. Save. Have the user tap "Restore Purchases" on the APK.
+- No code change possible: faking isPremium or server-granting Premium when RC does not report an entitlement is explicitly forbidden by the overnight directive and SEC-003.
+
+**Scope guardrails honoured:** no APK/AAB build; no deploy; no dependency/SDK/native changes; RevenueCat/ElevenLabs/auth/TTS architecture untouched (one additive diagnostic log line only); 84 frozen baseline failures NOT touched (verified identical failure list); parser not redesigned.
 
 
 
