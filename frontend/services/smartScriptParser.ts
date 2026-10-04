@@ -243,6 +243,26 @@ function isLikelyCharacterName(line: string): { likely: boolean; confidence: num
     return { likely: false, confidence: 0 };
   }
 
+  // ─── 2026-02 OVERNIGHT P0 — digit-token rejection ─────────────────
+  // Physical ScriptM8 APK: `SCRIPTM8 STRESS-TEST SCRIPT` was being
+  // promoted to a 5th character because PyPDF2 merged the glyphs
+  // `SCRIPT` + `M8` with no space during PDF extraction (NOT an
+  // invisible Unicode injection — a genuine kerning merge). The
+  // resulting 3-word all-caps candidate otherwise passes every
+  // existing heuristic (within length, not a scene heading, not a
+  // parenthetical, no trailing punctuation, capsRatio=1.0, 3 words).
+  // Real character cues (JACK, EMILY, MR. SMITH, MARY-ANNE, JACK (V.O.))
+  // NEVER contain digits — they are proper nouns. A token containing
+  // a digit (`SCRIPTM8`, `ACT 1`, `SCENE 2`, `PAGE 42`) is almost
+  // always a title/header/metadata artefact or a page number that
+  // escaped `stripLeadingLineNumber`. Reject them here before they
+  // get boosted by the main-loop confidence pass. This is the single
+  // highest-signal low-false-positive discriminator for the real
+  // physical case.
+  if (/\d/.test(wordCountSource)) {
+    return { likely: false, confidence: 0 };
+  }
+
   // 2026-10 physical build 1.1.0 regression — ScriptM8_The_Great_Snack_Heist.
   // Character cues never end with sentence-terminating punctuation.
   // `WHERE?`, `APPARENTLY.`, `OH!`, `JACK!`, `MUD.`, `FINE.`, `MAYBE.`,
@@ -571,14 +591,35 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
     const { likely, confidence } = isLikelyCharacterName(trimmed);
 
     if (likely) {
-      // Look ahead: next non-empty line should be dialogue-ish
+      // ─── 2026-02 OVERNIGHT P0 — strict dialogue look-ahead ─────
+      // Previous lookahead treated "anything that is not a character
+      // cue" as dialogue — including scene headings (`INT. KITCHEN
+      // - DAY`), header lines (`TITLE: ...`) and other all-uppercase
+      // metadata. On the physical ScriptM8 PDF the sequence
+      //    SCRIPTM8 STRESS-TEST SCRIPT      ← candidate cue
+      //    <blank>
+      //    INT. KITCHEN - DAY              ← scene heading, NOT dialogue
+      // caused `hasFollowingDialogue = true` incorrectly, boosting
+      // confidence to 1.0 and promoting the title to a character.
+      // The strict check now requires the next non-empty line to:
+      //   (a) NOT be a scene heading,
+      //   (b) NOT be a header line (`TITLE:`, `CHARACTERS:`, etc.),
+      //   (c) NOT itself be a cue-shaped candidate,
+      //   (d) contain at least one lowercase letter — the only
+      //       reliable signal that it is actual spoken dialogue
+      //       (uppercase-only continuations like `MORE.` are
+      //       dialogue punctuation and rare; letting them count as
+      //       dialogue would reopen the original hole).
       let hasFollowingDialogue = false;
       for (let j = i + 1; j < rawLines.length && j <= i + 3; j++) {
         const nextTrimmed = rawLines[j].trim();
         if (nextTrimmed.length === 0) continue;
-        // Next line should NOT be another character name with high caps
+        if (isHeading(nextTrimmed)) break;
+        if (isHeaderLine(nextTrimmed)) break;
         const nextCheck = isLikelyCharacterName(nextTrimmed);
-        if (!nextCheck.likely || nextCheck.confidence < confidence) {
+        if (nextCheck.likely && nextCheck.confidence >= confidence) break;
+        // Real dialogue almost always contains a lowercase letter.
+        if (/[a-z]/.test(nextTrimmed)) {
           hasFollowingDialogue = true;
         }
         break;

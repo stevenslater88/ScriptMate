@@ -1807,6 +1807,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                 and not _normalize_cue(cue_raw).endswith(('.', '!', '?'))
                 and cue_upper not in _HEADER_KEYWORDS
                 and not _looks_like_scene_heading(cue_raw)
+                and not any(ch.isdigit() for ch in cue_raw)
                 and dialogue_text
             ):
                 # Flush any in-progress two-line-style dialogue block.
@@ -1838,6 +1839,18 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
             and not potential_char.startswith(('(', '['))
             and not _normalize_cue(potential_char).endswith(('.', '!', '?'))
             and not _looks_like_scene_heading(potential_char)
+            # ─── 2026-02 OVERNIGHT P0 — digit-token rejection ─────
+            # Reject if ANY digit remains AFTER stripping the leading
+            # PDF line number (`1 — JACK` → `JACK`, no digit left,
+            # legitimate). A digit surviving `_strip_leading_line_number`
+            # indicates a title/metadata artefact like `SCRIPTM8 STRESS-
+            # TEST SCRIPT`, `ACT 1`, `SCENE 2`, `PAGE 42` — none of
+            # these are speaking characters. Real character names
+            # NEVER contain digits.
+            and not any(
+                ch.isdigit()
+                for ch in _strip_leading_line_number(potential_char)
+            )
         ):
             if current_character and current_text:
                 lines_data.append({

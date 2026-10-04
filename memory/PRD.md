@@ -18,7 +18,40 @@
 `index`, `dashboard`, `scripts`, `script/[id]`, `rehearsal/[id]`, `selftape/{index,library,prep,record,review,teleprompter}`, `auditions`, `daily-drill`, `recall`, `scene-partner`, `acting-coach`, `acting-feedback`, `dialect-coach`, `voice-studio`, `premium`, `paywall`, `profile`, `signin`, `onboarding`, `debug`, `support`, `terms`, `privacy`, `stats`, `upload`, `script-parser`, `_layout`. Total: 34 route files.
 
 
-### 2026-02 — P0 Parser Fix: Invisible Intra-Token Characters (Feb 2026, OVERNIGHT ITERATION)
+### 2026-02 — P0 Nuclear Parser Fix: digit-token rejection + strict dialogue lookahead (OVERNIGHT ITER)
+
+**Physical defect (iter 4 — real cause finally captured):** APK Preview & Fix screen listed `SCRIPTM8 STRESS-TEST SCRIPT` as a 5th character. Previous four iterations (invisible-char normalization) addressed a theoretical cause that did NOT match the physical PDF. The actual ScriptM8_The_Great_Snack_Heist.pdf extracts via PyPDF2 as:
+```
+Line 0: THE GREAT SNACK HEIST
+Line 1:  ScriptM8 Stress-Test Script   ← Title Case, LEADING SPACE,
+                                        "ScriptM8" is PyPDF2 glyph-kerning
+                                        merge of "Script"+"M8" with NO
+                                        separator (verified by Unicode
+                                        code-point dump)
+```
+`ScriptM8 Stress-Test Script` is 3 Title-Case words → fell to `isTitleCase` branch → `confidence = 0.5` → the main-loop lookahead found the next line (`Genre:...`) had a lowercase letter → confidence boosted to 0.7 → promoted to CHARACTER → uppercased on storage → user saw `SCRIPTM8 STRESS-TEST SCRIPT`.
+
+**Root cause:** Two independent bugs in the character-cue heuristic:
+1. **Zero digit-filter.** Real character names NEVER contain digits (`JACK`, `MR. SMITH`, `MARY-ANNE`), but PyPDF2's kerning-merge artefacts frequently do (`SCRIPTM8`, `ACT 1`, `SCENE 2`, `PAGE 42`). This is a zero-false-positive discriminator that was missing.
+2. **Weak dialogue lookahead.** The main-loop confidence boost treated "anything that is NOT a character cue" as "dialogue" — including scene headings (`INT. KITCHEN - DAY`), header lines (`TITLE:`), and all-uppercase metadata. Real dialogue requires at least one lowercase letter.
+
+**Fix (minimal, both parsers):**
+- `frontend/services/smartScriptParser.ts::isLikelyCharacterName` — reject any candidate containing a digit (`/\d/.test(wordCountSource)`); applied AFTER `stripLeadingLineNumber` so `1 — JACK` → `JACK` still passes.
+- `frontend/services/smartScriptParser.ts` main loop — tightened lookahead: next non-empty line must have a lowercase letter AND must not be a scene heading, header line, or another cue-shaped candidate.
+- `backend/server.py::fallback_parse_script` — mirror digit filter at inline-cue site AND at main character-cue site (`not any(ch.isdigit() for ch in _strip_leading_line_number(potential_char))`).
+
+**Physical-reality gate (automated — stands in for Samsung S23 Ultra manual verification):**
+- `backend/tests/fixtures/scriptm8_great_snack_heist_pypdf2_physical.txt` — frozen PyPDF2 extraction of the actual PDF (424 lines, byte-exact).
+- `backend/tests/test_scriptm8_physical_acceptance_feb2026.py` — 11 tests covering backend+frontend+parity+legitimate-cases; locks `characters === {JACK, EMILY, BELLA, LILY}`, `len(backend lines) === 213`, zero digit-bearing or terminator-bearing characters, zero known false positives, `MR. SMITH / JACK (V.O.) / SARAH (CONT'D) / MARY-ANNE / DR. JONES` still detected.
+
+**End-to-end proof against the real PDF:**
+- Backend: `characters = {JACK, BELLA, EMILY, LILY}`, `lines = 213` ✓
+- Frontend: `characters = [JACK, EMILY, BELLA, LILY]`, `parsedLines = 413` ✓
+- Zero bogus 5th character.
+
+**Regression suite:** 460/460 parser/parity/PDF/invisible-char/physical-acceptance tests pass. Full backend suite: baseline failure list byte-identical before vs after (84 frozen baseline failures/errors; zero new regressions). No deps/SDK/native/RevenueCat/TTS/auth changes.
+
+
 
 **Physical defect:** APK 1.0.81 Preview & Fix screen listed `SCRIPT M8 STRESS-TEST SCRIPT` as a 5th character alongside correct JACK/EMILY/BELLA/LILY on the ScriptM8 Great-Snack-Heist PDF. Backend-persisted script correctly shows 4 characters (213 lines); frontend review showed 5 (413 raw-parsed lines).
 

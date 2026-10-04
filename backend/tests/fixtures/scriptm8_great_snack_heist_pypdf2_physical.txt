@@ -1,0 +1,424 @@
+THE GREAT SNACK HEIST
+ ScriptM8 Stress-Test Script
+ 
+Genre: Teen comedy / light mystery
+Setting: Community centre, late afternoon
+Characters: Jack (adult) · Emily (adult) · Bella (teenager) · Lily (teenager)
+Stress-test focus: 200 dialogue lines, rapid character switching, short/medium/long lines, questions, interruptions,
+emotional shifts, repeated speakers and scene breaks.
+SCENE 1 — THE MISSING SNACKS
+1 — JACK
+Okay. Nobody panic.
+2 — EMILY
+You saying that means I should definitely panic.
+3 — BELLA
+What's happened?
+4 — LILY
+Did someone break something?
+5 — JACK
+Worse.
+6 — EMILY
+The Wi-Fi?
+7 — JACK
+The snacks.
+8 — BELLA
+What about them?
+9 — JACK
+They're gone.
+10 — LILY
+All of them?
+11 — JACK
+Every single packet.
+12 — EMILY
+That's serious.
+13 — BELLA
+Extremely serious.
+14 — LILY
+Who was responsible for putting them away?
+15 — JACK
+I was.
+16 — EMILY
+And you lost them?
+17 — JACK
+
+I didn't lose them.
+18 — BELLA
+Then where are they?
+19 — JACK
+That's the problem.
+20 — LILY
+You don't know.
+21 — JACK
+Correct.
+22 — EMILY
+Excellent management.
+23 — JACK
+Thank you.
+24 — EMILY
+That wasn't a compliment.
+25 — BELLA
+When did you last see the snacks?
+26 — JACK
+Around four o'clock.
+27 — LILY
+And what happened after that?
+28 — JACK
+I put them in the cupboard.
+29 — BELLA
+Which cupboard?
+30 — JACK
+The big one.
+31 — EMILY
+There are three big cupboards.
+32 — JACK
+The biggest one.
+33 — LILY
+That really narrows it down.
+34 — JACK
+Look, I was busy.
+35 — BELLA
+Doing what?
+36 — JACK
+Trying to fix the printer.
+37 — EMILY
+Did you fix it?
+38 — JACK
+No.
+
+39 — LILY
+So you've lost the snacks and broken the printer?
+40 — JACK
+The printer was already broken.
+SCENE 2 — THE INVESTIGATION
+41 — EMILY
+Right. We're investigating.
+42 — JACK
+We're doing what?
+43 — EMILY
+Investigating.
+44 — JACK
+Why?
+45 — EMILY
+Because apparently I'm the only adult here capable of solving a mystery.
+46 — BELLA
+I can solve mysteries.
+47 — LILY
+You watched one detective programme.
+48 — BELLA
+It was six seasons.
+49 — JACK
+That's still television.
+50 — BELLA
+Exactly. Research.
+51 — EMILY
+Okay, Detective Bella.
+52 — BELLA
+Thank you.
+53 — EMILY
+Where do we start?
+54 — BELLA
+The scene of the crime.
+55 — LILY
+The cupboard?
+56 — BELLA
+Obviously.
+57 — JACK
+Nothing was forced open.
+58 — EMILY
+Any fingerprints?
+59 — JACK
+
+Probably.
+60 — LILY
+Did you check?
+61 — JACK
+No.
+62 — BELLA
+Then how do you know?
+63 — JACK
+Because I'm not a detective.
+64 — EMILY
+We've established that.
+65 — LILY
+Look!
+66 — JACK
+What?
+67 — LILY
+A crisp packet.
+68 — BELLA
+A clue!
+69 — EMILY
+Or rubbish.
+70 — BELLA
+Don't ruin this.
+71 — JACK
+Where did you find it?
+72 — LILY
+Under the chair.
+73 — EMILY
+What flavour?
+74 — LILY
+Salt and vinegar.
+75 — BELLA
+Interesting.
+76 — JACK
+Why?
+77 — BELLA
+Because I hate salt and vinegar.
+78 — EMILY
+That's your evidence?
+79 — BELLA
+It's a strong lead.
+80 — LILY
+No, it isn't.
+
+SCENE 3 — SUSPECT NUMBER ONE
+81 — BELLA
+Jack.
+82 — JACK
+Yes?
+83 — BELLA
+Where were you at four fifteen?
+84 — JACK
+Still fixing the printer.
+85 — EMILY
+Can anyone confirm that?
+86 — JACK
+The printer.
+87 — LILY
+The printer can't talk.
+88 — JACK
+Exactly.
+89 — BELLA
+Convenient.
+90 — JACK
+Are you accusing me?
+91 — BELLA
+I'm asking questions.
+92 — EMILY
+She's accusing you.
+93 — JACK
+Thank you, Emily.
+94 — EMILY
+You're welcome.
+95 — LILY
+Wait.
+96 — JACK
+What now?
+97 — LILY
+Jack had the cupboard key.
+98 — BELLA
+Aha!
+99 — JACK
+Everyone calm down.
+100 — EMILY
+That's twice you've said that.
+101 — JACK
+Because nobody is calm.
+
+102 — BELLA
+Where's the key now?
+103 — JACK
+In my pocket.
+104 — LILY
+Then you could have taken the snacks.
+105 — JACK
+I could have.
+106 — EMILY
+But did you?
+107 — JACK
+No.
+108 — BELLA
+How do we know?
+109 — JACK
+Because I don't eat crisps.
+110 — LILY
+You ate three packets yesterday.
+111 — JACK
+Those were different circumstances.
+112 — EMILY
+How?
+113 — JACK
+It was Tuesday.
+114 — BELLA
+That's not an answer.
+115 — JACK
+It is to me.
+116 — LILY
+Suspicious.
+117 — JACK
+I'm surrounded by traitors.
+118 — EMILY
+You're surrounded by teenagers.
+119 — BELLA
+Same thing.
+120 — LILY
+Definitely.
+SCENE 4 — SUSPECT NUMBER TWO
+121 — EMILY
+Right. New theory.
+122 — JACK
+
+Please don't.
+123 — EMILY
+Bella did it.
+124 — BELLA
+Excuse me?
+125 — LILY
+Interesting.
+126 — BELLA
+Why am I suddenly the suspect?
+127 — EMILY
+Because you're enjoying this too much.
+128 — BELLA
+That's not evidence.
+129 — JACK
+It is pretty suspicious.
+130 — BELLA
+You're supposed to be on my side!
+131 — JACK
+I'm on the side of justice.
+132 — LILY
+Very dramatic.
+133 — BELLA
+Fine. Ask me anything.
+134 — EMILY
+Where were you at four fifteen?
+135 — BELLA
+Outside.
+136 — JACK
+Doing what?
+137 — BELLA
+Talking to Lily.
+138 — LILY
+True.
+139 — EMILY
+For how long?
+140 — LILY
+About twenty minutes.
+141 — EMILY
+And then?
+142 — BELLA
+We came inside.
+143 — JACK
+Did you go near the cupboard?
+
+144 — BELLA
+No.
+145 — LILY
+Actually...
+146 — BELLA
+Lily.
+147 — LILY
+You did.
+148 — BELLA
+I walked past it.
+149 — LILY
+You opened it.
+150 — BELLA
+For one second.
+151 — JACK
+Why?
+152 — BELLA
+I wanted a drink.
+153 — EMILY
+Did you see the snacks?
+154 — BELLA
+Yes.
+155 — JACK
+Were they there?
+156 — BELLA
+Yes.
+157 — LILY
+Then Bella didn't take them.
+158 — EMILY
+Unless she came back later.
+159 — BELLA
+I didn't!
+160 — JACK
+Okay. New problem.
+SCENE 5 — THE TRUTH
+161 — LILY
+What?
+162 — JACK
+I think I know where they are.
+163 — EMILY
+You do?
+164 — BELLA
+
+Where?
+165 — JACK
+The cupboard.
+166 — LILY
+We checked the cupboard.
+167 — JACK
+You checked the big cupboard.
+168 — EMILY
+Yes.
+169 — JACK
+The snacks aren't in the big cupboard.
+170 — BELLA
+Then where are they?
+171 — JACK
+The small cupboard.
+172 — LILY
+You said the big cupboard!
+173 — JACK
+I know.
+174 — EMILY
+You've spent twenty minutes investigating something you put in the wrong cupboard?
+175 — JACK
+Apparently.
+176 — BELLA
+That's incredible.
+177 — LILY
+Wait.
+178 — JACK
+What?
+179 — LILY
+If the snacks are in the small cupboard...
+180 — EMILY
+Yes?
+181 — LILY
+Who ate the biscuits?
+182 — BELLA
+What biscuits?
+183 — LILY
+The chocolate ones.
+184 — BELLA
+I didn't.
+185 — EMILY
+Neither did I.
+
+186 — JACK
+Definitely wasn't me.
+187 — LILY
+Then why is there chocolate on Jack's shirt?
+188 — BELLA
+OH!
+189 — EMILY
+Jack!
+190 — JACK
+That is not chocolate.
+191 — LILY
+What is it?
+192 — JACK
+Mud.
+193 — BELLA
+It's indoors.
+194 — JACK
+Fine.
+195 — EMILY
+You ate the biscuits.
+196 — JACK
+Maybe.
+197 — LILY
+How many?
+198 — JACK
+Two.
+199 — BELLA
+There were twelve.
+200 — JACK
+...Okay, maybe twelve.
+ END
+ 
