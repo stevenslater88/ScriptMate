@@ -29,6 +29,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -101,7 +102,7 @@ async def fetch_premium_entitlement(
             "REVENUECAT_SECRET_KEY is not set — refusing to grant Premium",
         )
 
-    url = f"{REVENUECAT_API_BASE}/subscribers/{app_user_id}"
+    url = f"{REVENUECAT_API_BASE}/subscribers/{quote(app_user_id, safe='')}"
     headers = {
         "Authorization": f"Bearer {secret_key}",
         "Accept": "application/json",

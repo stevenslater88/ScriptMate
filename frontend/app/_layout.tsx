@@ -50,8 +50,22 @@ async function getStableRevenueCatAppUserId(): Promise<string> {
     if (existing) return existing;
     // First launch — mint a device id with the same shape used by
     // scriptStore so a later getDeviceId() call reads this very row.
-    const uniq = Device.modelId || Device.deviceName || 'unknown';
-    const fresh = `${uniq}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    //
+    // 2026-02 SCRIPT M8 PHYSICAL FIX — SAFE CHARSET:
+    // The S23 Ultra physical repro showed `Device.deviceName` can
+    // contain an apostrophe + spaces ("S's S23 Ultra"). That id
+    // flows through the backend into RC's REST endpoint
+    // `GET /v1/subscribers/{id}` where unencoded `'` and ` ` make the
+    // URL malformed and RC returns 404 → user stays FREE even with an
+    // active ScriptMate Pro entitlement. The backend now URL-encodes
+    // this value, but we ALSO sanitise at the source so a) future
+    // installs never produce an unsafe id, and b) any system that
+    // doesn't do URL-encoding (logs, analytics, Sentry tags) still
+    // sees a safe value. Keep only `A-Za-z0-9._-` and collapse the
+    // rest to `-`.
+    const rawUniq = Device.modelId || Device.deviceName || 'unknown';
+    const safeUniq = rawUniq.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'device';
+    const fresh = `${safeUniq}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     await AsyncStorage.setItem('device_id', fresh);
     return fresh;
   } catch {
