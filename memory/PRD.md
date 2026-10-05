@@ -138,6 +138,24 @@ failures, fix the "nuclear parser" false character bugs, and address the
   filtered by account-available voices.
 - `frontend/store/scriptStore.ts` — Zustand script store.
 
+## 2026-02 — Emily Note20 Android 13 "user_id does not match" fix (SCRIPT M8 Option A)
+Two independent AsyncStorage keys were minting the device identity:
+- `device_id` (shared, used by scriptStore + _layout + RC appUserID)
+- `@scriptmate_device_id` (private to elevenLabsService, used for bearer mint)
+
+The bearer identity therefore never equalled the URL-path identity, and every
+protected `/api/users/{deviceId}/*` request failed `enforce_user_id_match`
+with 403 "user_id does not match authenticated session" (surfaced on Emily's
+Note20 as the Premium tap error; "Failed to start trial" was the same 403
+plus a React stale-closure masking the real error text).
+
+Fix (one file, `frontend/services/elevenLabsService.ts`): read/write the
+shared `device_id` key, mint with the same safe-charset shape as _layout.tsx.
+Zero backend / RC / products / pricing / entitlement / TTS changes.
+
+Guarded by `tests/test_emily_note20_user_id_mismatch_feb2026.py` (10 tests).
+Full regression (171 passed, 1 skipped) green. No build/deploy performed.
+
 ## 2026-02 — Device B "Missing bearer token" fix (SCRIPT M8)
 Three axios calls in `frontend/store/scriptStore.ts` hit SEC-002-protected
 endpoints without `getAuthHeader()`, producing 401 "Missing bearer token"

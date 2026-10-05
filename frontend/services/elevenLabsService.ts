@@ -50,6 +50,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Device from 'expo-device';
 import { AppConfig } from './appConfig';
 import { DebugLog } from './debugLogService';
 import {
@@ -101,7 +102,26 @@ const DEVICE_SESSION_ENDPOINT = `${BACKEND_URL}/api/auth/device-session`;
 // sign-in session, so the SEC-004 bearer gate accepts it unchanged.
 //
 // Cached in AsyncStorage + in-memory. Never logged.
-const DEVICE_ID_KEY = '@scriptmate_device_id';
+//
+// 2026-02 SCRIPT M8 — Emily Note20 (Android 13) Premium 403 RCA
+// -------------------------------------------------------------
+// Previously this file minted its own device_id under the PRIVATE key
+// `@scriptmate_device_id`. scriptStore.getDeviceId and
+// _layout.getStableRevenueCatAppUserId both key off the SHARED key
+// `device_id`. The two keys held DIFFERENT values on every real
+// install, so the bearer token's db.auth_tokens.user_id
+// ("device:<@scriptmate_device_id value>") never matched the URL
+// path identity ("<device_id value>") sent by scriptStore. The
+// backend's enforce_user_id_match rejected every protected
+// /api/users/{deviceId}/... request with 403 "user_id does not match
+// authenticated session" — the exact failure on Emily's Note20.
+//
+// Fix: read/write the SHARED `device_id` key so the bearer identity
+// equals the URL-path identity equals the RC appUserID. The bearer
+// cache (`cached.deviceId === deviceId` at _loadCachedBearer below)
+// auto-invalidates any legacy bearer minted against the old private
+// key, so there is no manual migration step.
+const DEVICE_ID_KEY = 'device_id';
 const TTS_BEARER_KEY = '@scriptmate_tts_bearer';
 // Refresh when fewer than this many ms remain before expiry.
 const TTS_BEARER_REFRESH_SKEW_MS = 24 * 60 * 60 * 1000; // 1 day
@@ -118,7 +138,18 @@ let _bearerFetchInFlight: Promise<CachedBearer | null> | null = null;
 async function _readOrCreateDeviceId(): Promise<string> {
   let id = await AsyncStorage.getItem(DEVICE_ID_KEY);
   if (!id) {
-    id = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // 2026-02 SCRIPT M8 — mint using the same safe-charset shape as
+    // _layout.tsx::getStableRevenueCatAppUserId so a cold-start race
+    // (TTS lib loads before the layout mounts) can't produce an id
+    // that disagrees with the shape every other consumer expects.
+    // Safe charset `A-Za-z0-9._-` ensures the id can be put into the
+    // RC REST URL and the backend's /api/users/{device_id} path
+    // without URL-encoding surprises.
+    const rawUniq = Device.modelId || Device.deviceName || 'unknown';
+    const safeUniq = rawUniq
+      .replace(/[^A-Za-z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'device';
+    id = `${safeUniq}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     await AsyncStorage.setItem(DEVICE_ID_KEY, id);
   }
   return id;

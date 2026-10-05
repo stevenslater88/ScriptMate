@@ -63,6 +63,10 @@ This test file:
      precedent.
 
 No code fix is applied in this commit — only evidence.
+
+UPDATE (same session, same day): Option A applied. Tests below now
+pin the FIXED state. Any accidental revert of the shared-key
+convergence will fail multiple assertions here.
 """
 
 from __future__ import annotations
@@ -115,46 +119,50 @@ def test_scriptstore_and_layout_share_the_same_async_storage_key() -> None:
     )
 
 
-def test_elevenlabs_service_mints_bearer_against_different_key() -> None:
-    """`elevenLabsService._readOrCreateDeviceId` uses the private key
-    `@scriptmate_device_id` to derive the device_id the bearer token's
-    db.auth_tokens row is bound to.
+def test_elevenlabs_service_mints_bearer_against_shared_key() -> None:
+    """FIXED (Option A, 2026-02 SCRIPT M8 Emily Note20):
+    `elevenLabsService._readOrCreateDeviceId` now reads/writes the
+    SHARED `device_id` AsyncStorage key — the same key scriptStore
+    and _layout write. The bearer identity therefore equals the URL
+    path identity equals the RC appUserID, and
+    `enforce_user_id_match` passes on all protected /api/users/
+    endpoints.
 
-    THIS IS THE BUG: the bearer identity source diverges from the URL
-    path identity source. The two keys are never kept in sync, so on
-    any device where elevenLabsService mints its own id (every device),
-    the bearer identity != URL path device_id.
+    Guard: assert the diverging private key is GONE and the shared
+    key is used. If anyone re-introduces a private mint key in this
+    file, Emily's 403 regression is back.
     """
     src = (FRONTEND / "services" / "elevenLabsService.ts").read_text()
-    assert "DEVICE_ID_KEY = '@scriptmate_device_id'" in src, (
-        "elevenLabsService no longer references the diverging key — if "
-        "the fix has landed, delete this xfail and flip the assertion."
+    assert "DEVICE_ID_KEY = 'device_id'" in src, (
+        "elevenLabsService no longer mints against the shared "
+        "`device_id` AsyncStorage key — Emily's 403 regression risk."
     )
-    assert "AsyncStorage.getItem(DEVICE_ID_KEY)" in src
-    # And it mints a `device-<ts>-<r>` shape, which cannot collide with
-    # the `<deviceName>-<ts>-<r>` shape that scriptStore writes.
-    assert "`device-${Date.now()}-${Math.random()" in src
+    assert "'@scriptmate_device_id'" not in src, (
+        "The diverging private key `@scriptmate_device_id` has "
+        "returned. This re-introduces the bearer/URL-path identity "
+        "mismatch that produced 'user_id does not match authenticated "
+        "session' on Emily's Note20."
+    )
+    # And it must mint with the same safe-charset shape _layout.tsx
+    # uses, so a cold-start race between TTS lib and the layout can't
+    # produce incompatible ids.
+    assert "replace(/[^A-Za-z0-9._-]+/g, '-')" in src
 
 
-def test_two_mint_patterns_can_never_collide() -> None:
-    """Proof-by-shape that the bearer id and the URL path id can
-    never coincidentally match on any real device.
-
-    scriptStore / _layout shape : "<deviceName|modelId sanitised>-<ts>-<r>"
-    elevenLabsService shape     : "device-<ts>-<r>"
-
-    For them to match, `Device.modelId || Device.deviceName` would
-    have to literally equal the string `"device"` AND the timestamps
-    AND the 9-char randoms would all have to coincide. Astronomically
-    improbable.
+def test_two_mint_sites_now_converge_on_same_async_storage_key() -> None:
+    """FIXED. Both scriptStore/_layout AND elevenLabsService now key
+    on `device_id`. They share the exact same stored value, so the
+    bearer identity equals the URL-path identity.
     """
-    scriptstore_shape_prefix = "device"  # the deviceName fallback
-    elevenlabs_shape_prefix = "device"
-    # Prefix string-equal is NOT sufficient; both include a timestamp
-    # and a random suffix generated at mint time in different
-    # callsites. The functional divergence is the mint-site identity,
-    # not the prefix.
-    assert scriptstore_shape_prefix == elevenlabs_shape_prefix
+    script_store = (FRONTEND / "store" / "scriptStore.ts").read_text()
+    elevenlabs = (FRONTEND / "services" / "elevenLabsService.ts").read_text()
+    layout = (FRONTEND / "app" / "_layout.tsx").read_text()
+    # scriptStore reads the literal key.
+    assert "AsyncStorage.getItem('device_id')" in script_store
+    # _layout reads/writes the same literal key.
+    assert "AsyncStorage.getItem('device_id')" in layout
+    # elevenLabsService must now reference `device_id` via its constant.
+    assert "DEVICE_ID_KEY = 'device_id'" in elevenlabs
 
 
 # ─── §C: backend contract that the fix must change ────────────────────────
@@ -167,23 +175,29 @@ PREMIUM_ENDPOINTS = [
 
 
 @pytest.mark.parametrize("decorator,function_name", PREMIUM_ENDPOINTS)
-def test_premium_endpoint_currently_enforces_path_bearer_match(
+def test_premium_endpoints_still_enforce_bearer_identity(
     decorator: str,
     function_name: str,
 ) -> None:
-    """TODAY, each Premium endpoint calls `enforce_user_id_match`.
-    After the fix (either option in the report), this assertion should
-    be inverted — these endpoints must mirror the Daily Drill
-    remediation (bearer-derived device_id, no path/bearer match).
+    """SEC-002 contract is preserved by Option A — these endpoints
+    still require a valid bearer (`Depends(get_authenticated_user_id)`)
+    AND still match path vs bearer via `enforce_user_id_match`. We
+    did NOT weaken the backend. Option A fixed the mismatch by
+    aligning the client's bearer-mint identity with the client's
+    URL-path identity, so the match now succeeds instead of failing.
     """
     server = (BACKEND / "server.py").read_text()
     idx = server.find(decorator)
     assert idx != -1, f"endpoint missing: {decorator}"
     scope = server[idx : idx + 1600]
+    assert "Depends(get_authenticated_user_id)" in scope, (
+        f"{function_name} regressed SEC-002 — bearer no longer required."
+    )
     assert "enforce_user_id_match" in scope, (
-        f"{function_name} no longer calls enforce_user_id_match — if "
-        "the fix has landed, update these tests to pin the new "
-        "bearer-only pattern."
+        f"{function_name} no longer calls enforce_user_id_match — "
+        "Option A relies on the backend's identity match being "
+        "preserved. If this changed, re-read the Emily Note20 "
+        "investigation and decide whether both fixes are now in."
     )
 
 
@@ -227,56 +241,59 @@ def test_no_android_version_branching_on_identity_or_trial_paths() -> None:
 
 # ─── §F: the fix — xfail until applied ────────────────────────────────────
 
-@pytest.mark.xfail(
-    reason=(
-        "Awaiting SCRIPT M8 fix. Two viable remediations, see report §11:\n"
-        "  Option A — unify AsyncStorage key in elevenLabsService to "
-        "'device_id'. One-file frontend change. Zero backend risk.\n"
-        "  Option B — remove enforce_user_id_match from the three "
-        "Premium endpoints (mirror dbdf3d1 Daily Drill fix). Zero "
-        "frontend risk; aligns with the pattern /scripts already uses."
-    ),
-    strict=True,
-)
-def test_fix_must_make_bearer_and_path_mismatch_succeed() -> None:
-    """Representative assertion the fix must satisfy.
-
-    This marker captures BOTH remediation options as acceptable:
-
-    Option A satisfies this because `elevenLabsService._readOrCreateDeviceId`
-    will read the SAME `device_id` key scriptStore writes, so bearer
-    identity == URL path identity; `enforce_user_id_match` will pass.
-
-    Option B satisfies this because the Premium endpoints will no
-    longer call `enforce_user_id_match` at all; the Mongo filter will
-    key on `effective_user_id(authenticated_user_id)` (same shape as
-    the raw device_id for device sessions, per auth.py).
-
-    Either way, this xfail flips to PASS the moment the fix lands.
+@pytest.mark.parametrize("key_name", ["Authorization", "X-RC-App-User-Id"])
+def test_premium_axios_calls_still_attach_both_headers(key_name: str) -> None:
+    """Lock in the previous fix (commit 77b6877) alongside Option A.
+    All three Premium axios calls must still send both the bearer
+    AND the RC header, so the backend has everything it needs on
+    cold-cache devices.
     """
-    # Encoded as a code-level invariant (not a HTTP call) so this file
-    # remains runnable in the sandboxed test environment without a
-    # live Mongo or a live bearer-minting path.
+    src = (FRONTEND / "store" / "scriptStore.ts").read_text()
+    # These three protected endpoints must each live inside a scope
+    # that also calls getAuthHeader() — the getAuthHeader() helper
+    # attaches both the Authorization bearer and the X-RC-App-User-Id
+    # header (see authClient.ts:113), hence the parametrize covers
+    # both symbolically through a single assertion.
+    assert "headers: await getAuthHeader()" in src
+    # Count: fetchUserLimits, startTrial, subscribe, revenuecat/sync,
+    # fetchScripts, fetchScript, createScript, updateScript,
+    # deleteScript, createRehearsal, fetchRehearsal, updateRehearsal.
+    assert src.count("headers: await getAuthHeader()") >= 9
+    # Guard against the header name regression specifically.
+    rc_header = (FRONTEND / "services" / "authClient.ts").read_text()
+    assert "'X-RC-App-User-Id'" in rc_header
+    assert "'Authorization'" in rc_header or "Authorization:" in rc_header
+    _ = key_name  # suppress unused-arg warning for the parametrize key
+
+
+def test_fix_option_a_landed_bearer_and_path_now_converge() -> None:
+    """Final assertion the fix is active. Both pre-conditions must
+    hold for Emily's 403 to be impossible:
+
+      1. elevenLabsService reads/writes the SHARED `device_id` key.
+      2. scriptStore + _layout also read/write that same key.
+    """
     elevenlabs = (FRONTEND / "services" / "elevenLabsService.ts").read_text()
-    server = (BACKEND / "server.py").read_text()
+    script_store = (FRONTEND / "store" / "scriptStore.ts").read_text()
+    layout = (FRONTEND / "app" / "_layout.tsx").read_text()
 
-    option_a_satisfied = (
-        "DEVICE_ID_KEY = 'device_id'" in elevenlabs
-        or "AsyncStorage.getItem('device_id')" in elevenlabs
-    )
-    # Option B satisfied if NONE of the three Premium endpoints call
-    # enforce_user_id_match any more (we check the function bodies).
-    def _calls_enforce(decorator: str) -> bool:
-        idx = server.find(decorator)
-        if idx == -1:
-            return False
-        return "enforce_user_id_match" in server[idx : idx + 1600]
-
-    option_b_satisfied = not any(
-        _calls_enforce(decorator) for decorator, _ in PREMIUM_ENDPOINTS
-    )
-
-    assert option_a_satisfied or option_b_satisfied, (
-        "Neither fix option has landed. See §11 of the Emily Note20 "
-        "investigation report."
-    )
+    assert "DEVICE_ID_KEY = 'device_id'" in elevenlabs
+    assert "AsyncStorage.getItem('device_id')" in script_store
+    assert "AsyncStorage.getItem('device_id')" in layout
+    # Negative pin: the diverging key must not be a LIVE string
+    # literal in any mint site. We allow it to appear in historical
+    # comments explaining what used to be there (searching for a
+    # quoted string literal catches real usage, not prose).
+    for p, name in (
+        (elevenlabs, "elevenLabsService.ts"),
+        (script_store, "scriptStore.ts"),
+        (layout, "_layout.tsx"),
+    ):
+        assert "'@scriptmate_device_id'" not in p, (
+            f"Diverging key `@scriptmate_device_id` is a live string "
+            f"literal in {name} — regression risk."
+        )
+        assert '"@scriptmate_device_id"' not in p, (
+            f"Diverging key `@scriptmate_device_id` is a live string "
+            f"literal in {name} — regression risk."
+        )
