@@ -40,10 +40,18 @@ import { ensureTtsBearerToken } from './elevenLabsService';
 // physical failure that produced "performance mode requires Premium"
 // alongside `activeEntitlementIds=['ScriptMate Pro']`).
 //
-// The id is cached in-process after the first SDK call to keep the
-// axios/fetch helpers synchronous-ish. Returned header map stays `{}`
-// if RC never configured.
+// VC1158 PHYSICAL FIX: never cache an anonymous RC id.
+// `Purchases.getAppUserID()` can return a `$RCAnonymousID:...` value
+// in the brief window between `Purchases.configure(appUserID)` and the
+// first `logIn(stableAppUserId)` alias completing. If the first
+// `getAuthHeader()` call lands in that window, a module-level cache
+// would latch the anonymous id forever — RC's dashboard holds the
+// `ScriptMate Pro` entitlement under the STABLE id, so every subsequent
+// `createRehearsal` would send the anonymous id, resolver returns free,
+// and Performance/Loop 403. Fix: only cache STABLE (non-anonymous)
+// IDs; re-probe the SDK on every call until we see one.
 const RC_HEADER_NAME = 'X-RC-App-User-Id';
+const ANON_PREFIX = '$RCAnonymousID:';
 let _rcAppUserIdCache: string | null = null;
 
 async function readRevenueCatAppUserId(): Promise<string | null> {
@@ -55,7 +63,14 @@ async function readRevenueCatAppUserId(): Promise<string | null> {
     const Purchases = (await import('react-native-purchases')).default;
     const id = await Purchases.getAppUserID();
     if (typeof id === 'string' && id.length > 0 && id.length <= 256) {
-      _rcAppUserIdCache = id;
+      // ONLY cache the stable id. If RC is still mid-alias and hands us
+      // the anonymous shadow id, return it for this one request (so the
+      // backend's resolver still has SOMETHING to try) but do NOT
+      // promote it to the cache — the next call will re-probe and pick
+      // up the stable id once the alias lands.
+      if (!id.startsWith(ANON_PREFIX)) {
+        _rcAppUserIdCache = id;
+      }
       return id;
     }
   } catch {
