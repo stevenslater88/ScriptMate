@@ -49,16 +49,12 @@ const MODE_OPTIONS: ModeOption[] = [
   { id: 'full_read', name: 'Full Read', icon: 'chatbubbles', description: 'Practice the complete scene with prompts', navigable: false, premium: false },
   { id: 'cue_only', name: 'Cue Only', icon: 'flash', description: 'Recall your lines from memory', navigable: false, premium: false },
   { id: 'recall', name: 'Recall', icon: 'bulb', description: 'Test your memory with hidden lines', navigable: true, route: '/recall', premium: false },
-  // NOTE: 'character' mode was removed here — it existed only in the frontend
-  // MODE_OPTIONS list and was never registered in FREE_TIER_LIMITS or
-  // PREMIUM_TIER_LIMITS on the backend. Selecting it produced the misleading
-  // "'character' mode requires Premium" 403 for both free AND premium users
-  // (see backend/server.py FREE_TIER_LIMITS / PREMIUM_TIER_LIMITS.available_modes).
-  // Its stated behaviour ("focus on your character lines only") is already
-  // covered by 'full_read', where the reader speaks non-user characters.
-  // Regression: backend/tests/test_phase2_character_mode_gate.py.
-  { id: 'performance', name: 'Performance', icon: 'trophy', description: 'No prompts — full performance mode', navigable: false, premium: true },
-  { id: 'loop', name: 'Loop', icon: 'repeat', description: 'Repeat weak lines until mastered', navigable: false, premium: true },
+  // 2026-02 SCRIPT M8 — Performance and Loop modes REMOVED from the user-
+  // facing UI for the V1 launch. The modes remain declared in
+  // PREMIUM_TIER_LIMITS.available_modes on the backend so legacy clients
+  // never 404 the gate, but they are no longer selectable here. Can be
+  // reinstated post-launch by restoring the two card entries below.
+  // Full Read remains the default/premium rehearsal flow.
 ];
 
 export default function ScriptDetailScreen() {

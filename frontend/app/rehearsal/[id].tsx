@@ -1579,7 +1579,7 @@ export default function RehearsalScreen() {
             <Ionicons name="play-circle" size={80} color="#6366f1" />
             <Text style={styles.idleTitle}>Ready to Rehearse</Text>
             <Text style={styles.idleSubtitle}>
-              Mode: {mode === 'full_read' ? 'Full Read' : mode === 'cue_only' ? 'Cue Only' : 'Performance'}
+              Mode: {mode === 'full_read' ? 'Full Read' : mode === 'cue_only' ? 'Cue Only' : 'Full Read'}
             </Text>
             <TouchableOpacity style={styles.startButton} onPress={startRehearsal}>
               <Ionicons name="play" size={24} color="#fff" />

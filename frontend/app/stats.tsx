@@ -261,7 +261,7 @@ export default function StatsScreen() {
           <View style={styles.tipsContent}>
             <Text style={styles.tipsTitle}>Pro Tip</Text>
             <Text style={styles.tipsText}>
-              Practice your weak lines in "Performance" mode to simulate real audition pressure.
+              Practise your weak lines in Full Read mode to build confidence before an audition.
             </Text>
           </View>
         </View>
