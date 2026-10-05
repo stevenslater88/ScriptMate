@@ -138,6 +138,25 @@ failures, fix the "nuclear parser" false character bugs, and address the
   filtered by account-available voices.
 - `frontend/store/scriptStore.ts` — Zustand script store.
 
+## 2026-02 — Premium Trial purchase-first flow (SCRIPT M8 final)
+Trial button now triggers the native RevenueCat purchase (yearlyPackage) when
+Google Play has an eligible intro offer configured; otherwise it reports the
+configuration gap clearly instead of faking trial activation. No local
+Premium grants, no QA bypass; backend SEC-003 verification remains intact.
+
+Also fixed in the same diff:
+- `premium.tsx` stale-closure: Alerts now read `useScriptStore.getState().error`
+  after `await`, so the real backend detail surfaces instead of
+  "Failed to start trial" / "Failed to subscribe".
+- `scriptStore.ts::startTrial` + `subscribe` now carry the full DebugLog
+  pipeline (functionStart / apiRequest / apiResponse / apiError /
+  functionSuccess / functionError) — never logs tokens, RC secrets, or
+  payment credentials.
+
+Guarded by `tests/test_premium_trial_purchase_flow_feb2026.py` (16 tests
+including live E2E against FastAPI). Full regression (192 passed, 1 skipped)
+green. No build/deploy performed — awaiting review.
+
 ## 2026-02 — Emily Note20 Android 13 "user_id does not match" fix (SCRIPT M8 Option A)
 Two independent AsyncStorage keys were minting the device identity:
 - `device_id` (shared, used by scriptStore + _layout + RC appUserID)

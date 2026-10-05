@@ -16,6 +16,7 @@ import { router } from 'expo-router';
 import { AppConfig } from '../services/appConfig';
 import { useScriptStore } from '../store/scriptStore';
 import { useRevenueCat } from '../hooks/useRevenueCat';
+import { hasIntroOffer, getIntroOfferDetails } from '../services/revenuecat';
 import * as Localization from 'expo-localization';
 import { PurchasesPackage } from 'react-native-purchases';
 import { DebugLog } from '../services/debugLogService';
@@ -176,7 +177,7 @@ export default function PremiumScreen() {
       }
     } else {
       const success = await subscribe(packageType);
-      
+
       if (success) {
         Alert.alert(
           'Welcome to Pro!',
@@ -184,7 +185,13 @@ export default function PremiumScreen() {
           [{ text: 'Get Started', onPress: () => router.back() }]
         );
       } else {
-        Alert.alert('Error', storeError || 'Failed to subscribe');
+        // 2026-02 SCRIPT M8 — stale-closure fix: read the error that
+        // was JUST written by subscribe() instead of the (stale)
+        // closure-captured `storeError` from the previous render.
+        // Previously this showed "Failed to subscribe" even when the
+        // backend returned a specific detail message.
+        const freshError = useScriptStore.getState().error;
+        Alert.alert('Error', freshError || 'Failed to subscribe');
       }
     }
     
@@ -196,11 +203,80 @@ export default function PremiumScreen() {
       Alert.alert('Trial Used', 'You have already used your free trial.');
       return;
     }
-    
+
+    DebugLog.buttonPress('start-trial-btn', 'PremiumScreen');
+
+    // 2026-02 SCRIPT M8 — Purchase-first trial flow.
+    //
+    // The backend `/start-trial` endpoint is a VERIFICATION endpoint:
+    // it checks RevenueCat has already granted an entitlement and
+    // sets `trial_used`+`subscription_tier=premium`. It does NOT and
+    // CANNOT initiate a Google Play trial itself (Google Play Billing
+    // requires an SDK-initiated purchase bound to a user action).
+    //
+    // Therefore: on native, we invoke the RevenueCat purchase flow
+    // for the yearly package. Google Play automatically presents its
+    // "7-day free trial, then £X/year" sheet when the subscription
+    // has an eligible intro offer configured in Play Console AND the
+    // user is eligible. If NO intro offer exists on the product, we
+    // report that clearly rather than fake trial activation.
+    //
+    // Security: we NEVER grant Premium locally. The subsequent
+    // `refreshPremiumStatus → fetchUserLimits → resolve_authoritative_tier`
+    // chain verifies the RC entitlement server-side (SEC-003 remains
+    // enforced end-to-end).
+    if (isNative && hasOfferings) {
+      if (!yearlyPackage) {
+        Alert.alert(
+          'Trial Not Available',
+          'The trial plan is not currently available. Please try again in a minute or tap Restore Purchases.',
+        );
+        return;
+      }
+      const introAvailable = hasIntroOffer(yearlyPackage);
+      DebugLog.log('PURCHASE_EVENT', 'RevenueCat', 'TRIAL_INTRO_PROBE', {
+        productId: yearlyPackage.product?.identifier,
+        introAvailable,
+        introDetail: introAvailable ? getIntroOfferDetails(yearlyPackage) : null,
+      });
+      if (!introAvailable) {
+        // Explicit, non-faking: configuration dependency is on the
+        // Google Play/RevenueCat side. Direct the user to the full
+        // subscribe path instead.
+        Alert.alert(
+          'Free Trial Unavailable',
+          'A free trial is not currently offered on this device. You can still subscribe directly to ScriptM8 Pro.',
+          [{ text: 'OK' }],
+        );
+        return;
+      }
+
+      setLoading(true);
+      const result = await purchase(yearlyPackage);
+      setLoading(false);
+
+      if (result.success) {
+        Alert.alert(
+          'Trial Activated!',
+          'Enjoy 7 days of Pro features free.',
+          [{ text: 'Start Exploring', onPress: () => router.back() }]
+        );
+      } else if (result.cancelled) {
+        // 2026-02 SCRIPT M8 — Google Play purchase sheet dismissed by
+        // the user. Not an error; return silently.
+        return;
+      } else {
+        Alert.alert('Trial Failed', result.error || 'Please try again.');
+      }
+      return;
+    }
+
+    // Web / non-native fallback — the old backend-only path. Keep
+    // the stale-closure fix here too.
     setLoading(true);
     const success = await startTrial();
     setLoading(false);
-    
+
     if (success) {
       Alert.alert(
         'Trial Activated!',
@@ -208,7 +284,9 @@ export default function PremiumScreen() {
         [{ text: 'Start Exploring', onPress: () => router.back() }]
       );
     } else {
-      Alert.alert('Error', storeError || 'Failed to start trial');
+      // 2026-02 SCRIPT M8 — stale-closure fix (see handlePurchase).
+      const freshError = useScriptStore.getState().error;
+      Alert.alert('Error', freshError || 'Failed to start trial');
     }
   };
 

@@ -337,7 +337,20 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   startTrial: async () => {
     const { deviceId } = get();
     if (!deviceId) return false;
-    
+
+    // 2026-02 SCRIPT M8 — Diagnostic instrumentation. The physical
+    // Note20 repro shipped a diagnostic with "no recent API call" for
+    // the trial failure because this function was invisible to
+    // DebugLog. Mirroring the createScript pattern so future failures
+    // land in the diagnostic report with endpoint + HTTP status.
+    // NEVER logs: bearer tokens, RC secrets, payment credentials.
+    const endpoint = `/api/users/${deviceId}/start-trial`;
+    const startTime = Date.now();
+    DebugLog.functionStart('startTrial', {
+      deviceIdPrefix: deviceId.substring(0, 20),
+    });
+    const requestId = DebugLog.apiRequest('POST', API_BASE_URL, endpoint, 'startTrial');
+
     try {
       // SEC-003 (Feb 2026): the backend verifies this app_user_id against
       // RevenueCat's REST API before granting Premium. Without a valid id
@@ -350,13 +363,17 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         console.warn('[ScriptStore] startTrial: cannot resolve RC app_user_id', rcErr);
       }
       const response = await axios.post(
-        `${API_BASE_URL}/api/users/${deviceId}/start-trial`,
+        `${API_BASE_URL}${endpoint}`,
         { revenuecat_app_user_id },
         // 2026-02 SCRIPT M8 — SEC-002 requires a bearer on this write.
         // Previously missing, which produced 401 "Missing bearer token"
         // on devices without a warm auth cache (Device B repro).
         { timeout: API_TIMEOUT, headers: await getAuthHeader() },
       );
+      const durationMs = Date.now() - startTime;
+      DebugLog.apiResponse(requestId, 'POST', endpoint, response.status, durationMs,
+        `trial_used=${!!response.data?.trial_used}`);
+      DebugLog.functionSuccess('startTrial', { trialUsed: !!response.data?.trial_used });
       set({ 
         user: response.data, 
         isPremium: true 
@@ -364,7 +381,12 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       await get().fetchUserLimits();
       return true;
     } catch (error: any) {
-      set({ error: getErrorMessage(error) });
+      const durationMs = Date.now() - startTime;
+      const status = error?.response?.status || 'no status';
+      const errorMsg = getErrorMessage(error);
+      DebugLog.apiError(requestId, 'POST', endpoint, status, errorMsg, durationMs);
+      DebugLog.functionError('startTrial', error);
+      set({ error: errorMsg });
       return false;
     }
   },
@@ -372,7 +394,16 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   subscribe: async (plan: string) => {
     const { deviceId } = get();
     if (!deviceId) return false;
-    
+
+    // 2026-02 SCRIPT M8 — Diagnostic instrumentation (see startTrial).
+    const endpoint = `/api/users/${deviceId}/subscribe`;
+    const startTime = Date.now();
+    DebugLog.functionStart('subscribe', {
+      plan,
+      deviceIdPrefix: deviceId.substring(0, 20),
+    });
+    const requestId = DebugLog.apiRequest('POST', API_BASE_URL, endpoint, `plan=${plan}`);
+
     try {
       // SEC-003 (Feb 2026): backend requires a RevenueCat app_user_id and
       // independently verifies an active Premium entitlement before
@@ -386,13 +417,17 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         console.warn('[ScriptStore] subscribe: cannot resolve RC app_user_id', rcErr);
       }
       const response = await axios.post(
-        `${API_BASE_URL}/api/users/${deviceId}/subscribe`,
+        `${API_BASE_URL}${endpoint}`,
         { plan, revenuecat_app_user_id },
         // 2026-02 SCRIPT M8 — SEC-002 requires a bearer on this write.
         // Previously missing, which produced 401 "Missing bearer token"
         // on devices without a warm auth cache (Device B repro).
         { timeout: API_TIMEOUT, headers: await getAuthHeader() },
       );
+      const durationMs = Date.now() - startTime;
+      DebugLog.apiResponse(requestId, 'POST', endpoint, response.status, durationMs,
+        `tier=${response.data?.subscription_tier || 'unknown'}`);
+      DebugLog.functionSuccess('subscribe', { plan });
       set({ 
         user: response.data, 
         isPremium: true 
@@ -400,7 +435,12 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       await get().fetchUserLimits();
       return true;
     } catch (error: any) {
-      set({ error: getErrorMessage(error) });
+      const durationMs = Date.now() - startTime;
+      const status = error?.response?.status || 'no status';
+      const errorMsg = getErrorMessage(error);
+      DebugLog.apiError(requestId, 'POST', endpoint, status, errorMsg, durationMs);
+      DebugLog.functionError('subscribe', error);
+      set({ error: errorMsg });
       return false;
     }
   },

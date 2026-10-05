@@ -80,22 +80,59 @@ def _extract_function_body(source: str, fn_name: str) -> str:
 
 def _axios_call_block(body: str, url_fragment: str) -> str:
     """Return the balanced-paren text of the axios.*(…) call that
-    contains the given URL fragment, scoped to the function body."""
+    targets the given URL fragment, scoped to the function body.
+
+    Supports BOTH shapes:
+      a) Inline URL inside axios: `axios.post(`${API_BASE_URL}/api/.../x`, …)`
+      b) Extracted endpoint var:  `const endpoint = `/api/.../x`;
+                                   ...
+                                   axios.post(`${API_BASE_URL}${endpoint}`, …)`
+
+    (b) was introduced by the 2026-02 SCRIPT M8 DebugLog
+    instrumentation of `startTrial` and `subscribe`, so both the URL
+    literal AND `${endpoint}` must be considered equivalent targets.
+    """
     url_idx = body.find(url_fragment)
     assert url_idx != -1, (
         f"URL fragment {url_fragment!r} not found in function body — "
         f"has the endpoint been renamed?"
     )
-    # Walk backwards from url_idx to the nearest 'axios.' call opener.
-    axios_match = None
-    for m in re.finditer(r"axios\.(get|post|put|patch|delete)\s*\(", body):
+    # If the URL appears inside an axios call, the axios opener is
+    # BEFORE url_idx. If the URL was extracted to `const endpoint =
+    # \`...\`` and axios uses `${endpoint}`, the axios opener is
+    # AFTER url_idx. Try both.
+    all_axios = list(re.finditer(
+        r"axios\.(get|post|put|patch|delete)\s*\(", body,
+    ))
+    assert all_axios, (
+        f"No axios.<verb>(...) call anywhere in function containing "
+        f"URL fragment {url_fragment!r}"
+    )
+
+    # First, the inline shape (axios opener before url_idx).
+    inline_match = None
+    for m in all_axios:
         if m.end() <= url_idx:
-            axios_match = m
+            inline_match = m
         else:
             break
+
+    # Second, the extracted-endpoint shape (axios opener after
+    # url_idx, in a function body that also references `${endpoint}`).
+    extracted_match = None
+    uses_endpoint_var = "${endpoint}" in body and "const endpoint" in body
+    if uses_endpoint_var:
+        for m in all_axios:
+            if m.start() > url_idx:
+                extracted_match = m
+                break
+
+    axios_match = inline_match or extracted_match
     assert axios_match, (
-        f"No axios.<verb>(...) call found before URL fragment {url_fragment!r}"
+        f"No axios.<verb>(...) call found referencing URL fragment "
+        f"{url_fragment!r} (inline nor via extracted `endpoint` var)"
     )
+
     # Balanced-paren scan from the opening '(' of the axios call.
     open_paren = axios_match.end() - 1
     depth = 0
@@ -182,8 +219,28 @@ def test_no_protected_user_axios_call_is_header_less() -> None:
 
     Catches regressions outside scriptStore.ts (e.g. a new hook or
     screen component adding a quick axios call and forgetting auth).
+
+    2026-02 SCRIPT M8: understands both call shapes —
+      (a) Inline URL inside axios call (original shape).
+      (b) `const endpoint = `<url>`; axios.post(`${API_BASE_URL}${endpoint}`, …)`
+          (new shape used by the DebugLog-instrumented startTrial and
+          subscribe actions).
     """
     offenders: list[tuple[str, str, str]] = []
+
+    def _axios_block_from_opener(text: str, opener: re.Match) -> str | None:
+        """Return the balanced-paren text of the axios call starting
+        at `opener`, or None if parens never balance."""
+        depth = 0
+        for j in range(opener.end() - 1, len(text)):
+            if text[j] == "(":
+                depth += 1
+            elif text[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    return text[opener.start() : j + 1]
+        return None
+
     for ts_file in [
         *FRONTEND_ROOT.rglob("*.ts"),
         *FRONTEND_ROOT.rglob("*.tsx"),
@@ -201,39 +258,75 @@ def test_no_protected_user_axios_call_is_header_less() -> None:
                 idx = text.find(frag, idx)
                 if idx == -1:
                     break
-                # Walk backwards to the nearest axios.<verb>( opener.
+                # Shape (a): axios opener immediately before URL.
                 prefix = text[:idx]
-                axios_opener = None
+                inline_opener = None
                 for m in re.finditer(
                     r"axios\.(get|post|put|patch|delete)\s*\(",
                     prefix,
                 ):
-                    axios_opener = m
-                if axios_opener is None:
+                    inline_opener = m
+                inline_call = (
+                    _axios_block_from_opener(text, inline_opener)
+                    if inline_opener is not None
+                    else None
+                )
+                # Only accept as shape (a) if the URL fragment is
+                # inside the axios call text (otherwise it's a leak
+                # from an unrelated earlier axios call in the file).
+                if inline_call and frag in inline_call:
+                    if not re.search(
+                        r"headers\s*:\s*await\s+getAuthHeader\s*\(\s*\)",
+                        inline_call,
+                    ):
+                        offenders.append((str(ts_file), frag, inline_call[:160]))
                     idx += len(frag)
                     continue
-                # Balanced-paren scan forward from the opener.
-                open_paren = axios_opener.end() - 1
-                depth = 0
-                end = None
-                for j in range(open_paren, len(text)):
-                    if text[j] == "(":
-                        depth += 1
-                    elif text[j] == ")":
-                        depth -= 1
-                        if depth == 0:
-                            end = j + 1
-                            break
-                if end is None:
-                    idx += len(frag)
-                    continue
-                call = text[axios_opener.start() : end]
-                if not re.search(
-                    r"headers\s*:\s*await\s+getAuthHeader\s*\(\s*\)",
-                    call,
-                ):
-                    offenders.append((str(ts_file), frag, call[:160]))
-                idx = end
+
+                # Shape (b): URL is in a `const endpoint = …` or
+                # similar assignment; the axios call AFTER the URL
+                # references `${endpoint}` or `${url}` and lives
+                # within the same ~800 chars of code (same function).
+                nearby = text[idx : idx + 1200]
+                if "${endpoint}" in nearby or "${url}" in nearby or "${path}" in nearby:
+                    next_axios = re.search(
+                        r"axios\.(get|post|put|patch|delete)\s*\(",
+                        nearby,
+                    )
+                    if next_axios:
+                        # Reconstruct absolute position for balanced-
+                        # paren scan.
+                        abs_opener_start = idx + next_axios.start()
+                        abs_opener = re.match(
+                            r"axios\.(get|post|put|patch|delete)\s*\(",
+                            text[abs_opener_start:],
+                        )
+                        # Build a shim Match-like object with .start()
+                        # and .end() for the helper.
+                        class _Shim:
+                            def __init__(self, s: int, e: int) -> None:
+                                self._s, self._e = s, e
+
+                            def start(self) -> int:
+                                return self._s
+
+                            def end(self) -> int:
+                                return self._e
+
+                        shim = _Shim(abs_opener_start, abs_opener_start + abs_opener.end())
+                        axios_call = _axios_block_from_opener(text, shim)  # type: ignore[arg-type]
+                        if axios_call and not re.search(
+                            r"headers\s*:\s*await\s+getAuthHeader\s*\(\s*\)",
+                            axios_call,
+                        ):
+                            offenders.append((str(ts_file), frag, axios_call[:160]))
+                        idx += len(frag)
+                        continue
+
+                # Neither shape matched — the URL appears in text
+                # that doesn't correspond to an axios call (e.g. a
+                # comment or type literal). Skip.
+                idx += len(frag)
 
     assert not offenders, (
         "Protected /api/users/{...} axios call(s) missing getAuthHeader():\n"
