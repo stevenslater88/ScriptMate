@@ -297,3 +297,177 @@ def test_fix_option_a_landed_bearer_and_path_now_converge() -> None:
             f"Diverging key `@scriptmate_device_id` is a live string "
             f"literal in {name} — regression risk."
         )
+
+
+# ─── §G: LIVE END-TO-END identity chain (not just source strings) ─────────
+#
+# The tests above pin the source-level contract. These tests exercise
+# the ACTUAL HTTP identity chain against the running FastAPI backend:
+# mint a real bearer with Emily's exact device_id shape, call the
+# three Premium endpoints, and assert the backend responses prove the
+# identity match works end-to-end AND SEC-002 is preserved.
+
+import os
+import uuid
+try:
+    import requests
+except ImportError:  # pragma: no cover - requests is in backend/requirements.txt
+    requests = None  # type: ignore[assignment]
+
+_API_BASE = os.environ.get(
+    "EXPO_PUBLIC_BACKEND_URL", "http://localhost:8001",
+).rstrip("/") + "/api"
+
+
+def _emily_shape(label: str) -> str:
+    """Produce a device_id with the EXACT shape Emily's device will
+    generate post-fix: `<safeDeviceName>-<13-digit-ts>-<9-char-r>`.
+    1791211467964 is Emily's actual timestamp from the physical repro."""
+    return f"Emily-s-Note20-{label}-1791211467964-{uuid.uuid4().hex[:9]}"
+
+
+def _mint_bearer(device_id: str) -> str:
+    assert requests is not None, "requests not installed"
+    r = requests.post(
+        f"{_API_BASE}/auth/device-session",
+        json={"device_id": device_id},
+        headers={"Authorization": ""},
+        timeout=10,
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["token"]
+
+
+def _bootstrap_user(device_id: str) -> None:
+    # /api/users is public (create-or-get). Required so /limits can
+    # return a real tier instead of only resolver-derived.
+    assert requests is not None
+    requests.post(
+        f"{_API_BASE}/users",
+        json={"device_id": device_id},
+        timeout=10,
+    )
+
+
+@pytest.fixture(scope="module")
+def _live_backend_or_skip() -> None:
+    if requests is None:
+        pytest.skip("requests library unavailable")
+    try:
+        r = requests.get(f"{_API_BASE[:-4]}/api/health", timeout=5)
+        if r.status_code != 200:
+            pytest.skip(f"backend health check returned {r.status_code}")
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"backend unreachable: {exc}")
+
+
+def test_e2e_matching_device_id_returns_200_not_403(
+    _live_backend_or_skip, unauthenticated_requests,
+) -> None:
+    """END-TO-END: with the Option A fix, Emily's bearer and URL path
+    device_id are identical. /limits must return 200, NOT 403.
+
+    This is the EXACT HTTP call Emily's VC1135 build produced a
+    403 for. Proves the fix end-to-end, not just via source-string
+    inspection.
+
+    `unauthenticated_requests` disables conftest's auto-auth URL-
+    rewriting so this test's custom bearer+path pair reaches the
+    backend unchanged.
+    """
+    emily = _emily_shape("match")
+    token = _mint_bearer(emily)
+    _bootstrap_user(emily)
+    r = requests.get(
+        f"{_API_BASE}/users/{emily}/limits",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+    assert r.status_code == 200, (
+        f"Expected 200 OK (identity match). Got {r.status_code}: {r.text}"
+    )
+
+
+def test_e2e_mismatched_device_id_still_rejected_403(
+    _live_backend_or_skip, unauthenticated_requests,
+) -> None:
+    """SEC-002 PRESERVED: a bearer minted for device A cannot read
+    device B's limits. The 403 security check Emily hit remains intact
+    for actual cross-user substitution attempts.
+    """
+    device_a = _emily_shape("A")
+    device_b = _emily_shape("B")
+    token = _mint_bearer(device_a)
+    _bootstrap_user(device_a)
+    r = requests.get(
+        f"{_API_BASE}/users/{device_b}/limits",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+    assert r.status_code == 403, (
+        f"Expected 403 (SEC-002 cross-user protection). Got {r.status_code}: {r.text}"
+    )
+    assert "user_id does not match authenticated session" in r.text
+
+
+def test_e2e_no_bearer_still_rejected_401(
+    _live_backend_or_skip, unauthenticated_requests,
+) -> None:
+    """SEC-002 PRESERVED: no bearer = 401. Emily's previous
+    "Missing bearer token" failure mode remains intact for actually
+    unauthenticated requests.
+    """
+    emily = _emily_shape("nobearer")
+    r = requests.get(f"{_API_BASE}/users/{emily}/limits", timeout=10)
+    assert r.status_code == 401, r.text
+    assert "Missing bearer token" in r.text
+
+
+def test_e2e_start_trial_identity_passes_fails_at_sec003_layer(
+    _live_backend_or_skip, unauthenticated_requests,
+) -> None:
+    """Prove the trial-start identity gate is now cleared.
+
+    Before fix: 403 "user_id does not match authenticated session"
+    After fix: 400 "revenuecat_app_user_id is required for
+                server-side verification" (SEC-003 validation layer).
+
+    The 400 is the EXPECTED next-layer rejection when the client
+    forgets to attach the RC id. The crucial point is: 403 is GONE.
+    """
+    emily = _emily_shape("trial")
+    token = _mint_bearer(emily)
+    _bootstrap_user(emily)
+    r = requests.post(
+        f"{_API_BASE}/users/{emily}/start-trial",
+        json={},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+    assert r.status_code != 403, (
+        f"Identity gate still rejecting after fix! Got 403: {r.text}"
+    )
+    # Expected 400 at the SEC-003 validation layer.
+    assert r.status_code == 400, r.text
+    assert "revenuecat_app_user_id is required" in r.text
+
+
+def test_e2e_subscribe_identity_passes_fails_at_sec003_layer(
+    _live_backend_or_skip, unauthenticated_requests,
+) -> None:
+    """Same proof for /subscribe. 403 identity-gate is gone;
+    SEC-003 next-layer validation remains active (as designed)."""
+    emily = _emily_shape("subscribe")
+    token = _mint_bearer(emily)
+    _bootstrap_user(emily)
+    r = requests.post(
+        f"{_API_BASE}/users/{emily}/subscribe",
+        json={"plan": "yearly"},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+    assert r.status_code != 403, (
+        f"Identity gate still rejecting after fix! Got 403: {r.text}"
+    )
+    assert r.status_code == 400, r.text
+    assert "revenuecat_app_user_id is required" in r.text
