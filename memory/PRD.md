@@ -138,6 +138,19 @@ failures, fix the "nuclear parser" false character bugs, and address the
   filtered by account-available voices.
 - `frontend/store/scriptStore.ts` — Zustand script store.
 
+## 2026-02 — Device B "Missing bearer token" fix (SCRIPT M8)
+Three axios calls in `frontend/store/scriptStore.ts` hit SEC-002-protected
+endpoints without `getAuthHeader()`, producing 401 "Missing bearer token"
+on cold-cache devices (Device B repro). Attached `headers: await
+getAuthHeader()` to all three:
+- `fetchUserLimits` → `GET /api/users/{deviceId}/limits`
+- `startTrial` → `POST /api/users/{deviceId}/start-trial`
+- `subscribe` → `POST /api/users/{deviceId}/subscribe`
+
+Guarded by `tests/test_scriptstore_premium_auth_headers_feb2026.py`
+(5 tests). Full Premium/RC regression (74 tests) green. No build/deploy
+performed — awaiting review.
+
 ## Key API Endpoints
 - `POST /api/scripts` — parse and persist.
 - `GET /api/users/{device_id}/limits` — now RC-authoritative via header.

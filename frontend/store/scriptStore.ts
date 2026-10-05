@@ -274,7 +274,15 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     if (!deviceId) return;
     
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/users/${deviceId}/limits`, { timeout: API_TIMEOUT });
+      // 2026-02 SCRIPT M8 — SEC-002: this endpoint requires a bearer
+      // (`Depends(get_authenticated_user_id)`) and the server-side
+      // Premium tier resolver reads `X-RC-App-User-Id` to self-heal
+      // stale free rows. Without `getAuthHeader()` Device B (no cached
+      // auth) saw 401 "Missing bearer token" when opening Premium.
+      const response = await axios.get(`${API_BASE_URL}/api/users/${deviceId}/limits`, {
+        headers: await getAuthHeader(),
+        timeout: API_TIMEOUT,
+      });
       const backendIsPremium: boolean = !!response.data.is_premium;
 
       // ─── 2026-02 Physical QA Blocker — Premium downgrade race ──────────────
@@ -344,7 +352,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       const response = await axios.post(
         `${API_BASE_URL}/api/users/${deviceId}/start-trial`,
         { revenuecat_app_user_id },
-        { timeout: API_TIMEOUT },
+        // 2026-02 SCRIPT M8 — SEC-002 requires a bearer on this write.
+        // Previously missing, which produced 401 "Missing bearer token"
+        // on devices without a warm auth cache (Device B repro).
+        { timeout: API_TIMEOUT, headers: await getAuthHeader() },
       );
       set({ 
         user: response.data, 
@@ -377,7 +388,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       const response = await axios.post(
         `${API_BASE_URL}/api/users/${deviceId}/subscribe`,
         { plan, revenuecat_app_user_id },
-        { timeout: API_TIMEOUT },
+        // 2026-02 SCRIPT M8 — SEC-002 requires a bearer on this write.
+        // Previously missing, which produced 401 "Missing bearer token"
+        // on devices without a warm auth cache (Device B repro).
+        { timeout: API_TIMEOUT, headers: await getAuthHeader() },
       );
       set({ 
         user: response.data, 
