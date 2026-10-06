@@ -154,11 +154,18 @@ export const deleteRecording = async (id: string): Promise<void> => {
 // Save to device gallery
 export const saveToGallery = async (uri: string): Promise<boolean> => {
   try {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
+    // 2026-02 SCRIPT M8 — Google Play policy fix (release blocker VC1141).
+    // Request WRITE-only scope so Android 14+ does NOT grant the broad
+    // READ_MEDIA_IMAGES / READ_MEDIA_VIDEO permissions. The write-only
+    // scope is sufficient for `saveToLibraryAsync`, which only ever
+    // writes self-tape videos the app itself owns to MediaStore and
+    // never reads any other media. Prevents the "Use alternative
+    // system pickers" Data-Safety warning from re-appearing.
+    const { status } = await MediaLibrary.requestPermissionsAsync(true);
     if (status !== 'granted') {
       return false;
     }
-    
+
     await MediaLibrary.saveToLibraryAsync(uri);
     return true;
   } catch (error) {
