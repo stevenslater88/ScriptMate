@@ -33,7 +33,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "app.emergent.scriptmate870106af3",
-      "versionCode": 1130,
+      "versionCode": 1140,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA"
