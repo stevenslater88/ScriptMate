@@ -1,5 +1,8 @@
 ---
+layout: default
+permalink: /delete-account
 title: Delete Your ScriptMate Account & Data
+------
 description: How to request deletion of your ScriptMate account and personal data. ScriptMate account deletion request page required by Google Play Data Safety.
 ---
 
