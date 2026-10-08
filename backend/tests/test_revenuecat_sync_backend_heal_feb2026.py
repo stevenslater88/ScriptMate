@@ -153,7 +153,7 @@ def test_sync_active_entitlement_lifts_backend_row(client, device_bearer, monkey
 
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/revenuecat/sync",
-        json={"revenuecat_app_user_id": "$RCAnonymousID:test-active"},
+        json={"revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 200, r.text
@@ -165,7 +165,7 @@ def test_sync_active_entitlement_lifts_backend_row(client, device_bearer, monkey
     # Post-condition: user row is premium.
     row = _sync_db.users.find_one({"device_id": device_bearer["device_id"]})
     assert row["subscription_tier"] == "premium"
-    assert row["revenuecat_app_user_id"] == "$RCAnonymousID:test-active"
+    assert row["revenuecat_app_user_id"] == device_bearer["device_id"]
     assert row["subscription_end"] is not None
 
 
@@ -176,7 +176,7 @@ def test_sync_lifetime_entitlement_uses_far_future_sentinel(client, device_beare
     )
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/revenuecat/sync",
-        json={"revenuecat_app_user_id": "$RCAnonymousID:lifetime"},
+        json={"revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 200, r.text
@@ -195,7 +195,7 @@ def test_sync_inactive_entitlement_does_not_mutate_row(client, device_bearer, mo
     )
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/revenuecat/sync",
-        json={"revenuecat_app_user_id": "$RCAnonymousID:inactive"},
+        json={"revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 200, r.text
@@ -219,7 +219,7 @@ def test_sync_inactive_does_not_demote_already_premium_row(client, device_bearer
         {"$set": {
             "subscription_tier": "premium",
             "subscription_end": far_future,
-            "revenuecat_app_user_id": "$RCAnonymousID:legit",
+            "revenuecat_app_user_id": device_bearer["device_id"],
         }},
     )
     monkeypatch.setattr(
@@ -228,7 +228,7 @@ def test_sync_inactive_does_not_demote_already_premium_row(client, device_bearer
     )
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/revenuecat/sync",
-        json={"revenuecat_app_user_id": "$RCAnonymousID:legit"},
+        json={"revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 200, r.text
@@ -248,7 +248,7 @@ def test_sync_rc_unavailable_returns_503(client, device_bearer, monkeypatch):
     )
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/revenuecat/sync",
-        json={"revenuecat_app_user_id": "$RCAnonymousID:any"},
+        json={"revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 503, r.text
@@ -322,7 +322,7 @@ def test_after_sync_performance_rehearsal_succeeds(client, device_bearer, monkey
 
     sync_r = client.post(
         f"/api/users/{device_bearer['device_id']}/revenuecat/sync",
-        json={"revenuecat_app_user_id": "$RCAnonymousID:e2e"},
+        json={"revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert sync_r.status_code == 200, sync_r.text
@@ -355,7 +355,7 @@ def test_after_sync_loop_rehearsal_succeeds(client, device_bearer, monkeypatch):
     )
     sync_r = client.post(
         f"/api/users/{device_bearer['device_id']}/revenuecat/sync",
-        json={"revenuecat_app_user_id": "$RCAnonymousID:e2e-loop"},
+        json={"revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert sync_r.status_code == 200, sync_r.text
@@ -384,7 +384,7 @@ def test_after_sync_limits_endpoint_reports_premium(client, device_bearer, monke
     )
     sync_r = client.post(
         f"/api/users/{device_bearer['device_id']}/revenuecat/sync",
-        json={"revenuecat_app_user_id": "$RCAnonymousID:limits"},
+        json={"revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert sync_r.status_code == 200, sync_r.text
@@ -414,7 +414,7 @@ def test_sync_is_idempotent(client, device_bearer, monkeypatch):
     for _ in range(3):
         r = client.post(
             f"/api/users/{device_bearer['device_id']}/revenuecat/sync",
-            json={"revenuecat_app_user_id": "$RCAnonymousID:idemp"},
+            json={"revenuecat_app_user_id": device_bearer["device_id"]},
             headers=_auth(device_bearer["token"]),
         )
         assert r.status_code == 200, r.text

@@ -114,7 +114,7 @@ def test_subscribe_without_rc_entitlement_returns_402(client, device_bearer, mon
     )
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/subscribe",
-        json={"plan": "monthly", "revenuecat_app_user_id": "rc-user-no-ent"},
+        json={"plan": "monthly", "revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 402, r.text
@@ -133,7 +133,7 @@ def test_subscribe_with_expired_entitlement_returns_402(client, device_bearer, m
     )
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/subscribe",
-        json={"plan": "monthly", "revenuecat_app_user_id": "rc-user-expired"},
+        json={"plan": "monthly", "revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 402, r.text
@@ -149,7 +149,7 @@ def test_subscribe_with_active_entitlement_grants_premium(client, device_bearer,
     )
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/subscribe",
-        json={"plan": "monthly", "revenuecat_app_user_id": "rc-user-active"},
+        json={"plan": "monthly", "revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 200, r.text
@@ -158,7 +158,7 @@ def test_subscribe_with_active_entitlement_grants_premium(client, device_bearer,
 
     row = _sync_db.users.find_one({"device_id": device_bearer["device_id"]})
     assert row["subscription_tier"] == "premium"
-    assert row.get("revenuecat_app_user_id") == "rc-user-active"
+    assert row.get("revenuecat_app_user_id") == device_bearer["device_id"]
     sub_end = row.get("subscription_end")
     assert sub_end is not None
     expected_naive = future.astimezone(timezone.utc).replace(tzinfo=None)
@@ -196,7 +196,7 @@ def test_start_trial_without_entitlement_returns_402(client, device_bearer, monk
     )
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/start-trial",
-        json={"revenuecat_app_user_id": "rc-user-notrial"},
+        json={"revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 402, r.text
@@ -214,7 +214,7 @@ def test_start_trial_with_entitlement_grants_premium(client, device_bearer, monk
     )
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/start-trial",
-        json={"revenuecat_app_user_id": "rc-user-trial"},
+        json={"revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 200, r.text
@@ -291,7 +291,7 @@ def test_subscribe_rc_unavailable_returns_503(client, device_bearer, monkeypatch
     )
     r = client.post(
         f"/api/users/{device_bearer['device_id']}/subscribe",
-        json={"plan": "monthly", "revenuecat_app_user_id": "rc-user-x"},
+        json={"plan": "monthly", "revenuecat_app_user_id": device_bearer["device_id"]},
         headers=_auth(device_bearer["token"]),
     )
     assert r.status_code == 503, r.text
@@ -310,7 +310,7 @@ def test_subscribe_is_idempotent(client, device_bearer, monkeypatch):
     for _ in range(2):
         r = client.post(
             f"/api/users/{device_bearer['device_id']}/subscribe",
-            json={"plan": "monthly", "revenuecat_app_user_id": "rc-user-idem"},
+            json={"plan": "monthly", "revenuecat_app_user_id": device_bearer["device_id"]},
             headers=_auth(device_bearer["token"]),
         )
         assert r.status_code == 200, r.text

@@ -188,6 +188,21 @@ Guarded by `tests/test_scriptstore_premium_auth_headers_feb2026.py`
 (5 tests). Full Premium/RC regression (74 tests) green. No build/deploy
 performed — awaiting review.
 
+## 2026-06 — SEC-002 RevenueCat identity binding (LAUNCH BLOCKER, code-only)
+`server._bind_rc_app_user_id(rc_id, authenticated_user_id, ignore_anonymous=)`
+rejects (403 "revenuecat_app_user_id does not match authenticated session")
+any RC id != `effective_user_id(session)` BEFORE `fetch_premium_entitlement`.
+Applied in: `resolve_authoritative_tier` (limits / rehearsals / TTS — header;
+`$RCAnonymousID:` header ignored → Mongo tier, no lookup), stored
+`revenuecat_app_user_id` fallback (used only if bound), `/revenuecat/sync`,
+`/subscribe`, `/start-trial` (body; anonymous → 403).
+Tests: `tests/test_sec002_rc_identity_binding_jun2026.py` (15). Fixtures in 4
+existing RC suites updated to use bound ids (they encoded the cross-id shape).
+Full suite diff vs pre-change: zero new failures (1 flaky network test).
+NOT deployed. Pending: SEC-001 (P1), SEC-004 (P2), iOS bundle id decision,
+RC transfer-behaviour dashboard check.
+
+
 ## Key API Endpoints
 - `POST /api/scripts` — parse and persist.
 - `GET /api/users/{device_id}/limits` — now RC-authoritative via header.

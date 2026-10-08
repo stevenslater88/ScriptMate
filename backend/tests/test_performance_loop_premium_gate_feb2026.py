@@ -211,7 +211,7 @@ def test_premium_rc_allows_performance_and_loop(srv, monkeypatch):
          patch.object(srv, "fetch_premium_entitlement",
                       AsyncMock(return_value=rc_entitlement)):
         result = _run(srv.check_user_limits(
-            "uid-PL", "create_rehearsal", "rc-user-PL",
+            "uid-PL", "create_rehearsal", "uid-PL",
         ))
     assert result["tier"] == "premium"
     assert result["allowed"] is True

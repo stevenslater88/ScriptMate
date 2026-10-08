@@ -167,7 +167,7 @@ def test_mongo_free_rc_active_lifts_row_and_returns_premium(srv, monkeypatch):
     with patch.object(srv.db, "users", users), \
          patch.object(srv, "fetch_premium_entitlement",
                       AsyncMock(return_value=rc_entitlement)):
-        tier = _run(srv.resolve_authoritative_tier("uid-C", "rc-user-C"))
+        tier = _run(srv.resolve_authoritative_tier("uid-C", "uid-C"))
     assert tier == "premium"
     # SCRIPT M8 LAUNCH-SAFETY: resolver eagerly persists the rcid BEFORE
     # the live RC call, then lifts the row to premium after RC confirms
@@ -179,7 +179,7 @@ def test_mongo_free_rc_active_lifts_row_and_returns_premium(srv, monkeypatch):
     ]
     assert len(premium_writes) == 1
     set_doc = premium_writes[0].args[1]["$set"]
-    assert set_doc["revenuecat_app_user_id"] == "rc-user-C"
+    assert set_doc["revenuecat_app_user_id"] == "uid-C"
     assert "subscription_end" in set_doc
 
 
@@ -192,7 +192,7 @@ def test_mongo_free_rc_inactive_returns_free_no_write(srv, monkeypatch):
     with patch.object(srv.db, "users", users), \
          patch.object(srv, "fetch_premium_entitlement",
                       AsyncMock(return_value=rc_inactive)):
-        tier = _run(srv.resolve_authoritative_tier("uid-D", "rc-user-D"))
+        tier = _run(srv.resolve_authoritative_tier("uid-D", "uid-D"))
     assert tier == "free"
     # No tier promotion write. The resolver may eagerly persist the rcid
     # (so a future RC-config fix can self-heal), but it must NEVER set
@@ -210,7 +210,7 @@ def test_rc_unavailable_falls_back_safely(srv, monkeypatch):
     with patch.object(srv.db, "users", _users_mock(user_doc)), \
          patch.object(srv, "fetch_premium_entitlement",
                       AsyncMock(side_effect=srv.RevenueCatUnavailable("timeout"))):
-        tier = _run(srv.resolve_authoritative_tier("uid-E", "rc-user-E"))
+        tier = _run(srv.resolve_authoritative_tier("uid-E", "uid-E"))
     assert tier == "free"
 
 
@@ -218,7 +218,7 @@ def test_rc_not_configured_falls_back_safely(srv, monkeypatch):
     monkeypatch.delenv("REVENUECAT_SECRET_KEY", raising=False)
     user_doc = {"id": "uid-F", "device_id": "uid-F", "subscription_tier": "free"}
     with patch.object(srv.db, "users", _users_mock(user_doc)):
-        tier = _run(srv.resolve_authoritative_tier("uid-F", "rc-user-F"))
+        tier = _run(srv.resolve_authoritative_tier("uid-F", "uid-F"))
     assert tier == "free"
 
 
@@ -233,7 +233,7 @@ def test_resolver_cache_prevents_rc_hammering(srv, monkeypatch):
          patch.object(srv, "fetch_premium_entitlement", rc_mock):
         async def _burst():
             for _ in range(5):
-                await srv.resolve_authoritative_tier("uid-G", "rc-user-G")
+                await srv.resolve_authoritative_tier("uid-G", "uid-G")
         _run(_burst())
     assert rc_mock.await_count == 1
 
@@ -242,7 +242,7 @@ def test_resolver_falls_back_to_persisted_rcid_when_header_absent(srv, monkeypat
     monkeypatch.setenv("REVENUECAT_SECRET_KEY", "sk_test_dummy")
     user_doc = {"id": "uid-H", "device_id": "uid-H",
                 "subscription_tier": "free",
-                "revenuecat_app_user_id": "stored-rc-id-H"}
+                "revenuecat_app_user_id": "uid-H"}
     rc_mock = AsyncMock(return_value=srv.RevenueCatEntitlement(
         active=True,
         expires_at=datetime.now(timezone.utc) + timedelta(days=365),
@@ -252,7 +252,7 @@ def test_resolver_falls_back_to_persisted_rcid_when_header_absent(srv, monkeypat
         tier = _run(srv.resolve_authoritative_tier("uid-H", None))
     assert tier == "premium"
     assert rc_mock.await_count == 1
-    assert rc_mock.await_args.args[0] == "stored-rc-id-H"
+    assert rc_mock.await_args.args[0] == "uid-H"
 
 
 # ─── 2.A LAUNCH-SAFETY — eager rcid persistence ──────────────────────
@@ -269,12 +269,12 @@ def test_resolver_eagerly_persists_rcid_even_when_secret_missing(srv, monkeypatc
     update_mock = AsyncMock()
     users = _users_mock(user_doc, update_mock=update_mock)
     with patch.object(srv.db, "users", users):
-        tier = _run(srv.resolve_authoritative_tier("uid-EP1", "rc-new-id"))
+        tier = _run(srv.resolve_authoritative_tier("uid-EP1", "uid-EP1"))
     assert tier == "free"  # No premium promotion without verification.
     # Exactly one write: the eager-persist of the rcid.
     assert update_mock.await_count == 1
     set_doc = update_mock.await_args.args[1]["$set"]
-    assert set_doc.get("revenuecat_app_user_id") == "rc-new-id"
+    assert set_doc.get("revenuecat_app_user_id") == "uid-EP1"
     # And CRITICALLY no tier promotion.
     assert "subscription_tier" not in set_doc
 
@@ -285,11 +285,11 @@ def test_resolver_eager_persist_skipped_when_rcid_already_matches(srv, monkeypat
     monkeypatch.delenv("REVENUECAT_SECRET_KEY", raising=False)
     user_doc = {"id": "uid-EP2", "device_id": "uid-EP2",
                 "subscription_tier": "free",
-                "revenuecat_app_user_id": "rc-stable-id"}
+                "revenuecat_app_user_id": "uid-EP2"}
     update_mock = AsyncMock()
     users = _users_mock(user_doc, update_mock=update_mock)
     with patch.object(srv.db, "users", users):
-        tier = _run(srv.resolve_authoritative_tier("uid-EP2", "rc-stable-id"))
+        tier = _run(srv.resolve_authoritative_tier("uid-EP2", "uid-EP2"))
     assert tier == "free"
     assert update_mock.await_count == 0
 
@@ -305,12 +305,12 @@ def test_resolver_eager_persist_also_fires_when_rc_unavailable(srv, monkeypatch)
     with patch.object(srv.db, "users", users), \
          patch.object(srv, "fetch_premium_entitlement",
                       AsyncMock(side_effect=srv.RevenueCatUnavailable("timeout"))):
-        tier = _run(srv.resolve_authoritative_tier("uid-EP3", "rc-new-id"))
+        tier = _run(srv.resolve_authoritative_tier("uid-EP3", "uid-EP3"))
     assert tier == "free"
     # The eager-persist still happened.
     rcid_writes = [
         c for c in update_mock.await_args_list
-        if c.args[1].get("$set", {}).get("revenuecat_app_user_id") == "rc-new-id"
+        if c.args[1].get("$set", {}).get("revenuecat_app_user_id") == "uid-EP3"
     ]
     assert len(rcid_writes) == 1
     # And NO tier promotion.
@@ -378,7 +378,7 @@ def test_physical_scenario_performance_and_loop_pass_for_premium_rc(srv, monkeyp
          patch.object(srv.db, "scripts", _scripts_mock()), \
          patch.object(srv, "fetch_premium_entitlement",
                       AsyncMock(return_value=rc_entitlement)):
-        result = _run(srv.check_user_limits("uid-P", "create_rehearsal", "rc-user-P"))
+        result = _run(srv.check_user_limits("uid-P", "create_rehearsal", "uid-P"))
     assert result["tier"] == "premium"
     assert "performance" in result["limits"]["available_modes"]
     assert "loop" in result["limits"]["available_modes"]
@@ -397,7 +397,7 @@ def test_physical_scenario_tts_tier_matches_rehearsal_gate(srv, monkeypatch):
          patch.object(srv.db, "authenticated_users", _authusers_mock()), \
          patch.object(srv, "fetch_premium_entitlement",
                       AsyncMock(return_value=rc_entitlement)):
-        tier = _run(srv._resolve_tier_for_tts("device:uid-Q", "rc-user-Q"))
+        tier = _run(srv._resolve_tier_for_tts("device:uid-Q", "uid-Q"))
     assert tier == "premium"
 
 

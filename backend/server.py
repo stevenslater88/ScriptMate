@@ -957,6 +957,35 @@ def _tier_cache_clear() -> None:  # test hook — never called in prod paths
     _TIER_CACHE.clear()
 
 
+RC_ANON_PREFIX = "$RCAnonymousID:"
+
+
+def _bind_rc_app_user_id(
+    rc_app_user_id: Optional[str],
+    authenticated_user_id: str,
+    *,
+    ignore_anonymous: bool = False,
+) -> Optional[str]:
+    """SEC-002: return the RC id only if it equals the session's effective id.
+    Missing → None; anonymous → None when `ignore_anonymous`; else mismatch → 403."""
+    rcid = (rc_app_user_id or "").strip()
+    if not rcid:
+        return None
+    if ignore_anonymous and rcid.startswith(RC_ANON_PREFIX):
+        return None
+    if rcid != effective_user_id(authenticated_user_id):
+        logger.warning(
+            "[SEC-002] RC app_user_id does not match authenticated session; "
+            "rejecting before RevenueCat lookup. session=%s",
+            authenticated_user_id,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="revenuecat_app_user_id does not match authenticated session",
+        )
+    return rcid
+
+
 async def resolve_authoritative_tier(
     user_id: str,
     rc_app_user_id: Optional[str] = None,
@@ -971,6 +1000,9 @@ async def resolve_authoritative_tier(
       (unauthenticated / pre-SDK requests) — in which case we rely
       entirely on the Mongo row.
     """
+    # SEC-002: bind the header RC id to the session BEFORE anything else.
+    bound_rcid = _bind_rc_app_user_id(rc_app_user_id, user_id, ignore_anonymous=True)
+
     # ── (1) Mongo row — primary source. ────────────────────────────────
     user = await db.users.find_one({"id": user_id})
     if not user:
@@ -996,12 +1028,15 @@ async def resolve_authoritative_tier(
         return "premium"
 
     # ── (2) Live RevenueCat verification — self-healing path. ──────────
-    rcid = (rc_app_user_id or "").strip()
+    rcid = bound_rcid or ""
     if not rcid and user:
         # Fall back to the id that a prior /revenuecat/sync persisted,
         # if any. Lets us self-heal even for clients that forgot the
         # header (older frontend builds).
-        rcid = (user.get("revenuecat_app_user_id") or "").strip()
+        stored = (user.get("revenuecat_app_user_id") or "").strip()
+        # SEC-002: a stored id not bound to this session is never used.
+        if stored == effective_user_id(user_id):
+            rcid = stored
 
     # 2026-02 SCRIPT M8 LAUNCH-SAFETY — eager rcid persistence.
     # Even if `REVENUECAT_SECRET_KEY` is not yet configured in prod OR
@@ -2501,6 +2536,9 @@ async def subscribe_user(
             status_code=400,
             detail="revenuecat_app_user_id is required for server-side verification",
         )
+    subscription.revenuecat_app_user_id = _bind_rc_app_user_id(
+        subscription.revenuecat_app_user_id, authenticated_user_id,
+    )
     try:
         entitlement = await fetch_premium_entitlement(
             subscription.revenuecat_app_user_id,
@@ -2589,6 +2627,7 @@ async def start_trial(
             status_code=400,
             detail="revenuecat_app_user_id is required for server-side verification",
         )
+    rc_app_user_id = _bind_rc_app_user_id(rc_app_user_id, authenticated_user_id)
     try:
         entitlement = await fetch_premium_entitlement(rc_app_user_id)
     except RevenueCatNotConfigured as exc:
@@ -2713,6 +2752,9 @@ async def sync_revenuecat_entitlement(
             status_code=400,
             detail="revenuecat_app_user_id is required for server-side verification",
         )
+    body.revenuecat_app_user_id = _bind_rc_app_user_id(
+        body.revenuecat_app_user_id, authenticated_user_id,
+    )
 
     try:
         entitlement = await fetch_premium_entitlement(body.revenuecat_app_user_id)
