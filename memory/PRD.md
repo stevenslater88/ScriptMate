@@ -199,8 +199,14 @@ Applied in: `resolve_authoritative_tier` (limits / rehearsals / TTS — header;
 Tests: `tests/test_sec002_rc_identity_binding_jun2026.py` (15). Fixtures in 4
 existing RC suites updated to use bound ids (they encoded the cross-id shape).
 Full suite diff vs pre-change: zero new failures (1 flaky network test).
-NOT deployed. Pending: SEC-001 (P1), SEC-004 (P2), iOS bundle id decision,
-RC transfer-behaviour dashboard check.
+DEPLOYED to production (https://scriptmate-8.emergent.host, commit c67253b,
+backend-only, no mobile build / Play submission / RC config change). Prod
+verification (disposable ids, script `/app/tmp/sec002_prod_verify.sh`): attack
+on limits/rehearsals/sync/subscribe/start-trial → 403; legit + anon → 200.
+Prod Premium recognition not verifiable with disposable ids (needs a real
+purchase; QA_PREMIUM fail-closed in prod) — covered by automated tests.
+Pending (NOT started, awaiting approval): SEC-001 (P1), SEC-004 (P2), iOS
+bundle id decision, RC transfer-behaviour dashboard check.
 
 
 ## Key API Endpoints
