@@ -17,6 +17,7 @@ import { AppConfig } from '../services/appConfig';
 import { useScriptStore } from '../store/scriptStore';
 import { useRevenueCat } from '../hooks/useRevenueCat';
 import { hasIntroOffer, getIntroOfferDetails } from '../services/revenuecat';
+import { summarizeSubscriptionOptions } from '../services/trialOffer';
 import * as Localization from 'expo-localization';
 import { PurchasesPackage } from 'react-native-purchases';
 import { DebugLog } from '../services/debugLogService';
@@ -238,6 +239,7 @@ export default function PremiumScreen() {
         productId: yearlyPackage.product?.identifier,
         introAvailable,
         introDetail: introAvailable ? getIntroOfferDetails(yearlyPackage) : null,
+        ...summarizeSubscriptionOptions(yearlyPackage.product),
       });
       if (!introAvailable) {
         // Explicit, non-faking: configuration dependency is on the
@@ -560,8 +562,8 @@ export default function PremiumScreen() {
           <Text style={styles.restorePurchasesText}>Restore Purchases</Text>
         </TouchableOpacity>
 
-        {/* Trial CTA */}
-        {!user?.trial_used && (
+        {/* Trial CTA — Android: only when Google Play returned a free-trial option */}
+        {!user?.trial_used && (Platform.OS !== 'android' || (!!yearlyPackage && hasIntroOffer(yearlyPackage))) && (
           <TouchableOpacity
             style={styles.trialButton}
             onPress={handleStartTrial}

@@ -9,6 +9,7 @@ import Purchases, {
 } from 'react-native-purchases';
 import { AppConfig } from './appConfig';
 import { DebugLog } from './debugLogService';
+import { hasFreeTrialOffer } from './trialOffer';
 
 // 2026-02 Overnight RC investigation (S23 Ultra "No Purchases Found"):
 // the physical diagnostic report contained ZERO RevenueCat events —
@@ -418,10 +419,10 @@ export const getPackagePeriod = (pkg: PurchasesPackage): string => {
 };
 
 /**
- * Check if package has intro/trial offer
+ * Check if package has a FREE trial the purchase will apply (paid intro offers excluded)
  */
 export const hasIntroOffer = (pkg: PurchasesPackage): boolean => {
-  return pkg.product.introPrice !== null;
+  return hasFreeTrialOffer(pkg.product);
 };
 
 /**
