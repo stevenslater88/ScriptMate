@@ -21,7 +21,6 @@ import {
   SceneProgress,
 } from '../services/progressService';
 import { getPendingAuditions, getAuditionStats, AuditionStats } from '../services/auditionService';
-import AIComingSoonSection from '../components/AIComingSoonSection';
 
 export default function DashboardScreen() {
   const { scripts, fetchScripts, loading, initializeUser, isPremium } = useScriptStore();
@@ -371,11 +370,6 @@ export default function DashboardScreen() {
             removal.
           */}
         </View>
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            SCRIPTMATE AI · COMING SOON
-        ═══════════════════════════════════════════════════════════════════ */}
-        <AIComingSoonSection />
 
         {/* ═══════════════════════════════════════════════════════════════════
             PREMIUM UPGRADE (Soft, Non-Intrusive)

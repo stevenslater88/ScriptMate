@@ -188,10 +188,10 @@ def test_upload_route_and_screen_preserved_for_deeplinks():
 # ─── AI COMING SOON SECTION ──────────────────────────────────────────
 
 
-def test_ai_coming_soon_section_is_rendered_on_home():
+def test_ai_coming_soon_section_is_not_rendered_on_home():
+    # 2026-10 Google Play "placeholder content" fix.
     src = _index()
-    assert "import AIComingSoonSection" in src
-    assert "<AIComingSoonSection />" in src
+    assert "AIComingSoonSection" not in src
 
 
 def test_ai_coming_soon_section_lists_all_five_planned_features():

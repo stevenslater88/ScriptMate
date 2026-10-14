@@ -169,13 +169,10 @@ def test_component_has_no_ai_backend_or_paywall_wiring(component_src: str) -> No
 # ─── Home wiring ────────────────────────────────────────────────────────
 
 
-def test_home_imports_and_renders_section(index_src: str) -> None:
-    assert re.search(
-        r"import\s+AIComingSoonSection\s+from\s+'\.\./components/AIComingSoonSection'",
-        index_src,
-    ), "Home must import AIComingSoonSection from '../components/AIComingSoonSection'."
-    assert "<AIComingSoonSection />" in index_src, (
-        "Home must render <AIComingSoonSection /> in its layout."
+def test_home_does_not_render_section(index_src: str) -> None:
+    # 2026-10 Google Play "placeholder content" fix: roadmap hidden from Home.
+    assert "AIComingSoonSection" not in index_src, (
+        "Home must not import or render AIComingSoonSection."
     )
 
 
@@ -213,13 +210,10 @@ def test_home_primary_grid_now_has_six_tools(index_src: str) -> None:
 # ─── Dashboard wiring ───────────────────────────────────────────────────
 
 
-def test_dashboard_imports_and_renders_section(dashboard_src: str) -> None:
-    assert re.search(
-        r"import\s+AIComingSoonSection\s+from\s+'\.\./components/AIComingSoonSection'",
-        dashboard_src,
-    ), "Dashboard must import AIComingSoonSection."
-    assert "<AIComingSoonSection />" in dashboard_src, (
-        "Dashboard must render <AIComingSoonSection />."
+def test_dashboard_does_not_render_section(dashboard_src: str) -> None:
+    # 2026-10 Google Play "placeholder content" fix: roadmap hidden from Dashboard.
+    assert "AIComingSoonSection" not in dashboard_src, (
+        "Dashboard must not import or render AIComingSoonSection."
     )
 
 

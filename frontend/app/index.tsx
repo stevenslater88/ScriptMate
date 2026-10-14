@@ -16,7 +16,6 @@ import { getAuthHeader } from '../services/authClient';
 import { useScriptStore } from '../store/scriptStore';
 import { safeHandler } from '../services/debugService';
 import { shouldShowOnboarding } from '../components/OnboardingTutorial';
-import AIComingSoonSection from '../components/AIComingSoonSection';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -168,9 +167,6 @@ export default function HomeScreen() {
             <View style={st.drillXp}><Text style={st.drillXpTx}>+25 XP</Text></View>
           </TouchableOpacity>
         )}
-
-        {/* ─── SCRIPTMATE AI · COMING SOON ─── */}
-        <AIComingSoonSection />
 
         {/* ─── MORE TOOLS ─── */}
         {/*

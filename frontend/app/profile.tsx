@@ -68,21 +68,7 @@ export default function ProfileScreen() {
           <View style={styles.placeholder} />
         </View>
         
-        <View style={{ flex: 1, justifyContent: 'space-between' }}>
-          <View style={styles.signInPromptFixed}>
-            <Ionicons name="person-circle-outline" size={64} color="#4a4a5e" />
-            <Text style={styles.signInTitle}>Not Signed In</Text>
-            <Text style={styles.signInSubtitle}>
-              Sign in to sync your scripts, notes, and progress across all your devices.
-            </Text>
-            <TouchableOpacity 
-              style={styles.signInButton}
-              onPress={() => router.push('/signin')}
-            >
-              <Text style={styles.signInButtonText}>Sign In</Text>
-            </TouchableOpacity>
-          </View>
-
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           {/* Watermark Settings - pinned to bottom */}
           <View style={styles.watermarkBottom}>
           <View style={styles.watermarkCard}>
