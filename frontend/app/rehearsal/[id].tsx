@@ -390,6 +390,8 @@ export default function RehearsalScreen() {
   // survives app restarts, so this cache is a defence-in-depth optimisation.
   const speechPermissionGrantedRef = useRef(false);
   const audioPermissionGrantedRef = useRef(false);
+  // Set once the user declines mic access; stops auto-start re-prompting every user turn.
+  const speechPermissionDeniedRef = useRef(false);
 
   /**
    * Ensure microphone/speech-recognition permission is granted BEFORE calling
@@ -412,6 +414,7 @@ export default function RehearsalScreen() {
       // point them at Settings instead of silently re-prompting.
       if (current.canAskAgain === false) {
         debugLog('ensureSpeechPermission: previously denied, canAskAgain=false');
+        speechPermissionDeniedRef.current = true;
         Alert.alert(
           'Microphone Access Needed',
           'Speech recognition needs microphone access. Please enable it in Settings → Apps → ScriptM8 → Permissions.',
@@ -422,8 +425,10 @@ export default function RehearsalScreen() {
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (result.granted) {
         speechPermissionGrantedRef.current = true;
+        speechPermissionDeniedRef.current = false;
         return true;
       }
+      speechPermissionDeniedRef.current = true;
       Alert.alert('Permission Required', 'Please grant microphone permission for speech recognition.');
       return false;
     } catch (e: any) {
@@ -873,6 +878,7 @@ export default function RehearsalScreen() {
                 // Match the semantics of Speech onDone.
                 activeElevenLabsSoundRef.current = null;
                 safeAdvance();
+                Promise.resolve(sound.unloadAsync()).catch(() => {}); // free Android player
               }
             });
             return; // do not fall through to Speech.speak
@@ -1153,7 +1159,8 @@ export default function RehearsalScreen() {
         speechRecognitionAvailable && 
         autoAdvanceEnabled && 
         !isListening && 
-        !isPaused) {
+        !isPaused &&
+        !speechPermissionDeniedRef.current) {
       // Small delay to let UI settle before starting recognition
       debugLog('AutoStart: Will start listening in 500ms');
       const timer = setTimeout(() => {

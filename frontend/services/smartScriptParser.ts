@@ -286,7 +286,8 @@ function isLikelyCharacterName(line: string): { likely: boolean; confidence: num
   }
 
   // Mostly letters, spaces, periods, hyphens, apostrophes
-  const validChars = cleaned.replace(/[a-zA-Z\s.\-']/g, '');
+  // Use the number-stripped cue: `10 — LILY` must not fail on its prefix.
+  const validChars = wordCountSource.replace(/[a-zA-Z\s.\-']/g, '');
   if (validChars.length > 2) {
     return { likely: false, confidence: 0 };
   }
@@ -435,9 +436,12 @@ export function parseScript(rawText: string, options?: { includeHeadings?: boole
     const line = rawLines[i];
     const trimmed = line.trim();
 
-    // Empty line → reset dialogue block
+    // Empty line → reset dialogue block, unless it directly follows a cue
+    // (PDF page break between `17 — JACK` and its dialogue).
     if (trimmed.length === 0) {
-      inDialogueBlock = false;
+      if (parsedLines[parsedLines.length - 1]?.type !== 'CHARACTER') {
+        inDialogueBlock = false;
+      }
       continue;
     }
 
