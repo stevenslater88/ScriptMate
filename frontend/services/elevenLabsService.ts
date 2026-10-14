@@ -882,24 +882,43 @@ export const waitForForeground = (): Promise<void> => {
 export const isBackgroundAudioFocusError = (e: any): boolean =>
   /in the background/i.test(e?.message || String(e ?? ''));
 
-// Start playback; on expo-av's background audio-focus rejection, wait for the
-// foreground and retry once (JS can see 'active' before onHostResume runs).
+// Start playback; retry transient Android audio-focus rejections with
+// bounded delays because AppState can become active before Android resumes
+// the host and grants audio focus.
 export const playWhenForeground = async (
   sound: { playAsync: () => Promise<unknown> },
   voiceId: string,
   retryDelayMs = 300,
 ): Promise<void> => {
-  try {
-    await sound.playAsync();
-  } catch (firstErr: any) {
-    if (!isBackgroundAudioFocusError(firstErr)) throw firstErr;
-    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_FOCUS_RETRY', { voiceId });
-    await waitForForeground();
-    await new Promise((r) => setTimeout(r, retryDelayMs));
-    await sound.playAsync();
+  const delays = [retryDelayMs, 700, 1200];
+
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await sound.playAsync();
+
+      if (attempt > 0) {
+        DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_FOCUS_RECOVERED', {
+          voiceId,
+          attempt,
+        });
+      }
+      return;
+    } catch (err: any) {
+      if (!isBackgroundAudioFocusError(err) || attempt >= delays.length) {
+        throw err;
+      }
+
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_FOCUS_RETRY', {
+        voiceId,
+        attempt: attempt + 1,
+        delayMs: delays[attempt],
+      });
+
+      await waitForForeground();
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
   }
 };
-
 /**
  * Play a line via ElevenLabs. Returns the `Audio.Sound` if started, or
  * `null` if any stage failed — in which case the caller must fall back
