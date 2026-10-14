@@ -82,7 +82,7 @@ def test_mic_denial_is_remembered():
     assert "const speechPermissionDeniedRef = useRef(false);" in REHEARSAL
     i = REHEARSAL.index("const ensureSpeechPermission")
     body = REHEARSAL[i:i + 2200]
-    assert body.count("speechPermissionDeniedRef.current = true;") == 2
+    assert body.count("speechPermissionDeniedRef.current = true;") == 1
     assert "speechPermissionDeniedRef.current = false;" in body
 
 

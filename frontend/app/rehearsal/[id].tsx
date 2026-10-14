@@ -409,19 +409,11 @@ export default function RehearsalScreen() {
         debugLog('ensureSpeechPermission: already granted, skipping request');
         return true;
       }
-      // Only prompt on the very first (undetermined) request. If the native
-      // state says the user previously denied and we can no longer request,
-      // point them at Settings instead of silently re-prompting.
-      if (current.canAskAgain === false) {
-        debugLog('ensureSpeechPermission: previously denied, canAskAgain=false');
-        speechPermissionDeniedRef.current = true;
-        Alert.alert(
-          'Microphone Access Needed',
-          'Speech recognition needs microphone access. Please enable it in Settings → Apps → ScriptM8 → Permissions.',
-        );
-        return false;
-      }
-      debugLog('ensureSpeechPermission: requesting (undetermined)');
+      // Always ask Android when not granted: pre-request `canAskAgain` is
+      // false after an expired "Only this time" grant, a Settings revoke or a
+      // reinstall, even though Android would still show its dialog. Android
+      // itself suppresses the dialog when access is permanently denied.
+      debugLog(`ensureSpeechPermission: requesting (status=${current.status})`);
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (result.granted) {
         speechPermissionGrantedRef.current = true;
@@ -429,6 +421,14 @@ export default function RehearsalScreen() {
         return true;
       }
       speechPermissionDeniedRef.current = true;
+      if (result.canAskAgain === false) {
+        debugLog('ensureSpeechPermission: denied, canAskAgain=false after request');
+        Alert.alert(
+          'Microphone Access Needed',
+          'Speech recognition needs microphone access. Please enable it in Settings → Apps → ScriptM8 → Permissions.',
+        );
+        return false;
+      }
       Alert.alert('Permission Required', 'Please grant microphone permission for speech recognition.');
       return false;
     } catch (e: any) {
@@ -1279,17 +1279,19 @@ export default function RehearsalScreen() {
         audioPermissionGrantedRef.current = true;
         return true;
       }
-      if (current.canAskAgain === false) {
+      // Ask Android directly (see ensureSpeechPermission); use the
+      // post-request canAskAgain only to choose the message.
+      const result = await Audio.requestPermissionsAsync();
+      if (result.status === 'granted') {
+        audioPermissionGrantedRef.current = true;
+        return true;
+      }
+      if (result.canAskAgain === false) {
         Alert.alert(
           'Microphone Access Needed',
           'Recording needs microphone access. Please enable it in Settings → Apps → ScriptM8 → Permissions.',
         );
         return false;
-      }
-      const result = await Audio.requestPermissionsAsync();
-      if (result.status === 'granted') {
-        audioPermissionGrantedRef.current = true;
-        return true;
       }
       Alert.alert('Permission Required', 'Please grant microphone permission to record');
       return false;

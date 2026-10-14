@@ -49,6 +49,7 @@
 
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import { AppConfig } from './appConfig';
@@ -863,6 +864,42 @@ export async function ensurePlaybackAudioMode(): Promise<void> {
   }
 }
 
+// expo-av (AVManager.acquireAudioFocus) rejects playAsync while the Android
+// activity is paused: app backgrounded, screen locked, or a system dialog
+// such as the mic permission prompt on top. Wait for the foreground instead.
+export const waitForForeground = (): Promise<void> => {
+  if (AppState.currentState === 'active') return Promise.resolve();
+  return new Promise((resolve) => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        sub.remove();
+        resolve();
+      }
+    });
+  });
+};
+
+export const isBackgroundAudioFocusError = (e: any): boolean =>
+  /in the background/i.test(e?.message || String(e ?? ''));
+
+// Start playback; on expo-av's background audio-focus rejection, wait for the
+// foreground and retry once (JS can see 'active' before onHostResume runs).
+export const playWhenForeground = async (
+  sound: { playAsync: () => Promise<unknown> },
+  voiceId: string,
+  retryDelayMs = 300,
+): Promise<void> => {
+  try {
+    await sound.playAsync();
+  } catch (firstErr: any) {
+    if (!isBackgroundAudioFocusError(firstErr)) throw firstErr;
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_FOCUS_RETRY', { voiceId });
+    await waitForForeground();
+    await new Promise((r) => setTimeout(r, retryDelayMs));
+    await sound.playAsync();
+  }
+};
+
 /**
  * Play a line via ElevenLabs. Returns the `Audio.Sound` if started, or
  * `null` if any stage failed — in which case the caller must fall back
@@ -957,8 +994,16 @@ export const playSpeech = async (
 
   DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_PLAY_START', { voiceId });
 
+  if (AppState.currentState !== 'active') {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_WAIT_FOREGROUND', {
+      voiceId,
+      appState: AppState.currentState,
+    });
+    await waitForForeground();
+  }
+
   try {
-    await sound.playAsync();
+    await playWhenForeground(sound, voiceId);
   } catch (playErr: any) {
     DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_PLAYBACK_ERROR', {
       voiceId,
