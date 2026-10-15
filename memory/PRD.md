@@ -225,3 +225,11 @@ bundle id decision, RC transfer-behaviour dashboard check.
 - `daily_drills`: user-tied practice history.
 - `users`: now includes `revenuecat_app_user_id` persisted by any
   successful self-heal or explicit sync.
+
+## 2026-10-15 — Rehearsal responsiveness pass (branch `perf/rehearsal-responsiveness`, uncommitted, from `eb84fae`)
+- Trial CTA: closed as Google Play account eligibility (no app regression proven). Production VC1150 pending review from `recovery/vc1143-fixes` (app.json 1149).
+- Rehearsal: ElevenLabs prefetch of next partner line + in-flight dedupe; fixed waits cut (partner start 500→150ms, post-playback advance 300→50ms, stop-settle 100ms only if audio was playing, mic auto-start 500→250ms); duplicate-advance guard per line; mic start guard + immediate UI ack; stale SR 'end' ignored; `RehearsalTiming` diagnostics (no transcripts).
+- Scene Partner: "Immediate" cue timing was 1s (`|| 1000`) → fixed; Continue double-tap no longer double-advances.
+- Test branch app.json versionCode 1150 → EAS build 1151. No AAB built (user chose code+tests only).
+- Tests: backend/tests/test_rehearsal_responsiveness.py (+ fixtures/elevenlabs_prefetch_harness.js).
+- Pending: on-device before/after timing capture; P1 SEC-001 rate limiting; P2 dynamic build labels; P2 SEC-004 share links.

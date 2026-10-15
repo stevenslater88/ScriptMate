@@ -917,24 +917,8 @@ export const playSpeech = async (
 ): Promise<Audio.Sound | null> => {
   await ensurePlaybackAudioMode();
 
-  // Cache key must include readerStyle + voiceSpeed — otherwise a
-  // neutral clip and an emotional clip for the same voice+text would
-  // collide and one would silently mask the other.
-  const styleKey = (options?.readerStyle ?? 'neutral').toLowerCase();
-  const speedKey = typeof options?.voiceSpeed === 'number' ? options!.voiceSpeed : 1.0;
-  const cacheKey = `${makeAudioCacheKey(voiceId, text)}|${styleKey}|${speedKey}`;
-  let fileUri = cacheGet(cacheKey);
-  if (fileUri) {
-    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_CACHE_HIT', {
-      voiceId,
-      textLength: text.length,
-    });
-  } else {
-    const generated = await generateSpeechToFile(text, voiceId, options);
-    if (!generated) return null;
-    fileUri = generated.fileUri;
-    cachePut(cacheKey, fileUri);
-  }
+  const fileUri = await getOrGenerateSpeechFile(text, voiceId, options, 'play');
+  if (!fileUri) return null;
 
   DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_LOAD_START', {
     voiceId,
@@ -1015,6 +999,60 @@ export const playSpeech = async (
   }
 
   return sound;
+};
+
+type SpeechOptions = { stability?: number; similarityBoost?: number; readerStyle?: string; voiceSpeed?: number };
+
+// Cache key must include readerStyle + voiceSpeed — otherwise a neutral clip
+// and an emotional clip for the same voice+text would collide.
+const speechCacheKey = (text: string, voiceId: string, options?: SpeechOptions): string => {
+  const styleKey = (options?.readerStyle ?? 'neutral').toLowerCase();
+  const speedKey = typeof options?.voiceSpeed === 'number' ? options.voiceSpeed : 1.0;
+  const cacheKey = `${makeAudioCacheKey(voiceId, text)}|${styleKey}|${speedKey}`;
+  return cacheKey;
+};
+
+// One generation per key: a prefetch and the later playSpeech share the request.
+const inFlightGenerations = new Map<string, Promise<string | null>>();
+
+const getOrGenerateSpeechFile = (
+  text: string,
+  voiceId: string,
+  options: SpeechOptions | undefined,
+  source: 'play' | 'prefetch',
+): Promise<string | null> => {
+  const key = speechCacheKey(text, voiceId, options);
+  const cached = cacheGet(key);
+  if (cached) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'AUDIO_CACHE_HIT', { voiceId, textLength: text.length, source });
+    return Promise.resolve(cached);
+  }
+  const pending = inFlightGenerations.get(key);
+  if (pending) {
+    DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'TTS_JOINED_IN_FLIGHT', { voiceId, source });
+    return pending;
+  }
+  const startedAt = Date.now();
+  DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'TTS_REQUEST_STARTED', { voiceId, textLength: text.length, source });
+  const p = generateSpeechToFile(text, voiceId, options)
+    .catch(() => null)
+    .then((generated) => {
+      DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'TTS_AUDIO_READY', {
+        voiceId, source, success: !!generated, generateMs: Date.now() - startedAt,
+      });
+      if (!generated) return null;
+      cachePut(key, generated.fileUri);
+      return generated.fileUri;
+    })
+    .finally(() => { inFlightGenerations.delete(key); });
+  inFlightGenerations.set(key, p);
+  return p;
+};
+
+/** Generate a line's audio into the cache ahead of time. Never plays, never throws. */
+export const prefetchSpeech = (text: string, voiceId: string, options?: SpeechOptions): void => {
+  if (!text || !voiceId || _backendConfigured === false) return;
+  getOrGenerateSpeechFile(text, voiceId, options, 'prefetch');
 };
 
 // ─── CONFIG PROBE ─────────────────────────────────────────────────────
@@ -1126,6 +1164,7 @@ export default {
   elevenLabsConfigStatus,
   readerStyleToElevenLabsSettings,
   clearElevenLabsAudioCache,
+  prefetchSpeech,
   resolveVoiceForCharacter,
   selectProvider,
   uint8ArrayToBase64,

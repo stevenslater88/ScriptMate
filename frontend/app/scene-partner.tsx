@@ -110,7 +110,7 @@ export default function ScenePartnerScreen() {
 
   // Get current style settings
   const getStyle = () => READER_STYLES.find(s => s.id === selectedStyle) || READER_STYLES[0];
-  const getDelay = () => CUE_TIMINGS.find(t => t.id === selectedTiming)?.delay || 1000;
+  const getDelay = () => CUE_TIMINGS.find(t => t.id === selectedTiming)?.delay ?? 1000;
 
   // --- Rehearsal Control ---
   const speakLine = useCallback((item: QueueItem, onDone: () => void) => {
@@ -180,6 +180,8 @@ export default function ScenePartnerScreen() {
 
   const handleContinue = () => {
     if (playState === 'waiting_user') {
+      // A second tap replaces the pending advance instead of queuing another.
+      if (timerRef.current) clearTimeout(timerRef.current);
       const delay = getDelay();
       if (delay > 0) {
         timerRef.current = setTimeout(() => advanceTo(currentIndex + 1), delay);

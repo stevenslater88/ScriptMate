@@ -32,6 +32,7 @@ import {
   playSpeech,
   isElevenLabsConfigured,
   ensurePlaybackAudioMode,
+  prefetchSpeech,
   resolveVoiceForCharacter,
   selectProvider,
   type CharacterVoiceAssignment,
@@ -217,6 +218,15 @@ export default function RehearsalScreen() {
     console.log(`[Rehearsal-Debug] ${msg}`);
     setDebugInfo(msg);
   };
+
+  // Turn-timing diagnostics: timestamps and line indexes only, never transcripts.
+  const timingRef = useRef<Record<string, number>>({});
+  const msSince = (key: string) => (timingRef.current[key] ? Date.now() - timingRef.current[key] : null);
+  const logTiming = (event: string, data: Record<string, unknown> = {}) =>
+    DebugLog.log('DIAGNOSTIC', 'RehearsalTiming', event, data);
+  // Line index whose user turn was already completed (blocks duplicate advances).
+  const userLineDoneRef = useRef(-1);
+  const micStartingRef = useRef(false);
   
   // Animation refs
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -290,6 +300,16 @@ export default function RehearsalScreen() {
   useSpeechRecognitionEvent('start', () => {
     if (!speechRecognitionImported) return;
     debugLog('SR Event: start');
+    timingRef.current.micReady = Date.now();
+    timingRef.current.lastResult = 0;
+    const rearm = !!timingRef.current.playbackFinished;
+    logTiming(rearm ? 'MICROPHONE_REARMED' : 'MICROPHONE_READY', {
+      lineIndex: currentLineIndexRef.current,
+      startMs: msSince('micRequested'),
+      sinceTurnStartedMs: msSince('turnStarted'),
+      sincePlaybackFinishedMs: msSince('playbackFinished'),
+    });
+    timingRef.current.playbackFinished = 0;
     setIsListening(true);
     setCurrentAccuracy(0);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -298,6 +318,11 @@ export default function RehearsalScreen() {
   useSpeechRecognitionEvent('end', () => {
     if (!speechRecognitionImported) return;
     debugLog('SR Event: end');
+    // Late 'end' from the previous session while a new start is pending.
+    if ((timingRef.current.micRequested || 0) > (timingRef.current.micReady || 0)) {
+      logTiming('SPEECH_STALE_END_IGNORED', { lineIndex: currentLineIndexRef.current });
+      return;
+    }
     setIsListening(false);
     // Show accuracy feedback briefly after listening ends
     if (currentAccuracy > 0) {
@@ -319,9 +344,12 @@ export default function RehearsalScreen() {
       
       debugLog(`SR: "${safeTranscript.substring(0, 25)}..." final=${isFinal}`);
       setRecognizedText(safeTranscript);
+      const prevResultMs = msSince('lastResult');
+      timingRef.current.lastResult = Date.now();
       
       // Calculate and update accuracy in real-time
-      if (state === 'user_turn' && safeTranscript.length > 0) {
+      if (state === 'user_turn' && safeTranscript.length > 0 &&
+          userLineDoneRef.current !== currentLineIndexRef.current) {
         const lines = currentScript?.lines || [];
         const currentLine = lines[currentLineIndex];
         const expectedText = currentLine?.text || '';
@@ -350,7 +378,21 @@ export default function RehearsalScreen() {
                              completenessThresholdMet &&
                              (isFinal || similarity >= 0.85);
         
+        if (isFinal && !shouldAdvance) {
+          logTiming('SPEECH_FINAL_NO_MATCH', {
+            lineIndex: currentLineIndexRef.current,
+            similarityPct: Math.round(similarity * 100),
+            spokenPct: Math.round(spokenRatio * 100),
+          });
+        }
         if (shouldAdvance) {
+          logTiming('SPEECH_FINALIZED', {
+            lineIndex: currentLineIndexRef.current,
+            isFinal,
+            similarityPct: Math.round(similarity * 100),
+            sinceMicReadyMs: msSince('micReady'),
+            sincePrevResultMs: prevResultMs,
+          });
           debugLog('SR: Auto-advancing - line complete!');
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -372,6 +414,11 @@ export default function RehearsalScreen() {
     try {
       const errorMsg = event?.error || 'unknown error';
       debugLog(`SR Event: error - ${errorMsg}`);
+      logTiming('REHEARSAL_TURN_ERROR', {
+        stage: 'speech-recognition',
+        error: String(errorMsg).substring(0, 60),
+        lineIndex: currentLineIndexRef.current,
+      });
       setIsListening(false);
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -445,12 +492,18 @@ export default function RehearsalScreen() {
       return;
     }
 
+    // Ignore repeat taps / auto-start while a start is already in progress.
+    if (micStartingRef.current) return;
+    micStartingRef.current = true;
     try {
       const ok = await ensureSpeechPermission();
       if (!ok) return;
 
       setRecognizedText('');
       debugLog('startListening: Starting SR module...');
+      timingRef.current.micRequested = Date.now();
+      // Immediate UI acknowledgement; the SR 'end'/'error' events reset it.
+      setIsListening(true);
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
@@ -458,8 +511,11 @@ export default function RehearsalScreen() {
       });
       debugLog('startListening: SR module started');
     } catch (error: any) {
+      setIsListening(false);
       debugLog(`startListening: Error - ${error?.message || 'unknown'}`);
       console.error('Failed to start speech recognition:', error);
+    } finally {
+      micStartingRef.current = false;
     }
   };
 
@@ -667,6 +723,22 @@ export default function RehearsalScreen() {
     })();
   }, [currentScript?.id, currentRehearsal?.script_id]);
 
+  // Generate the next scene-partner line's ElevenLabs audio while the current
+  // turn is in progress, using the exact voice + options speakLine will use.
+  const prefetchNextPartnerLine = useCallback((fromIndex: number) => {
+    if (!elevenLabsAvailable.current) return;
+    for (let i = fromIndex + 1; i < lines.length; i++) {
+      const l = lines[i];
+      if (!l || l.is_stage_direction || l.character === userCharacter) continue;
+      const character = l.character || '';
+      const resolution = resolveVoiceForCharacter(voiceAssignmentsRef.current, character);
+      if (selectProvider(elevenLabsAvailable.current, resolution) !== 'elevenlabs') return;
+      const a = voiceAssignmentsRef.current[character] ?? voiceAssignmentsRef.current[character.toUpperCase()];
+      if (a?.voiceId) prefetchSpeech(l.text, a.voiceId, { readerStyle, voiceSpeed: readerVoiceSpeed });
+      return;
+    }
+  }, [lines, userCharacter, readerStyle, readerVoiceSpeed]);
+
   // Helper: safely tear down any active ElevenLabs sound. Called from
   // pause/stop paths and before every new speakLine invocation.
   const stopElevenLabsSound = useCallback(async () => {
@@ -741,6 +813,25 @@ export default function RehearsalScreen() {
            ?? voiceAssignmentsRef.current[(lineCharacter as string).toUpperCase()])
         : undefined;
 
+      timingRef.current.responseSelected = Date.now();
+      logTiming('RESPONSE_SELECTED', {
+        lineIndex: targetLineIndex,
+        provider,
+        sinceSpeechFinalizedMs: msSince('speechFinalized'),
+        sincePlaybackFinishedMs: msSince('playbackFinished'),
+      });
+      const logPlaybackStarted = (actualProvider: string) => logTiming('AUDIO_PLAYBACK_STARTED', {
+        lineIndex: targetLineIndex,
+        provider: actualProvider,
+        sinceResponseSelectedMs: msSince('responseSelected'),
+        sinceSpeechFinalizedMs: msSince('speechFinalized'),
+      });
+      const logPlaybackFinished = (actualProvider: string) => {
+        timingRef.current.playbackFinished = Date.now();
+        logTiming('AUDIO_PLAYBACK_FINISHED', { lineIndex: targetLineIndex, provider: actualProvider });
+      };
+      prefetchNextPartnerLine(targetLineIndex);
+
       // Per-line resolution + selection breadcrumbs.
       DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'VOICE_RESOLUTION', {
         lineIndex: targetLineIndex,
@@ -788,22 +879,24 @@ export default function RehearsalScreen() {
           clearTimeout(speechTimeoutRef.current);
         }
         
-        // Use a timeout to ensure state has settled
+        // Guards are ref-based; the short timeout only lets the finish callback unwind.
         speechTimeoutRef.current = setTimeout(() => {
           // Double-check we're still on the expected line before advancing
           if (currentLineIndexRef.current === targetLineIndex) {
             advanceToNextLineRef.current();
           }
-        }, 300);
+        }, 50);
       };
 
       try {
         // Stop any existing speech first
+        const hadActiveAudio = !!activeElevenLabsSoundRef.current
+          || await Speech.isSpeakingAsync().catch(() => false);
         await Speech.stop();
         await stopElevenLabsSound();
 
-        // Small delay to ensure previous speech is fully stopped
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Settle delay only when something was actually playing
+        if (hadActiveAudio) await new Promise(resolve => setTimeout(resolve, 100));
 
         if (useElevenLabs && assignment) {
           // ─── Per-character ElevenLabs voice path ─────────────────
@@ -869,6 +962,7 @@ export default function RehearsalScreen() {
               voiceKey: assignment.voiceKey,
             });
             activeElevenLabsSoundRef.current = sound;
+            logPlaybackStarted('elevenlabs');
             let doneFired = false;
             sound.setOnPlaybackStatusUpdate((status: any) => {
               if (!status?.isLoaded) return;
@@ -878,12 +972,19 @@ export default function RehearsalScreen() {
                 // Match the semantics of Speech onDone.
                 activeElevenLabsSoundRef.current = null;
                 safeAdvance();
+                logPlaybackFinished('elevenlabs');
                 Promise.resolve(sound.unloadAsync()).catch(() => {}); // free Android player
               }
             });
             return; // do not fall through to Speech.speak
           } catch (e: any) {
             console.warn('[Rehearsal] ElevenLabs path failed, falling back to expo-speech:', e?.message);
+            logTiming('REHEARSAL_TURN_ERROR', {
+              stage: 'elevenlabs',
+              lineIndex: targetLineIndex,
+              sinceResponseSelectedMs: msSince('responseSelected'),
+              fallingBackTo: 'expo-speech',
+            });
             DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'TTS_RESPONSE', {
               lineIndex: targetLineIndex,
               character: lineCharacter,
@@ -947,7 +1048,9 @@ export default function RehearsalScreen() {
           language: 'en-US',
           pitch: voiceSettings.pitch,
           rate: voiceSettings.rate,
+          onStart: () => logPlaybackStarted('expo-speech'),
           onDone: () => {
+            logPlaybackFinished('expo-speech');
             console.log('[Rehearsal] Speech done for line:', targetLineIndex);
             safeAdvance();
           },
@@ -967,7 +1070,7 @@ export default function RehearsalScreen() {
         safeAdvance();
       }
     },
-    [voiceType, isPaused, getVoiceSettings, readerVoiceSpeed, lines, stopElevenLabsSound]
+    [voiceType, isPaused, getVoiceSettings, readerVoiceSpeed, lines, stopElevenLabsSound, prefetchNextPartnerLine]
   );
 
   // Save progress to backend
@@ -1117,6 +1220,12 @@ export default function RehearsalScreen() {
       }
       
       if (nextLine.character === userCharacter) {
+        timingRef.current.turnStarted = Date.now();
+        logTiming('REHEARSAL_TURN_STARTED', {
+          lineIndex: nextIndex,
+          sincePlaybackFinishedMs: msSince('playbackFinished'),
+        });
+        prefetchNextPartnerLine(nextIndex);
         setState('user_turn');
         setLineStartTime(Date.now());
         if (mode === 'cue_only' || mode === 'performance') {
@@ -1136,7 +1245,7 @@ export default function RehearsalScreen() {
             !isSpeakingRef.current) {
           speakLine(nextLine.text, lineToSpeak);
         }
-      }, 500);
+      }, 150);
     } else {
       // Stage direction - skip
       setTimeout(() => advanceToNextLine(), 300);
@@ -1145,7 +1254,7 @@ export default function RehearsalScreen() {
       console.error('[Rehearsal] advanceToNextLine error:', err?.message || err);
       debugLog(`Advance Error: ${err?.message || 'unknown'}`);
     }
-  }, [lines, userCharacter, isPaused, mode, speakLine, saveProgress]);
+  }, [lines, userCharacter, isPaused, mode, speakLine, saveProgress, prefetchNextPartnerLine]);
 
   // Keep advanceToNextLine ref updated for use in speakLine callbacks
   useEffect(() => {
@@ -1162,11 +1271,11 @@ export default function RehearsalScreen() {
         !isPaused &&
         !speechPermissionDeniedRef.current) {
       // Small delay to let UI settle before starting recognition
-      debugLog('AutoStart: Will start listening in 500ms');
+      debugLog('AutoStart: Will start listening in 250ms');
       const timer = setTimeout(() => {
         debugLog('AutoStart: Starting listening now');
         startListening();
-      }, 500);
+      }, 250);
       return () => clearTimeout(timer);
     }
   }, [state, speechRecognitionAvailable, autoAdvanceEnabled, isListening, isPaused]);
@@ -1188,9 +1297,14 @@ export default function RehearsalScreen() {
     speakingLineIndexRef.current = null;
     advanceProcessedRef.current = false;
     isSpeakingRef.current = false;
+    userLineDoneRef.current = -1;
+    timingRef.current = {};
 
     const firstLine = lines[0];
     if (firstLine.character === userCharacter) {
+      timingRef.current.turnStarted = Date.now();
+      logTiming('REHEARSAL_TURN_STARTED', { lineIndex: 0 });
+      prefetchNextPartnerLine(0);
       setState('user_turn');
       setLineStartTime(Date.now());
       setUserLineVisible(mode !== 'cue_only' && mode !== 'performance');
@@ -1203,6 +1317,10 @@ export default function RehearsalScreen() {
 
   // User confirms they've said their line
   const onUserLineDone = (usedHint: boolean = false, speechAccuracy?: number) => {
+    // A late SR result or a double tap must not complete the same line twice.
+    if (userLineDoneRef.current === currentLineIndexRef.current) return;
+    userLineDoneRef.current = currentLineIndexRef.current;
+    timingRef.current.speechFinalized = Date.now();
     const hesitationTime = (Date.now() - lineStartTime) / 1000;
     
     // Track performance with speech accuracy
