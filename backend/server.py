@@ -1809,6 +1809,20 @@ _HEADER_KEYWORDS = frozenset({
     "LOGLINE",
 })
 
+
+def _is_header_keyword_line(line: str) -> bool:
+    """Front-matter label line. Colon forms (`TITLE: X`, `Title: X`) match in
+    any case; bare / space forms (`CHARACTERS`, `WRITTEN BY Jane`) only when
+    the keyword itself is uppercase, so dialogue like "Time will tell." stays
+    dialogue."""
+    upper = line.upper()
+    for kw in _HEADER_KEYWORDS:
+        if upper.startswith(kw + ":"):
+            return True
+        if line == kw or line.startswith(kw + " "):
+            return True
+    return False
+
 # Inline-cue dialogue (`NAME: dialogue text on the same line`). Common
 # in stage plays and Fountain drafts. Captures the cue name (upper /
 # digit / dot / apostrophe / hyphen, 1..31 chars) and the dialogue.
@@ -1898,17 +1912,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
                 continue
             if _looks_like_scene_heading(_s):
                 break
-            _lu = _s.upper()
-            _is_hk = False
-            for _hk in _HEADER_KEYWORDS:
-                if (
-                    _lu == _hk
-                    or _lu == _hk + ":"
-                    or _lu.startswith((_hk + ":", _hk + " "))
-                ):
-                    _is_hk = True
-                    break
-            if _is_hk:
+            if _is_header_keyword_line(_s):
                 break
             _passes_cue_shape = (
                 _s.isupper()
@@ -1988,18 +1992,7 @@ def fallback_parse_script(raw_text: str) -> Dict[str, Any]:
         # dialogue block first. Matches either the bare keyword
         # (`CHARACTERS:`) or the keyword followed by content on the
         # same line (`TITLE: THE CALL`, `AUTHOR: Jane Doe`).
-        _line_upper = line.upper()
-        _is_header_line = False
-        for _hk in _HEADER_KEYWORDS:
-            if _line_upper == _hk or _line_upper == _hk + ":":
-                _is_header_line = True
-                break
-            # `TITLE: THE CALL` / `WRITTEN BY: Jane Doe` — the keyword
-            # starts the line and is terminated by `:` or whitespace.
-            if _line_upper.startswith((_hk + ":", _hk + " ")):
-                _is_header_line = True
-                break
-        if _is_header_line:
+        if _is_header_keyword_line(line):
             if current_character and current_text:
                 lines_data.append({
                     "character": current_character,
@@ -2191,16 +2184,8 @@ def _coalesce_pdf_header_value_splits(text: str) -> str:
             if j < len(lines):
                 next_line = lines[j]
                 next_stripped = next_line.strip()
-                next_upper = next_stripped.upper()
                 # Must not itself be another header
-                next_is_header = False
-                for kw in _HEADER_KEYWORDS:
-                    if next_upper == kw or next_upper == kw + ":":
-                        next_is_header = True
-                        break
-                    if next_upper.startswith((kw + ":", kw + " ")):
-                        next_is_header = True
-                        break
+                next_is_header = _is_header_keyword_line(next_stripped)
                 if (not next_is_header
                         and 0 < len(next_stripped) <= 60):
                     # Preserve leading indentation of the header line.
