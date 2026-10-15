@@ -224,11 +224,23 @@ export default function ScenePartnerScreen() {
     if (lastCueIndex >= 0 && lastCueIndex < queue.length) {
       Speech.stop();
       if (timerRef.current) clearTimeout(timerRef.current);
+      // The cleared timer may have been a pending Continue / post-cue advance.
+      continuePendingRef.current = false;
       const item = queue[lastCueIndex];
       const style = getStyle();
+      const resumeIndex = lastCueIndex + 1;
+      const continueAfter = playState === 'playing'
+        ? () => {
+            const delay = getDelay();
+            if (delay > 0) timerRef.current = setTimeout(() => advanceTo(resumeIndex), delay);
+            else advanceTo(resumeIndex);
+          }
+        : undefined;
       Speech.speak(item.text, {
         rate: style.rate,
         pitch: style.pitch,
+        onDone: continueAfter,
+        onError: continueAfter,
       });
     }
   };

@@ -173,3 +173,12 @@ def test_scene_partner_advance_reads_latest_queue():
     assert "}, [speakLine, selectedTiming]);" in adv
     start = _between(SCENE, "const handleStart = () =>", 300)
     assert start.index("queueRef.current = q;") < start.index("setQueue(q);")
+
+
+def test_scene_partner_replay_cue_cannot_strand_the_turn():
+    # Replay clears the pending timer: it must reset the Continue guard and, when it
+    # interrupts a partner line, resume the scene after the replay finishes.
+    body = _between(SCENE, "const handleReplayCue = () =>", 1100)
+    assert body.index("if (timerRef.current) clearTimeout(timerRef.current);") < body.index("continuePendingRef.current = false;")
+    assert "playState === 'playing'" in body and "advanceTo(resumeIndex)" in body
+    assert "onDone: continueAfter," in body and "onError: continueAfter," in body
