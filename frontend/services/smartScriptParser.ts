@@ -179,11 +179,15 @@ function stripLeadingLineNumber(s: string): string {
 }
 export const _stripLeadingLineNumberForTest = stripLeadingLineNumber;
 
+// Colon forms (`TITLE: X`, `Title: X`) match in any case; bare / space forms
+// (`CHARACTERS`, `WRITTEN BY Jane`) only when the keyword itself is uppercase,
+// so dialogue like "Time will tell." stays dialogue. Mirrors
+// `backend/server.py::_is_header_keyword_line`.
 function isHeaderLine(trimmed: string): boolean {
   const upper = trimmed.toUpperCase();
   for (const kw of HEADER_KEYWORDS) {
-    if (upper === kw || upper === kw + ':') return true;
-    if (upper.startsWith(kw + ':') || upper.startsWith(kw + ' ')) return true;
+    if (upper.startsWith(kw + ':')) return true;
+    if (trimmed === kw || trimmed.startsWith(kw + ' ')) return true;
   }
   return false;
 }
