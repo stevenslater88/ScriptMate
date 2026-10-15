@@ -227,6 +227,10 @@ export default function RehearsalScreen() {
   // Line index whose user turn was already completed (blocks duplicate advances).
   const userLineDoneRef = useRef(-1);
   const micStartingRef = useRef(false);
+  // start() issued, native 'start'/'error' not yet received (bounded so a lost event can't block the mic).
+  const micPendingRef = useRef(false);
+  const isMicStartPending = () =>
+    micPendingRef.current && Date.now() - (timingRef.current.micRequested || 0) < 3000;
   
   // Animation refs
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -300,6 +304,7 @@ export default function RehearsalScreen() {
   useSpeechRecognitionEvent('start', () => {
     if (!speechRecognitionImported) return;
     debugLog('SR Event: start');
+    micPendingRef.current = false;
     timingRef.current.micReady = Date.now();
     timingRef.current.lastResult = 0;
     const rearm = !!timingRef.current.playbackFinished;
@@ -319,7 +324,7 @@ export default function RehearsalScreen() {
     if (!speechRecognitionImported) return;
     debugLog('SR Event: end');
     // Late 'end' from the previous session while a new start is pending.
-    if ((timingRef.current.micRequested || 0) > (timingRef.current.micReady || 0)) {
+    if (isMicStartPending()) {
       logTiming('SPEECH_STALE_END_IGNORED', { lineIndex: currentLineIndexRef.current });
       return;
     }
@@ -419,6 +424,7 @@ export default function RehearsalScreen() {
         error: String(errorMsg).substring(0, 60),
         lineIndex: currentLineIndexRef.current,
       });
+      micPendingRef.current = false;
       setIsListening(false);
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -493,7 +499,7 @@ export default function RehearsalScreen() {
     }
 
     // Ignore repeat taps / auto-start while a start is already in progress.
-    if (micStartingRef.current) return;
+    if (micStartingRef.current || isMicStartPending()) return;
     micStartingRef.current = true;
     try {
       const ok = await ensureSpeechPermission();
@@ -502,8 +508,7 @@ export default function RehearsalScreen() {
       setRecognizedText('');
       debugLog('startListening: Starting SR module...');
       timingRef.current.micRequested = Date.now();
-      // Immediate UI acknowledgement; the SR 'end'/'error' events reset it.
-      setIsListening(true);
+      micPendingRef.current = true;
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
@@ -511,7 +516,7 @@ export default function RehearsalScreen() {
       });
       debugLog('startListening: SR module started');
     } catch (error: any) {
-      setIsListening(false);
+      micPendingRef.current = false;
       debugLog(`startListening: Error - ${error?.message || 'unknown'}`);
       console.error('Failed to start speech recognition:', error);
     } finally {

@@ -233,3 +233,5 @@ bundle id decision, RC transfer-behaviour dashboard check.
 - Test branch app.json versionCode 1150 → EAS build 1151. No AAB built (user chose code+tests only).
 - Tests: backend/tests/test_rehearsal_responsiveness.py (+ fixtures/elevenlabs_prefetch_harness.js).
 - Pending: on-device before/after timing capture; P1 SEC-001 rate limiting; P2 dynamic build labels; P2 SEC-004 share links.
+- 2026-10-15 follow-up (uncommitted on top of auto-checkpoint 3db9b65): removed optimistic `setIsListening(true)` (caused 250ms auto-start retry loop when SR fails before 'start'); replaced with bounded `micPendingRef` (3s). Scene Partner Continue now guarded by `continuePendingRef` (Immediate=0ms double-tap). 3 failing backend tests are env/pre-existing: QA_PREMIUM=true in preview backend/.env (iteration26), backend parser drops final line after `[Stage Direction: ...]` (iteration19; server.py unchanged since eb84fae).
+- Zero-byte junk file `frontend/\x01\x90\xf8@@\xd0\xc39@8` = artifact of failed x86 hermesc run during `expo export` (mtime matches bundler tmp dir); safe to delete with approval.

@@ -61,6 +61,7 @@ export default function ScenePartnerScreen() {
 
   // Refs
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const continuePendingRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -124,6 +125,7 @@ export default function ScenePartnerScreen() {
   }, [selectedStyle]);
 
   const advanceTo = useCallback((index: number) => {
+    continuePendingRef.current = false;
     if (index >= queue.length) {
       setPlayState('finished');
       setCurrentIndex(index);
@@ -180,7 +182,9 @@ export default function ScenePartnerScreen() {
 
   const handleContinue = () => {
     if (playState === 'waiting_user') {
-      // A second tap replaces the pending advance instead of queuing another.
+      // One advance per user turn: ignore repeat taps until advanceTo runs.
+      if (continuePendingRef.current) return;
+      continuePendingRef.current = true;
       if (timerRef.current) clearTimeout(timerRef.current);
       const delay = getDelay();
       if (delay > 0) {
@@ -194,6 +198,7 @@ export default function ScenePartnerScreen() {
   const handlePause = () => {
     Speech.stop();
     if (timerRef.current) clearTimeout(timerRef.current);
+    continuePendingRef.current = false;
     setPlayState('paused');
   };
 
@@ -227,6 +232,7 @@ export default function ScenePartnerScreen() {
   const handleBackToSetup = () => {
     Speech.stop();
     if (timerRef.current) clearTimeout(timerRef.current);
+    continuePendingRef.current = false;
     setPhase('setup');
     setPlayState('paused');
     setCurrentIndex(0);

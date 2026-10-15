@@ -95,16 +95,24 @@ def test_user_line_completes_once_per_line():
     assert "userLineDoneRef.current !== currentLineIndexRef.current" in res
 
 
-def test_mic_start_is_guarded_and_acknowledged_immediately():
+def test_mic_start_is_guarded_without_optimistic_listening_state():
     body = _between(REHEARSAL, "const startListening = async () =>", 1600)
-    assert "if (micStartingRef.current) return;" in body
-    assert body.index("ensureSpeechPermission()") < body.index("setIsListening(true);") < body.index("ExpoSpeechRecognitionModule.start(")
+    assert "if (micStartingRef.current || isMicStartPending()) return;" in body
+    assert body.index("ensureSpeechPermission()") < body.index("micPendingRef.current = true;") < body.index("ExpoSpeechRecognitionModule.start(")
+    # isListening stays event-driven: an optimistic true->false flip on a failed
+    # start would re-trigger the auto-start effect in a loop.
+    assert "setIsListening(true)" not in body
     assert "micStartingRef.current = false;" in body[body.index("finally"):]
-    assert "setIsListening(false);" in body[body.index("catch"):]
+    assert "micPendingRef.current = false;" in body[body.index("catch"):]
+    pending = _between(REHEARSAL, "const isMicStartPending = () =>", 200)
+    assert "< 3000" in pending  # a lost native event cannot block the mic forever
+    assert "micPendingRef.current = false;" in _between(REHEARSAL, "useSpeechRecognitionEvent('start'", 300)
+    assert "micPendingRef.current = false;" in _between(REHEARSAL, "useSpeechRecognitionEvent('error'", 700)
 
 
 def test_stale_end_event_ignored_while_start_pending():
     body = _between(REHEARSAL, "useSpeechRecognitionEvent('end'", 600)
+    assert "if (isMicStartPending())" in body
     assert body.index("SPEECH_STALE_END_IGNORED") < body.index("setIsListening(false);")
 
 
@@ -132,8 +140,12 @@ def test_scene_partner_immediate_timing_is_zero():
 
 
 def test_scene_partner_continue_double_tap_does_not_queue_two_advances():
-    body = _between(SCENE, "const handleContinue = () =>", 500)
+    body = _between(SCENE, "const handleContinue = () =>", 600)
+    assert body.index("if (continuePendingRef.current) return;") < body.index("advanceTo(")
     assert body.index("if (timerRef.current) clearTimeout(timerRef.current);") < body.index("setTimeout(")
+    assert "continuePendingRef.current = false;" in _between(SCENE, "const advanceTo = useCallback", 120)
+    for fn in ["const handlePause = () =>", "const handleBackToSetup = () =>"]:
+        assert "continuePendingRef.current = false;" in _between(SCENE, fn, 200), fn
 
 
 # ─── Release isolation ────────────────────────────────────────────────
