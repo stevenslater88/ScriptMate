@@ -62,6 +62,8 @@ export default function ScenePartnerScreen() {
   // Refs
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const continuePendingRef = useRef(false);
+  // Latest queue for callbacks scheduled before setQueue re-renders (handleStart).
+  const queueRef = useRef<QueueItem[]>([]);
   const scrollRef = useRef<ScrollView>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -126,6 +128,7 @@ export default function ScenePartnerScreen() {
 
   const advanceTo = useCallback((index: number) => {
     continuePendingRef.current = false;
+    const queue = queueRef.current;
     if (index >= queue.length) {
       setPlayState('finished');
       setCurrentIndex(index);
@@ -149,11 +152,12 @@ export default function ScenePartnerScreen() {
         }
       });
     }
-  }, [queue, speakLine, selectedTiming]);
+  }, [speakLine, selectedTiming]);
 
   const handleStart = () => {
     const q = buildQueue();
     if (q.length === 0) return;
+    queueRef.current = q;
     setQueue(q);
     setCurrentIndex(0);
     setLastCueIndex(-1);

@@ -92,7 +92,76 @@ def test_legitimate_headers_recognised_by_both_parsers(header):
 
 def test_frontend_rule_mirrors_backend_rule():
     i = PARSER_SRC.index("function isHeaderLine(trimmed: string): boolean")
-    body = PARSER_SRC[i:i + 400]
-    assert "upper.startsWith(kw + ':')" in body
-    assert "trimmed === kw || trimmed.startsWith(kw + ' ')" in body
-    assert "upper.startsWith(kw + ' ')" not in body
+    body = PARSER_SRC[i:i + 500]
+    assert "upper.startsWith(kw + ':') || upper === kw" in body
+    assert "/[.!?]$/.test(rest)" in body
+    assert "trimmed.startsWith(kw + ' ') || isNameLike(rest)" in body
+
+
+# ─── Title pages, shouted dialogue, mixed-case labels (2026-10-15) ───────
+
+TITLE_PAGE_CREDITS = [
+    "Written by Jane Doe", "WRITTEN BY JANE DOE", "Written By Jane Doe",
+    "by Jane Doe", "By Jane Doe", "BY JANE DOE", "Written by Jane Doe and John Smith",
+    "WRITTEN BY: Jane Doe", "Author: Jane Doe",
+]
+
+
+@pytest.mark.parametrize("credit", TITLE_PAGE_CREDITS)
+def test_title_page_credit_is_metadata_in_both_parsers(credit):
+    raw = f"THE HEIST\n{credit}\n\nJACK\nHello.\n\nSARAH\nHi."
+    expected = [("JACK", "Hello."), ("SARAH", "Hi.")]
+    for side in (fe(raw), be(raw)):
+        assert side["dialogue"] == expected, credit
+        assert {"JACK", "SARAH"} <= side["characters"], credit
+
+
+@pytest.mark.parametrize("header", [
+    "Title The Heist", "Characters", "Synopsis", "Cast Jack, Sarah", "Setting Downtown Chicago",
+])
+def test_mixed_case_labels_without_colon(header):
+    raw = f"{header}\n\nJACK\nHello.\n\nSARAH\nHi."
+    for side in (fe(raw), be(raw)):
+        assert side["dialogue"] == [("JACK", "Hello."), ("SARAH", "Hi.")], header
+
+
+@pytest.mark.parametrize("shout", ["TIME IS UP!", "BY GOD, YES!", "CAST THE NET?", "PLACE IT THERE."])
+def test_shouted_keyword_dialogue_kept(shout):
+    raw = f"JACK\n{shout}\n\nSARAH\nNo."
+    for side in (fe(raw), be(raw)):
+        assert side["dialogue"] == [("JACK", shout), ("SARAH", "No.")], shout
+
+
+def test_representative_full_script_title_page_scene_and_counts():
+    raw = (
+        "THE HEIST\n\nWritten by Jane Doe\n\nCHARACTERS:\nJACK, SARAH\n\n"
+        "INT. KITCHEN - NIGHT\n\n"
+        "JACK\nTime will tell.\n\n"
+        "(She laughs)\n\n"
+        "SARAH\nBY GOD, YES!\n\n"
+        "JACK\nPlace it there.\nCast your vote.\n\n"
+        "SARAH\nBy a name I know not.\n"
+    )
+    expected = [
+        ("JACK", "Time will tell."),
+        ("SARAH", "BY GOD, YES!"),
+        ("JACK", "Place it there. Cast your vote."),
+        ("SARAH", "By a name I know not."),
+    ]
+    def blocks(dialogue):
+        # FE preview emits one entry per physical line; BE joins a speech. Compare speeches.
+        out = []
+        for c, t in dialogue:
+            t = t.replace("\n", " ")
+            if out and out[-1][0] == c:
+                out[-1] = (c, out[-1][1] + " " + t)
+            else:
+                out.append((c, t))
+        return out
+
+    f, b = fe(raw), be(raw)
+    assert blocks(b["dialogue"]) == expected
+    assert blocks(f["dialogue"]) == expected
+    for side in (f, b):
+        speeches = blocks(side["dialogue"])
+        assert {c: sum(1 for x, _ in speeches if x == c) for c in ("JACK", "SARAH")} == {"JACK": 2, "SARAH": 2}

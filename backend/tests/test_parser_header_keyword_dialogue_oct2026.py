@@ -79,7 +79,9 @@ def test_legitimate_headers_still_recognised(header):
 
 def test_header_helper_rules():
     h = server._is_header_keyword_line
-    for yes in ["TITLE:", "TITLE: X", "Title: X", "time: 8pm", "CHARACTERS", "WRITTEN BY Jane", "BY JANE"]:
+    for yes in ["TITLE:", "TITLE: X", "Title: X", "time: 8pm", "CHARACTERS", "Characters",
+                "WRITTEN BY Jane", "BY JANE", "Written by Jane Doe", "by Jane Doe", "Title The Heist"]:
         assert h(yes), yes
-    for no in DIALOGUE_EXAMPLES + ["Bye.", "Timeless.", "Castle walls."]:
+    for no in DIALOGUE_EXAMPLES + ["Bye.", "Timeless.", "Castle walls.", "TIME IS UP!",
+                                   "BY GOD, YES!", "By Jane Doe."]:
         assert not h(no), no

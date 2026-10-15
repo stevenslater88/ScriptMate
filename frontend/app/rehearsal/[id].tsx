@@ -1322,6 +1322,9 @@ export default function RehearsalScreen() {
 
   // User confirms they've said their line
   const onUserLineDone = (usedHint: boolean = false, speechAccuracy?: number) => {
+    // While paused, advanceToNextLine is a no-op, so completing would strand the
+    // turn in 'waiting'. Ignore; resume re-arms the mic for the same line.
+    if (isPaused) return;
     // A late SR result or a double tap must not complete the same line twice.
     if (userLineDoneRef.current === currentLineIndexRef.current) return;
     userLineDoneRef.current = currentLineIndexRef.current;

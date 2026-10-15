@@ -87,7 +87,7 @@ def test_auto_start_mic_delay_reduced_and_permission_policy_kept():
 # ─── Duplicate turns / mic responsiveness ─────────────────────────────
 
 def test_user_line_completes_once_per_line():
-    body = _between(REHEARSAL, "const onUserLineDone = (", 400)
+    body = _between(REHEARSAL, "const onUserLineDone = (", 700)
     assert "if (userLineDoneRef.current === currentLineIndexRef.current) return;" in body
     assert "userLineDoneRef.current = currentLineIndexRef.current;" in body
     assert "userLineDoneRef.current = -1;" in _between(REHEARSAL, "const startRehearsal = () =>", 900)
@@ -154,3 +154,22 @@ def test_test_branch_version_code_above_pending_release():
     cfg = json.loads((FRONTEND / "app.json").read_text())["expo"]
     assert cfg["version"] == "1.1.1"
     assert cfg["android"]["versionCode"] == 1150  # EAS local auto-increment -> 1151
+
+
+# ─── 2026-10-15 stability pass ────────────────────────────────────────
+
+def test_user_line_done_ignored_while_paused():
+    # advanceToNextLine returns early when paused; completing would strand the turn in 'waiting'.
+    body = _between(REHEARSAL, "const onUserLineDone = (", 500)
+    assert body.index("if (isPaused) return;") < body.index("userLineDoneRef.current = currentLineIndexRef.current;")
+    auto = _between(REHEARSAL, "// Auto-start listening when it's the user's turn", 1200)
+    assert "[state, speechRecognitionAvailable, autoAdvanceEnabled, isListening, isPaused]" in auto
+
+
+def test_scene_partner_advance_reads_latest_queue():
+    # handleStart schedules advanceTo(1) before setQueue re-renders; it must not see the old queue.
+    adv = _between(SCENE, "const advanceTo = useCallback", 1000)
+    assert "const queue = queueRef.current;" in adv
+    assert "}, [speakLine, selectedTiming]);" in adv
+    start = _between(SCENE, "const handleStart = () =>", 300)
+    assert start.index("queueRef.current = q;") < start.index("setQueue(q);")

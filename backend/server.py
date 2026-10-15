@@ -1810,17 +1810,34 @@ _HEADER_KEYWORDS = frozenset({
 })
 
 
+def _is_name_like(text: str) -> bool:
+    """Credit/title value shape: 1-6 capitalised words (commas, `and`, `&` allowed)."""
+    words = text.replace(",", " ").split()
+    if not 1 <= len(words) <= 6:
+        return False
+    return all(w[0].isupper() or w in ("and", "&") for w in words)
+
+
 def _is_header_keyword_line(line: str) -> bool:
-    """Front-matter label line. Colon forms (`TITLE: X`, `Title: X`) match in
-    any case; bare / space forms (`CHARACTERS`, `WRITTEN BY Jane`) only when
-    the keyword itself is uppercase, so dialogue like "Time will tell." stays
-    dialogue."""
+    """Front-matter label line, decided by line structure rather than case alone:
+      * colon form, any case:            `TITLE: X`, `Title: X`, `CAST:`
+      * bare keyword, any case:          `CHARACTERS`, `Synopsis`
+      * keyword + value, no colon, only when the value is not a sentence
+        (no terminal . ! ?) and either the keyword is uppercase
+        (`WRITTEN BY Jane`, `SETTING some text`) or the value is name-like
+        (`Written by Jane Doe`, `by Jane Doe`, `Title The Heist`).
+    So "Time will tell.", "By a name I know not..." and shouted
+    "TIME IS UP!" stay dialogue."""
     upper = line.upper()
     for kw in _HEADER_KEYWORDS:
-        if upper.startswith(kw + ":"):
+        if upper.startswith(kw + ":") or upper == kw:
             return True
-        if line == kw or line.startswith(kw + " "):
-            return True
+        if upper.startswith(kw + " "):
+            rest = line[len(kw) + 1:].strip()
+            if rest.endswith((".", "!", "?")):
+                continue
+            if line.startswith(kw + " ") or _is_name_like(rest):
+                return True
     return False
 
 # Inline-cue dialogue (`NAME: dialogue text on the same line`). Common

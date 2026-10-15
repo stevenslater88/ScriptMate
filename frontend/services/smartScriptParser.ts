@@ -179,15 +179,29 @@ function stripLeadingLineNumber(s: string): string {
 }
 export const _stripLeadingLineNumberForTest = stripLeadingLineNumber;
 
-// Colon forms (`TITLE: X`, `Title: X`) match in any case; bare / space forms
-// (`CHARACTERS`, `WRITTEN BY Jane`) only when the keyword itself is uppercase,
-// so dialogue like "Time will tell." stays dialogue. Mirrors
-// `backend/server.py::_is_header_keyword_line`.
+// Credit/title value shape: 1-6 capitalised words (commas, `and`, `&` allowed).
+function isNameLike(text: string): boolean {
+  const words = text.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+  if (words.length < 1 || words.length > 6) return false;
+  return words.every(w => w === 'and' || w === '&'
+    || (w[0] === w[0].toUpperCase() && w[0] !== w[0].toLowerCase()));
+}
+
+// Front-matter label line, decided by line structure. Mirrors
+// `backend/server.py::_is_header_keyword_line`: colon form or bare keyword in
+// any case; keyword + value without a colon only when the value is not a
+// sentence (no terminal . ! ?) and the keyword is uppercase or the value is
+// name-like. "Time will tell." / "TIME IS UP!" stay dialogue;
+// "Written by Jane Doe" stays a credit.
 function isHeaderLine(trimmed: string): boolean {
   const upper = trimmed.toUpperCase();
   for (const kw of HEADER_KEYWORDS) {
-    if (upper.startsWith(kw + ':')) return true;
-    if (trimmed === kw || trimmed.startsWith(kw + ' ')) return true;
+    if (upper.startsWith(kw + ':') || upper === kw) return true;
+    if (upper.startsWith(kw + ' ')) {
+      const rest = trimmed.slice(kw.length + 1).trim();
+      if (/[.!?]$/.test(rest)) continue;
+      if (trimmed.startsWith(kw + ' ') || isNameLike(rest)) return true;
+    }
   }
   return false;
 }
