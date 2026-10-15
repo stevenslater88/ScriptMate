@@ -1,5 +1,5 @@
 // Premium Value Page - Professional, Value-Driven Design
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -125,6 +125,30 @@ export default function PremiumScreen() {
     }, 8000);
     return () => clearTimeout(timer);
   }, [isNative, rcLoading, hasOfferings]);
+
+  // Diagnostic: record why the trial CTA is shown/hidden (logs only when inputs change).
+  const lastTrialCtaDecisionRef = useRef('');
+  const trialUsed = !!user?.trial_used;
+  const userLoaded = !!user;
+  useEffect(() => {
+    if (!isNative || !offeringsReady) return;
+    const summary = summarizeSubscriptionOptions(yearlyPackage?.product);
+    const payload = {
+      platform: Platform.OS,
+      isPremium,
+      userLoaded,
+      trialUsed,
+      hasYearlyPackage: !!yearlyPackage,
+      hasFreeTrial: !!yearlyPackage && hasIntroOffer(yearlyPackage),
+      ...summary,
+      // Flatten tags: DebugLog masks values nested deeper than 3 levels.
+      subscriptionOptions: summary.subscriptionOptions.map((o) => ({ ...o, tags: (o.tags ?? []).join(',') })),
+    };
+    const key = JSON.stringify(payload);
+    if (key === lastTrialCtaDecisionRef.current) return;
+    lastTrialCtaDecisionRef.current = key;
+    DebugLog.log('PURCHASE_EVENT', 'RevenueCat', 'TRIAL_CTA_DECISION', payload);
+  }, [isNative, offeringsReady, isPremium, userLoaded, trialUsed, yearlyPackage]);
 
   useEffect(() => {
     const detectRegion = () => {

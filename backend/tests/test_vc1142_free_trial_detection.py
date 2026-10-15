@@ -124,3 +124,49 @@ def test_paid_upgrade_and_restore_untouched():
     assert 'data-testid="upgrade-cta-button"' in PREMIUM_SRC
     assert 'data-testid="restore-purchases-btn"' in PREMIUM_SRC
     assert "const result = await purchase(yearlyPackage);" in PREMIUM_SRC
+
+
+# ─── TRIAL_CTA_DECISION diagnostic (logging only) ─────────────────────────
+
+def _cta_block():
+    i = PREMIUM_SRC.index("const lastTrialCtaDecisionRef = useRef('');")
+    j = PREMIUM_SRC.index("'TRIAL_CTA_DECISION'", i)
+    return PREMIUM_SRC[i:PREMIUM_SRC.index("]);", j) + 3]
+
+
+def test_trial_cta_decision_logged_with_required_fields():
+    b = _cta_block()
+    assert "DebugLog.log('PURCHASE_EVENT', 'RevenueCat', 'TRIAL_CTA_DECISION', payload);" in b
+    for field in ("platform: Platform.OS", "isPremium,", "trialUsed,", "userLoaded,",
+                  "hasYearlyPackage: !!yearlyPackage",
+                  "hasFreeTrial: !!yearlyPackage && hasIntroOffer(yearlyPackage)",
+                  "summarizeSubscriptionOptions(yearlyPackage?.product)", "...summary,"):
+        assert field in b, field
+    assert "const trialUsed = !!user?.trial_used;" in PREMIUM_SRC
+
+
+def test_trial_cta_decision_waits_for_offerings_and_runs_on_native_only():
+    assert "if (!isNative || !offeringsReady) return;" in _cta_block()
+
+
+def test_trial_cta_decision_dedupes_and_has_primitive_deps():
+    b = _cta_block()
+    assert "if (key === lastTrialCtaDecisionRef.current) return;" in b
+    assert "}, [isNative, offeringsReady, isPremium, userLoaded, trialUsed, yearlyPackage]);" in b
+    assert "setState" not in b and "set" + "Loading" not in b  # no state writes → no render loop
+
+
+def test_trial_cta_decision_tags_flattened_below_mask_depth_limit():
+    assert "tags: (o.tags ?? []).join(',')" in _cta_block()
+
+
+def test_trial_cta_decision_contains_no_sensitive_fields():
+    b = _cta_block().lower()
+    for banned in ("token", "email", "appuserid", "app_user_id", "device_id", "receipt", "orderid"):
+        assert banned not in b, banned
+
+
+def test_trial_eligibility_condition_unchanged():
+    assert PREMIUM_SRC.count("{!user?.trial_used && (Platform.OS !== 'android' || "
+                             "(!!yearlyPackage && hasIntroOffer(yearlyPackage))) && (") == 1
+    assert "if (user?.trial_used) {" in PREMIUM_SRC
