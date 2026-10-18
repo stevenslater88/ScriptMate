@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { useScriptStore } from '../../store/scriptStore';
 import { DebugLog } from '../../services/debugLogService';
+import { scoreLineAttempt } from '../../services/rehearsalScoring';
 // 2026-02: multi-voice + reader-style wiring. All three imports were
 // previously present only in components/VoiceAssignment.tsx (for the
 // preview button). The rehearsal path now consults the persisted
@@ -61,106 +62,6 @@ interface LinePerformance {
   hintUsed: boolean;
   speechAccuracy?: number;
 }
-
-// Normalize text for comparison
-const normalizeText = (text: string): string => {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s]/g, '') // Remove punctuation
-    .replace(/\s+/g, ' ')    // Normalize whitespace
-    .trim();
-};
-
-// Calculate Levenshtein distance for fuzzy matching
-const levenshteinDistance = (str1: string, str2: string): number => {
-  const m = str1.length;
-  const n = str2.length;
-  
-  if (m === 0) return n;
-  if (n === 0) return m;
-  
-  // Use two rows instead of full matrix for memory efficiency
-  let prevRow = Array(n + 1).fill(0).map((_, i) => i);
-  let currRow = Array(n + 1).fill(0);
-  
-  for (let i = 1; i <= m; i++) {
-    currRow[0] = i;
-    for (let j = 1; j <= n; j++) {
-      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-      currRow[j] = Math.min(
-        prevRow[j] + 1,      // deletion
-        currRow[j - 1] + 1,  // insertion
-        prevRow[j - 1] + cost // substitution
-      );
-    }
-    [prevRow, currRow] = [currRow, prevRow];
-  }
-  
-  return prevRow[n];
-};
-
-// Calculate similarity score combining multiple methods
-const calculateSimilarity = (spoken: string, expected: string): number => {
-  const s1 = normalizeText(spoken);
-  const s2 = normalizeText(expected);
-  
-  if (s1 === s2) return 1;
-  if (s1.length === 0 || s2.length === 0) return 0;
-  
-  // Method 1: Word overlap (order-independent)
-  const words1 = s1.split(/\s+/);
-  const words2 = s2.split(/\s+/);
-  
-  let wordMatchCount = 0;
-  const usedIndices = new Set<number>();
-  
-  for (const word1 of words1) {
-    // Find best matching word in expected text
-    let bestMatch = -1;
-    let bestScore = 0;
-    
-    for (let i = 0; i < words2.length; i++) {
-      if (usedIndices.has(i)) continue;
-      
-      const word2 = words2[i];
-      // Exact match
-      if (word1 === word2) {
-        bestMatch = i;
-        bestScore = 1;
-        break;
-      }
-      // Fuzzy match for longer words
-      if (word1.length > 3 && word2.length > 3) {
-        const dist = levenshteinDistance(word1, word2);
-        const maxLen = Math.max(word1.length, word2.length);
-        const similarity = 1 - (dist / maxLen);
-        if (similarity > 0.7 && similarity > bestScore) {
-          bestMatch = i;
-          bestScore = similarity;
-        }
-      }
-    }
-    
-    if (bestMatch >= 0) {
-      wordMatchCount += bestScore;
-      usedIndices.add(bestMatch);
-    }
-  }
-  
-  const wordOverlapScore = wordMatchCount / Math.max(words1.length, words2.length);
-  
-  // Method 2: Character-level similarity (catches partial words)
-  const maxLen = Math.max(s1.length, s2.length);
-  const charScore = 1 - (levenshteinDistance(s1, s2) / maxLen);
-  
-  // Method 3: Sequence matching (checks if spoken text contains key phrases)
-  const sequenceScore = s2.split(' ').filter(word => 
-    word.length > 2 && s1.includes(word)
-  ).length / words2.length;
-  
-  // Weighted combination
-  return (wordOverlapScore * 0.5) + (charScore * 0.3) + (sequenceScore * 0.2);
-};
 
 // Get accuracy color based on score
 const getAccuracyColor = (accuracy: number): string => {
@@ -210,7 +111,17 @@ export default function RehearsalScreen() {
   const [speechRecognitionAvailable, setSpeechRecognitionAvailable] = useState(false);
   const [autoAdvanceEnabled, setAutoAdvanceEnabled] = useState(true);
   const [currentAccuracy, setCurrentAccuracy] = useState(0);
-  const [showAccuracyFeedback, setShowAccuracyFeedback] = useState(false);
+  // Score shown briefly after a line attempt (completed or not); null hides it.
+  const [lineFeedback, setLineFeedback] = useState<number | null>(null);
+  const lineFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liveAccuracyRef = useRef(0);
+  // Finalised text from earlier mic sessions of the same line (Android ends a session at a pause).
+  const heardRef = useRef({ line: -1, committed: '', sessionBase: '' });
+  const showLineFeedback = (accuracy: number) => {
+    if (lineFeedbackTimerRef.current) clearTimeout(lineFeedbackTimerRef.current);
+    setLineFeedback(accuracy);
+    lineFeedbackTimerRef.current = setTimeout(() => setLineFeedback(null), 2500);
+  };
   
   // Diagnostic state for debugging speech recognition flow
   const [debugInfo, setDebugInfo] = useState<string>('Init');
@@ -315,6 +226,8 @@ export default function RehearsalScreen() {
       sincePlaybackFinishedMs: msSince('playbackFinished'),
     });
     timingRef.current.playbackFinished = 0;
+    heardRef.current.sessionBase = heardRef.current.committed;
+    liveAccuracyRef.current = 0;
     setIsListening(true);
     setCurrentAccuracy(0);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -329,11 +242,8 @@ export default function RehearsalScreen() {
       return;
     }
     setIsListening(false);
-    // Show accuracy feedback briefly after listening ends
-    if (currentAccuracy > 0) {
-      setShowAccuracyFeedback(true);
-      setTimeout(() => setShowAccuracyFeedback(false), 2000);
-    }
+    // Session ended without completing the line: show the score of what was heard so far.
+    if (liveAccuracyRef.current > 0) showLineFeedback(liveAccuracyRef.current);
   });
 
   useSpeechRecognitionEvent('result', (event: any) => {
@@ -359,12 +269,18 @@ export default function RehearsalScreen() {
         const currentLine = lines[currentLineIndex];
         const expectedText = currentLine?.text || '';
         const expectedLength = expectedText.length;
-        
-        const similarity = calculateSimilarity(safeTranscript, expectedText);
+
+        if (heardRef.current.line !== currentLineIndexRef.current) {
+          heardRef.current = { line: currentLineIndexRef.current, committed: '', sessionBase: '' };
+        }
+        const { transcript: lineTranscript, similarity } =
+          scoreLineAttempt(heardRef.current.sessionBase, safeTranscript, expectedText);
         setCurrentAccuracy(similarity);
-        
+        liveAccuracyRef.current = similarity;
+        if (lineTranscript !== safeTranscript) setRecognizedText(lineTranscript);
+
         // Calculate how much of the line has been spoken (by length)
-        const spokenRatio = expectedLength > 0 ? safeTranscript.length / expectedLength : 0;
+        const spokenRatio = expectedLength > 0 ? lineTranscript.length / expectedLength : 0;
         
         debugLog(`SR: acc=${(similarity * 100).toFixed(0)}% ratio=${(spokenRatio * 100).toFixed(0)}% final=${isFinal}`);
         
@@ -374,7 +290,7 @@ export default function RehearsalScreen() {
         // 3. Similarity is good enough (>65%)
         // 4. User has spoken at least 60% of the expected line length
         // 5. Transcript is reasonably long (>10 chars or >50% of expected)
-        const minLengthMet = safeTranscript.length > 10 || spokenRatio > 0.5;
+        const minLengthMet = lineTranscript.length > 10 || spokenRatio > 0.5;
         const similarityThresholdMet = similarity >= 0.65;
         const completenessThresholdMet = spokenRatio >= 0.6;
         const shouldAdvance = autoAdvanceEnabled && 
@@ -384,6 +300,8 @@ export default function RehearsalScreen() {
                              (isFinal || similarity >= 0.85);
         
         if (isFinal && !shouldAdvance) {
+          // Keep what was heard so the next mic session continues this line (idempotent on repeats).
+          heardRef.current.committed = lineTranscript;
           logTiming('SPEECH_FINAL_NO_MATCH', {
             lineIndex: currentLineIndexRef.current,
             similarityPct: Math.round(similarity * 100),
@@ -1343,7 +1261,10 @@ export default function RehearsalScreen() {
     
     // Reset speech recognition state
     setCurrentAccuracy(0);
+    liveAccuracyRef.current = 0;
+    heardRef.current = { line: -1, committed: '', sessionBase: '' };
     setRecognizedText('');
+    if (speechAccuracy !== undefined && speechAccuracy > 0) showLineFeedback(speechAccuracy);
     
     // Mark as weak if hesitation > 5 seconds or hint was used
     if (hesitationTime > 5 || usedHint) {
@@ -1816,26 +1737,6 @@ export default function RehearsalScreen() {
                     </View>
                   )}
                   
-                  {/* Accuracy feedback after listening */}
-                  {showAccuracyFeedback && !isListening && currentAccuracy > 0 && (
-                    <View style={[
-                      styles.accuracyFeedback,
-                      { borderColor: getAccuracyColor(currentAccuracy) }
-                    ]}>
-                      <Ionicons 
-                        name={currentAccuracy >= 0.6 ? 'checkmark-circle' : 'alert-circle'} 
-                        size={24} 
-                        color={getAccuracyColor(currentAccuracy)} 
-                      />
-                      <Text style={[
-                        styles.accuracyFeedbackText,
-                        { color: getAccuracyColor(currentAccuracy) }
-                      ]}>
-                        {getAccuracyLabel(currentAccuracy)} - {Math.round(currentAccuracy * 100)}% match
-                      </Text>
-                    </View>
-                  )}
-                  
                   <Text style={styles.userActionLabel}>
                     {isListening ? 'Speak your line now' : 'Say your line, then tap:'}
                   </Text>
@@ -1901,6 +1802,22 @@ export default function RehearsalScreen() {
               </View>
             ) : (
               <Text style={styles.aiLineText}>{currentLine?.text}</Text>
+            )}
+            {/* Score of the last line attempt, shown for completed and incomplete lines alike */}
+            {lineFeedback !== null && !isListening && (
+              <View
+                testID="rehearsal-line-score"
+                style={[styles.accuracyFeedback, { borderColor: getAccuracyColor(lineFeedback) }]}
+              >
+                <Ionicons
+                  name={lineFeedback >= 0.6 ? 'checkmark-circle' : 'alert-circle'}
+                  size={24}
+                  color={getAccuracyColor(lineFeedback)}
+                />
+                <Text style={[styles.accuracyFeedbackText, { color: getAccuracyColor(lineFeedback) }]}>
+                  {getAccuracyLabel(lineFeedback)} - {Math.round(lineFeedback * 100)}% match
+                </Text>
+              </View>
             )}
           </View>
         )}
