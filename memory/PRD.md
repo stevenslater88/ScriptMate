@@ -246,3 +246,4 @@ bundle id decision, RC transfer-behaviour dashboard check.
 - New frontend/services/rehearsalScoring.ts (normalisation: contractions, digits 0-99, ok/okay, Mr/Mrs/Dr, dashes/ellipses as word breaks; scoreLineAttempt carries text across Android mic sessions). Formula + thresholds unchanged.
 - rehearsal/[id].tsx: post-line % match now shown for completed lines too (was only shown for failed ones -> apparent ~60% ceiling).
 - Tests: backend/tests/test_rehearsal_scoring_accuracy_jun2026.py (21 pass). Device verification pending. Open: end-summary "Accuracy" is a completion rate, not speech match.
+- 2026-06 follow-up: end summary relabelled "Line completion"; new "Speech Match" = mean speechAccuracy of completed, non-missed lines with a score >0 (one per line), else "not available". summarizeSpeechMatch in rehearsalScoring.ts; 31 tests pass.

@@ -122,3 +122,24 @@ export const scoreLineAttempt = (committed: string, current: string, expected: s
   };
 };
 
+
+// Average Speech Match over completed (not skipped/missed) user lines that have a recognised
+// score > 0. Lines without a score are excluded, never counted as 0% or 100%. One score per line.
+export const summarizeSpeechMatch = (
+  performances: { lineIndex: number; speechAccuracy?: number }[],
+  missedLineIndexes: number[],
+): { speechMatch: number | null; scoredLines: number } => {
+  const missed = new Set(missedLineIndexes || []);
+  const byLine = new Map<number, number>();
+  for (const p of performances || []) {
+    if (!p || missed.has(p.lineIndex)) continue;
+    const a = p.speechAccuracy;
+    if (typeof a === 'number' && Number.isFinite(a) && a > 0) byLine.set(p.lineIndex, Math.min(1, a));
+  }
+  const scores = [...byLine.values()];
+  if (scores.length === 0) return { speechMatch: null, scoredLines: 0 };
+  return {
+    speechMatch: Math.round((scores.reduce((s, a) => s + a, 0) / scores.length) * 100),
+    scoredLines: scores.length,
+  };
+};

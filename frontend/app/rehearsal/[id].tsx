@@ -18,7 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { useScriptStore } from '../../store/scriptStore';
 import { DebugLog } from '../../services/debugLogService';
-import { scoreLineAttempt } from '../../services/rehearsalScoring';
+import { scoreLineAttempt, summarizeSpeechMatch } from '../../services/rehearsalScoring';
 // 2026-02: multi-voice + reader-style wiring. All three imports were
 // previously present only in components/VoiceAssignment.tsx (for the
 // preview button). The rehearsal path now consults the persisted
@@ -1465,10 +1465,13 @@ export default function RehearsalScreen() {
         : 0;
       const accuracy = Number.isFinite(accuracyRaw) ? Math.max(0, Math.min(100, accuracyRaw)) : 0;
 
-      return { totalUserLines, completedUserLines, avgHesitation, hintsUsed, accuracy };
+      // `accuracy` is line completion (lines completed minus missed), not speech accuracy.
+      const { speechMatch, scoredLines } = summarizeSpeechMatch(safePerformances, safeMissed);
+
+      return { totalUserLines, completedUserLines, avgHesitation, hintsUsed, accuracy, speechMatch, scoredLines };
     } catch (e: any) {
       DebugLog.errorCaught('getStats', e);
-      return { totalUserLines: 0, completedUserLines: 0, avgHesitation: 0, hintsUsed: 0, accuracy: 0 };
+      return { totalUserLines: 0, completedUserLines: 0, avgHesitation: 0, hintsUsed: 0, accuracy: 0, speechMatch: null, scoredLines: 0 };
     }
   };
 
@@ -1608,8 +1611,13 @@ export default function RehearsalScreen() {
           <View style={styles.finishedContainer}>
             <Ionicons name="checkmark-circle" size={64} color="#10b981" />
             <Text style={styles.finishedTitle}>Scene Complete!</Text>
-            <Text style={styles.finishedSubtitle}>
-              Accuracy: {Number.isFinite(stats.accuracy) ? stats.accuracy : 0}% • Avg. Response: {(Number.isFinite(stats.avgHesitation) ? stats.avgHesitation : 0).toFixed(1)}s
+            <Text style={styles.finishedSubtitle} testID="finished-line-completion">
+              Line completion: {Number.isFinite(stats.accuracy) ? stats.accuracy : 0}% • Avg. Response: {(Number.isFinite(stats.avgHesitation) ? stats.avgHesitation : 0).toFixed(1)}s
+            </Text>
+            <Text style={styles.finishedSubtitle} testID="finished-speech-match">
+              {stats.speechMatch !== null
+                ? `Speech match: ${stats.speechMatch}% (${stats.scoredLines} ${stats.scoredLines === 1 ? 'line' : 'lines'} scored)`
+                : 'Speech match: not available (no lines were scored by speech recognition)'}
             </Text>
             {weakLines.length > 0 && (
               <Text style={styles.weakLinesText}>
@@ -1902,8 +1910,19 @@ export default function RehearsalScreen() {
             <ScrollView style={styles.modalScroll}>
               <View style={styles.statCard}>
                 <Ionicons name="checkmark-circle" size={32} color="#10b981" />
-                <Text style={styles.statValue}>{stats.accuracy}%</Text>
-                <Text style={styles.statLabel}>Accuracy</Text>
+                <Text style={styles.statValue} testID="stats-line-completion">{stats.accuracy}%</Text>
+                <Text style={styles.statLabel}>Line Completion</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Ionicons name="mic" size={32} color="#10b981" />
+                <Text style={styles.statValue} testID="stats-speech-match">
+                  {stats.speechMatch !== null ? `${stats.speechMatch}%` : '—'}
+                </Text>
+                <Text style={styles.statLabel}>
+                  {stats.speechMatch !== null
+                    ? `Speech Match (${stats.scoredLines} ${stats.scoredLines === 1 ? 'line' : 'lines'})`
+                    : 'Speech Match (not available)'}
+                </Text>
               </View>
               <View style={styles.statCard}>
                 <Ionicons name="time" size={32} color="#6366f1" />
