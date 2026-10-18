@@ -10,6 +10,8 @@ const KEY = 'SCRIPTM8_DEV_TEST_MODE';
 let _cached: boolean | null = null;
 
 export async function isDevTestMode(): Promise<boolean> {
+  // Release builds (__DEV__ === false) can never enter Dev Test Mode, whatever is stored.
+  if (!__DEV__) return false;
   if (_cached !== null) return _cached;
   try {
     const v = await AsyncStorage.getItem(KEY);
@@ -26,5 +28,5 @@ export async function setDevTestMode(enabled: boolean): Promise<void> {
 }
 
 export function getCachedDevTestMode(): boolean {
-  return _cached === true;
+  return __DEV__ && _cached === true;
 }

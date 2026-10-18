@@ -189,7 +189,8 @@ export default function DebugScreen() {
           ))}
         </View>
 
-        {/* Dev Test Mode */}
+        {/* Dev Test Mode (development builds only) */}
+        {__DEV__ && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Dev Test Mode</Text>
           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 8 }}>
@@ -211,6 +212,7 @@ export default function DebugScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+        )}
 
         {/* Clear Logs Button */}
         <TouchableOpacity style={styles.clearButton} onPress={handleClearLogs}>

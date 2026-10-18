@@ -513,11 +513,6 @@ export default function PremiumScreen() {
               <Text style={styles.planPrice}>{getPriceDisplay('yearly')}</Text>
               <Text style={styles.planPeriod}>per year</Text>
             </View>
-            {yearlyPlan && (
-              <View style={styles.savingsBadge}>
-                <Text style={styles.savingsText}>Save 50%</Text>
-              </View>
-            )}
           </TouchableOpacity>
 
           {/* Monthly */}
