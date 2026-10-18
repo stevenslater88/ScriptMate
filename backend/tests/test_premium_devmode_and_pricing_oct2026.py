@@ -65,7 +65,8 @@ def test_paywall_has_no_unsupported_discount_claim():
 def test_paywall_prices_trial_purchase_and_restore_preserved():
     assert "return yearlyPackage.product.priceString;" in PREMIUM
     assert "return monthlyPackage.product.priceString;" in PREMIUM
-    assert "hasIntroOffer(yearlyPackage)" in PREMIUM
+    # Either form of the free-trial check (VC1157 source calls the helper directly).
+    assert "hasIntroOffer(yearlyPackage)" in PREMIUM or "hasFreeTrialOffer(yearlyPackage.product)" in PREMIUM
     assert "Start 7-Day Free Trial" in PREMIUM
     assert 'data-testid="yearly-plan-card"' in PREMIUM and 'data-testid="monthly-plan-card"' in PREMIUM
     assert "restorePurchases" in PREMIUM or "handleRestore" in PREMIUM

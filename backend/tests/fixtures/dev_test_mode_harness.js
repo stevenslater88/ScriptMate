@@ -1,7 +1,9 @@
 // Runs the real frontend/services/devTestMode.ts in Node with a stubbed AsyncStorage.
 // Usage: node <this> <dev|release>   (sets the React Native __DEV__ global)
 const Module = require('module');
-require('/app/frontend/node_modules/sucrase/register/ts');
+const path = require('path');
+const FRONTEND = path.resolve(__dirname, '..', '..', '..', 'frontend');
+require(path.join(FRONTEND, 'node_modules', 'sucrase', 'register', 'ts'));
 
 global.__DEV__ = process.argv[2] === 'dev';
 const store = { SCRIPTM8_DEV_TEST_MODE: 'true' }; // a previously enabled toggle
@@ -16,7 +18,7 @@ Module._load = function (req, ...rest) {
   return origLoad.call(this, req, ...rest);
 };
 
-const m = require('/app/frontend/services/devTestMode.ts');
+const m = require(path.join(FRONTEND, 'services', 'devTestMode.ts'));
 (async () => {
   const stored = await m.isDevTestMode();
   await m.setDevTestMode(true);

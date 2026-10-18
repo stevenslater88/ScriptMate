@@ -1,0 +1,169 @@
+diff --git a/frontend/app/debug.tsx b/frontend/app/debug.tsx
+index 039381b..743738c 100644
+--- a/frontend/app/debug.tsx
++++ b/frontend/app/debug.tsx
+@@ -189,7 +189,8 @@ export default function DebugScreen() {
+           ))}
+         </View>
+ 
+-        {/* Dev Test Mode */}
++        {/* Dev Test Mode (development builds only) */}
++        {__DEV__ && (
+         <View style={styles.section}>
+           <Text style={styles.sectionTitle}>Dev Test Mode</Text>
+           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 8 }}>
+@@ -211,6 +212,7 @@ export default function DebugScreen() {
+             </Text>
+           </TouchableOpacity>
+         </View>
++        )}
+ 
+         {/* Clear Logs Button */}
+         <TouchableOpacity style={styles.clearButton} onPress={handleClearLogs}>
+diff --git a/frontend/app/premium.tsx b/frontend/app/premium.tsx
+index 8eef994..d5247c2 100644
+--- a/frontend/app/premium.tsx
++++ b/frontend/app/premium.tsx
+@@ -513,11 +513,6 @@ export default function PremiumScreen() {
+               <Text style={styles.planPrice}>{getPriceDisplay('yearly')}</Text>
+               <Text style={styles.planPeriod}>per year</Text>
+             </View>
+-            {yearlyPlan && (
+-              <View style={styles.savingsBadge}>
+-                <Text style={styles.savingsText}>Save 50%</Text>
+-              </View>
+-            )}
+           </TouchableOpacity>
+ 
+           {/* Monthly */}
+diff --git a/frontend/services/devTestMode.ts b/frontend/services/devTestMode.ts
+index 8b962e4..924c64d 100644
+--- a/frontend/services/devTestMode.ts
++++ b/frontend/services/devTestMode.ts
+@@ -10,6 +10,8 @@ const KEY = 'SCRIPTM8_DEV_TEST_MODE';
+ let _cached: boolean | null = null;
+ 
+ export async function isDevTestMode(): Promise<boolean> {
++  // Release builds (__DEV__ === false) can never enter Dev Test Mode, whatever is stored.
++  if (!__DEV__) return false;
+   if (_cached !== null) return _cached;
+   try {
+     const v = await AsyncStorage.getItem(KEY);
+@@ -26,5 +28,5 @@ export async function setDevTestMode(enabled: boolean): Promise<void> {
+ }
+ 
+ export function getCachedDevTestMode(): boolean {
+-  return _cached === true;
++  return __DEV__ && _cached === true;
+ }
+diff --git a/backend/tests/test_premium_devmode_and_pricing_oct2026.py b/backend/tests/test_premium_devmode_and_pricing_oct2026.py
+new file mode 100644
+index 0000000..20160c1
+--- /dev/null
++++ b/backend/tests/test_premium_devmode_and_pricing_oct2026.py
+@@ -0,0 +1,72 @@
++"""Premium bypass + pricing-claim fixes (Oct 2026).
++
++1. Dev Test Mode (services/devTestMode.ts) was reachable in production builds via the
++   5-tap logo gesture / dashboard -> /debug toggle and made the client treat the user as
++   Premium with no purchase. It is now honoured only when __DEV__ is true (release AABs
++   are built with __DEV__ === false) and the toggle is hidden outside dev builds.
++2. The paywall's hardcoded "Save 50%" yearly badge was false (GBP £4.99 x 12 = £59.88 vs
++   £39.99/yr ~= 33%). The badge is removed; no replacement figure is invented."""
++import json
++import re
++import subprocess
++from pathlib import Path
++
++HERE = Path(__file__).resolve().parent
++FRONTEND = HERE.parents[1] / "frontend"
++HARNESS = HERE / "fixtures/dev_test_mode_harness.js"
++PREMIUM = (FRONTEND / "app/premium.tsx").read_text()
++DEBUG = (FRONTEND / "app/debug.tsx").read_text()
++
++
++def _run(mode: str) -> dict:
++    out = subprocess.run(["node", str(HARNESS), mode], capture_output=True, text=True, timeout=60)
++    assert out.returncode == 0, out.stderr
++    return json.loads(out.stdout)
++
++
++def test_release_build_cannot_enter_dev_test_mode():
++    # Even with the toggle previously stored as "true" and re-enabled, a release build reports false.
++    assert _run("release") == {"stored": False, "afterEnable": False, "cached": False}
++
++
++def test_dev_build_keeps_dev_test_mode_for_internal_qa():
++    assert _run("dev") == {"stored": True, "afterEnable": True, "cached": True}
++
++
++def test_premium_consumers_only_use_the_guarded_helper():
++    for rel in ["hooks/useRevenueCat.ts", "store/scriptStore.ts", "app/_layout.tsx"]:
++        src = (FRONTEND / rel).read_text()
++        assert "SCRIPTM8_DEV_TEST_MODE" not in src, rel
++        assert "from '../services/devTestMode'" in src, rel
++    hook = (FRONTEND / "hooks/useRevenueCat.ts").read_text()
++    assert "isDevTestMode().then(setDevTestModeActive)" in hook
++    # Real entitlement path untouched.
++    assert "customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined" in hook
++
++
++def test_dev_test_mode_toggle_hidden_outside_dev_builds():
++    start = DEBUG.index("{/* Dev Test Mode (development builds only) */}")
++    section = DEBUG[start:DEBUG.index("{/* Clear Logs Button */}", start)]
++    assert section.split("\n")[1].strip() == "{__DEV__ && ("
++    assert 'data-testid="dev-test-mode-toggle"' in section
++    assert section.rstrip().endswith(")}")
++
++
++def test_debug_entry_points_unchanged_for_diagnostics():
++    assert "router.push('/debug')" in (FRONTEND / "app/index.tsx").read_text()
++
++
++def test_paywall_has_no_unsupported_discount_claim():
++    assert "Save 50%" not in PREMIUM
++    assert not re.search(r"Save\s*\d+\s*%|\d+\s*%\s*off", PREMIUM, re.I)
++    assert "textDecorationLine: 'line-through'" not in PREMIUM
++
++
++def test_paywall_prices_trial_purchase_and_restore_preserved():
++    assert "return yearlyPackage.product.priceString;" in PREMIUM
++    assert "return monthlyPackage.product.priceString;" in PREMIUM
++    # Either form of the free-trial check (VC1157 source calls the helper directly).
++    assert "hasIntroOffer(yearlyPackage)" in PREMIUM or "hasFreeTrialOffer(yearlyPackage.product)" in PREMIUM
++    assert "Start 7-Day Free Trial" in PREMIUM
++    assert 'data-testid="yearly-plan-card"' in PREMIUM and 'data-testid="monthly-plan-card"' in PREMIUM
++    assert "restorePurchases" in PREMIUM or "handleRestore" in PREMIUM
+diff --git a/backend/tests/fixtures/dev_test_mode_harness.js b/backend/tests/fixtures/dev_test_mode_harness.js
+new file mode 100644
+index 0000000..b3f744c
+--- /dev/null
++++ b/backend/tests/fixtures/dev_test_mode_harness.js
+@@ -0,0 +1,27 @@
++// Runs the real frontend/services/devTestMode.ts in Node with a stubbed AsyncStorage.
++// Usage: node <this> <dev|release>   (sets the React Native __DEV__ global)
++const Module = require('module');
++const path = require('path');
++const FRONTEND = path.resolve(__dirname, '..', '..', '..', 'frontend');
++require(path.join(FRONTEND, 'node_modules', 'sucrase', 'register', 'ts'));
++
++global.__DEV__ = process.argv[2] === 'dev';
++const store = { SCRIPTM8_DEV_TEST_MODE: 'true' }; // a previously enabled toggle
++const origLoad = Module._load;
++Module._load = function (req, ...rest) {
++  if (req === '@react-native-async-storage/async-storage') {
++    return { __esModule: true, default: {
++      getItem: async (k) => store[k] ?? null,
++      setItem: async (k, v) => { store[k] = v; },
++    } };
++  }
++  return origLoad.call(this, req, ...rest);
++};
++
++const m = require(path.join(FRONTEND, 'services', 'devTestMode.ts'));
++(async () => {
++  const stored = await m.isDevTestMode();
++  await m.setDevTestMode(true);
++  const afterEnable = await m.isDevTestMode();
++  process.stdout.write(JSON.stringify({ stored, afterEnable, cached: m.getCachedDevTestMode() }));
++})().catch((e) => { console.error(e); process.exit(1); });
