@@ -159,10 +159,19 @@ def test_rehearsal_lookup_is_case_insensitive():
     lookup must survive that drift without renaming keys in storage."""
     src = REHEARSAL.read_text()
     # Loader stores BOTH the exact case and the upper-case key.
+    # (Jun 2026: the loader moved to the pure buildVoiceAssignmentMap helper.)
+    pure_src = (FRONTEND / "services" / "elevenLabsPure.ts").read_text()
     m_loader = re.search(
         r"map\[a\.characterName\]\s*=\s*a;\s*"
         r"map\[a\.characterName\.toUpperCase\(\)\]\s*=\s*a",
         src,
+    ) or (
+        "buildVoiceAssignmentMap(list," in src
+        and re.search(
+            r"map\[a\.characterName\]\s*=\s*entry;\s*"
+            r"map\[a\.characterName\.toUpperCase\(\)\]\s*=\s*entry",
+            pure_src,
+        )
     )
     assert m_loader, (
         "assignment map must be populated with both the exact and "

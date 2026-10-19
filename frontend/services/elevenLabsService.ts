@@ -330,8 +330,21 @@ export function readerStyleToElevenLabsSettings(
 // ELEVENLABS_API_KEY is usable. Cached in-memory. Never logs the key.
 let _backendConfigured: boolean | null = null;
 let _backendClassification: string = 'unknown';
+// A negative verdict (e.g. a network blip at app start) is re-checked after this long
+// instead of disabling assigned voices for the rest of the session.
+const PROBE_RETRY_MS = 15000;
+let _lastProbeAt = 0;
+let _probeInFlight: Promise<void> | null = null;
 
-async function probeBackendElevenLabs(): Promise<void> {
+function probeBackendElevenLabs(): Promise<void> {
+  if (!_probeInFlight) {
+    _lastProbeAt = Date.now();
+    _probeInFlight = runBackendProbe().finally(() => { _probeInFlight = null; });
+  }
+  return _probeInFlight;
+}
+
+async function runBackendProbe(): Promise<void> {
   try {
     const res = await fetch(TTS_HEALTH_ENDPOINT, { method: 'GET' });
     if (!res.ok) {
@@ -524,10 +537,7 @@ export const generateSpeechToFile = async (
   // at module load; if it hasn't resolved yet, we retry it once
   // synchronously (inside a Promise) so the first rehearsal line
   // still has a verdict.
-  if (_backendConfigured === null) {
-    await probeBackendElevenLabs();
-  }
-  if (_backendConfigured === false) {
+  if (!(await ensureElevenLabsConfigured())) {
     DebugLog.log('DIAGNOSTIC', 'ElevenLabsService', 'ELEVENLABS_REQUEST_ABORT', {
       reason: 'backend-not-configured',
       classification: _backendClassification,
@@ -1081,6 +1091,19 @@ export const prefetchSpeech = (text: string, voiceId: string, options?: SpeechOp
 // route. The rehearsal screen uses this exactly like before — it
 // only asks "is ElevenLabs available?" and never sees the key.
 export const isElevenLabsConfigured = (): boolean => _backendConfigured === true;
+
+// Current verdict, waiting for a pending probe and re-probing a stale negative one.
+// `maxWaitMs` bounds the wait so a hung network can't stall a rehearsal line.
+export const ensureElevenLabsConfigured = async (maxWaitMs?: number): Promise<boolean> => {
+  if (_backendConfigured === true) return true;
+  if (_backendConfigured === null || _probeInFlight || Date.now() - _lastProbeAt >= PROBE_RETRY_MS) {
+    const probe = probeBackendElevenLabs();
+    await (maxWaitMs === undefined
+      ? probe
+      : Promise.race([probe, new Promise<void>(r => setTimeout(r, maxWaitMs))]));
+  }
+  return isElevenLabsConfigured();
+};
 
 export const elevenLabsConfigStatus = (): { valid: boolean; classification: string } => ({
   valid: _backendConfigured === true,

@@ -32,12 +32,15 @@ import {
   loadVoiceAssignments,
   playSpeech,
   isElevenLabsConfigured,
+  ensureElevenLabsConfigured,
+  getVoiceByKey,
   ensurePlaybackAudioMode,
   prefetchSpeech,
   resolveVoiceForCharacter,
   selectProvider,
   type CharacterVoiceAssignment,
 } from '../../services/elevenLabsService';
+import { buildVoiceAssignmentMap } from '../../services/elevenLabsPure';
 
 // Safely import speech recognition - it may not be available on all devices
 let ExpoSpeechRecognitionModule: any = null;
@@ -574,6 +577,8 @@ export default function RehearsalScreen() {
   // (see effect below) and read synchronously inside speakLine via a
   // ref so we never re-render on every line.
   const voiceAssignmentsRef = useRef<Record<string, CharacterVoiceAssignment>>({});
+  // Pending assignment load; speakLine awaits it so an early line can't miss its voice.
+  const voiceAssignmentsLoadRef = useRef<Promise<void>>(Promise.resolve());
   const elevenLabsAvailable = useRef<boolean>(false);
   const activeElevenLabsSoundRef = useRef<Audio.Sound | null>(null);
   // 2026-02 — Lifecycle guards for async playSpeech().
@@ -608,22 +613,14 @@ export default function RehearsalScreen() {
     const scriptId = currentScript?.id || currentRehearsal?.script_id;
     if (!scriptId) return;
     elevenLabsAvailable.current = isElevenLabsConfigured();
-    (async () => {
+    let cancelled = false;
+    voiceAssignmentsLoadRef.current = (async () => {
       try {
         const list = await loadVoiceAssignments(scriptId);
-        const map: Record<string, CharacterVoiceAssignment> = {};
-        // 2026-02 voice-pipeline hardening. Store BOTH exact and
-        // upper-cased keys. Screenplay parsers emit character names in
-        // upper case ("DET. HARRIS"), but the picker may persist them
-        // in the parsed form ("Det. Harris") depending on the source
-        // metadata. Case-insensitive lookup guards against that drift
-        // without changing the storage format.
-        for (const a of list) {
-          if (a && a.characterName) {
-            map[a.characterName] = a;
-            map[a.characterName.toUpperCase()] = a;
-          }
-        }
+        // A newer load (different script) owns the map; never let a stale one overwrite it.
+        if (cancelled) return;
+        // Exact + upper-cased keys (parser vs picker casing); voiceId re-derived from voiceKey if empty.
+        const map = buildVoiceAssignmentMap(list, (key) => getVoiceByKey(key)?.id);
         voiceAssignmentsRef.current = map;
         DebugLog.log('DIAGNOSTIC', 'Rehearsal', 'REHEARSAL_VOICE_ASSIGNMENTS', {
           scriptId,
@@ -641,9 +638,10 @@ export default function RehearsalScreen() {
       } catch (e: any) {
         // Non-fatal: fall through to the shared expo-speech path.
         DebugLog.errorCaught('voice-assignments-load', e, { scriptId });
-        voiceAssignmentsRef.current = {};
+        if (!cancelled) voiceAssignmentsRef.current = {};
       }
     })();
+    return () => { cancelled = true; };
   }, [currentScript?.id, currentRehearsal?.script_id]);
 
   // Generate the next scene-partner line's ElevenLabs audio while the current
@@ -719,6 +717,12 @@ export default function RehearsalScreen() {
       // Compose the reader style speed multiplier into the base voice
       // settings. See getVoiceSettings above.
       const voiceSettings = getVoiceSettings(voiceType, readerVoiceSpeed);
+
+      // Decide the provider from the CURRENT backend verdict and loaded assignments, not a
+      // snapshot taken at mount (a pending/failed health probe used to force device voice
+      // for every character for the whole rehearsal).
+      await voiceAssignmentsLoadRef.current;
+      elevenLabsAvailable.current = await ensureElevenLabsConfigured(2500);
 
       // 2026-02 multi-voice branch selection. Uses the line's
       // character (resolved at call time, not memoized) to look up the

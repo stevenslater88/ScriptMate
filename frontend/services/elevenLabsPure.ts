@@ -93,6 +93,23 @@ export interface VoiceResolution {
   voiceId: string | null;
 }
 
+// Lookup map for the rehearsal: exact and upper-cased character names. A missing
+// voiceId is re-derived from the stable voiceKey via `voiceIdForKey`.
+export function buildVoiceAssignmentMap<T extends CharacterVoiceAssignmentLite>(
+  list: T[] | null | undefined,
+  voiceIdForKey: (key: string) => string | undefined,
+): Record<string, T> {
+  const map: Record<string, T> = {};
+  for (const a of list || []) {
+    if (!a || !a.characterName) continue;
+    const voiceId = a.voiceId || (a.voiceKey ? voiceIdForKey(a.voiceKey) : undefined) || '';
+    const entry = { ...a, voiceId };
+    map[a.characterName] = entry;
+    map[a.characterName.toUpperCase()] = entry;
+  }
+  return map;
+}
+
 /**
  * Resolve a line's character to a voice assignment. Tries the exact
  * key first, then the upper-cased key — matches the two forms the

@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.readerStyleToElevenLabsSettingsPure = readerStyleToElevenLabsSettingsPure;
 exports.isValidElevenLabsApiKeyPure = isValidElevenLabsApiKeyPure;
 exports.classifyElevenLabsKeyPure = classifyElevenLabsKeyPure;
+exports.buildVoiceAssignmentMap = buildVoiceAssignmentMap;
 exports.resolveVoiceForCharacter = resolveVoiceForCharacter;
 exports.selectProvider = selectProvider;
 exports.uint8ArrayToBase64 = uint8ArrayToBase64;
@@ -75,6 +76,20 @@ function classifyElevenLabsKeyPure(key) {
     if (trimmed.length < 20)
         return 'too-short';
     return 'valid';
+}
+// Lookup map for the rehearsal: exact and upper-cased character names. A missing
+// voiceId is re-derived from the stable voiceKey via `voiceIdForKey`.
+function buildVoiceAssignmentMap(list, voiceIdForKey) {
+    const map = {};
+    for (const a of list || []) {
+        if (!a || !a.characterName)
+            continue;
+        const voiceId = a.voiceId || (a.voiceKey ? voiceIdForKey(a.voiceKey) : undefined) || '';
+        const entry = { ...a, voiceId };
+        map[a.characterName] = entry;
+        map[a.characterName.toUpperCase()] = entry;
+    }
+    return map;
 }
 /**
  * Resolve a line's character to a voice assignment. Tries the exact
