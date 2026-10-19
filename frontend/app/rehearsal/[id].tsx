@@ -68,10 +68,10 @@ interface LinePerformance {
 
 // Get accuracy color based on score
 const getAccuracyColor = (accuracy: number): string => {
-  if (accuracy >= 0.8) return '#10b981'; // Green - Excellent
-  if (accuracy >= 0.6) return '#f59e0b'; // Yellow - Good
+  if (accuracy >= 0.8) return '#34D399'; // Green - Excellent
+  if (accuracy >= 0.6) return '#FFB18A'; // Yellow - Good
   if (accuracy >= 0.4) return '#f97316'; // Orange - Partial
-  return '#ef4444'; // Red - Poor
+  return '#FF5C7A'; // Red - Poor
 };
 
 // Get accuracy label
@@ -1496,7 +1496,7 @@ export default function RehearsalScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366f1" />
+          <ActivityIndicator size="large" color="#7C5CFF" />
           <Text style={styles.loadingText}>Loading rehearsal...</Text>
         </View>
       </SafeAreaView>
@@ -1507,7 +1507,7 @@ export default function RehearsalScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#ef4444" />
+          <Ionicons name="alert-circle" size={48} color="#FF5C7A" />
           <Text style={styles.errorText}>Failed to load rehearsal</Text>
           <TouchableOpacity style={styles.errorButton} onPress={() => router.back()}>
             <Text style={styles.errorButtonText}>Go Back</Text>
@@ -1522,7 +1522,7 @@ export default function RehearsalScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Ionicons name="document-text-outline" size={48} color="#f59e0b" />
+          <Ionicons name="document-text-outline" size={48} color="#FFB18A" />
           <Text style={styles.errorText}>No dialogue lines found in script</Text>
           <Text style={styles.errorSubtext}>The script may not have been parsed correctly</Text>
           <TouchableOpacity style={styles.errorButton} onPress={() => router.back()}>
@@ -1555,11 +1555,11 @@ export default function RehearsalScreen() {
               onPress={isRecording ? stopRecording : startRecording}
               style={[styles.recordButton, isRecording && styles.recordButtonActive]}
             >
-              <Ionicons name={isRecording ? 'stop' : 'radio-button-on'} size={20} color={isRecording ? '#fff' : '#ef4444'} />
+              <Ionicons name={isRecording ? 'stop' : 'radio-button-on'} size={20} color={isRecording ? '#fff' : '#FF5C7A'} />
             </TouchableOpacity>
           )}
           <TouchableOpacity onPress={() => setShowStatsModal(true)} style={styles.headerButton}>
-            <Ionicons name="stats-chart" size={22} color="#6366f1" />
+            <Ionicons name="stats-chart" size={22} color="#7C5CFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -1569,8 +1569,8 @@ export default function RehearsalScreen() {
         <View style={styles.progressBar}>
           <View style={[styles.progressFill, { width: `${progress}%` }]} />
         </View>
-        <Text style={styles.progressText}>
-          {currentLineIndex + 1} / {lines.length}
+        <Text style={styles.progressText} testID="rehearsal-progress-text">
+          Line {Math.min(currentLineIndex + 1, lines.length)} of {lines.length}
         </Text>
       </View>
 
@@ -1597,13 +1597,13 @@ export default function RehearsalScreen() {
       */}
       {__DEV__ && (
         <View
-          style={{ backgroundColor: '#1a1a2e', padding: 8, borderBottomWidth: 1, borderBottomColor: '#333' }}
+          style={{ backgroundColor: '#14122A', padding: 8, borderBottomWidth: 1, borderBottomColor: '#333' }}
           testID="rehearsal-debug-banner"
         >
-          <Text style={{ color: '#f59e0b', fontSize: 11, fontFamily: 'monospace' }} numberOfLines={2}>
+          <Text style={{ color: '#FFB18A', fontSize: 11, fontFamily: 'monospace' }} numberOfLines={2}>
             [DEBUG] {debugInfo}
           </Text>
-          <Text style={{ color: '#6b7280', fontSize: 10 }}>
+          <Text style={{ color: '#A19DC6', fontSize: 10 }}>
             SR:{speechRecognitionAvailable ? 'Y' : 'N'} | Auto:{autoAdvanceEnabled ? 'Y' : 'N'} | Listen:{isListening ? 'Y' : 'N'} | State:{state}
           </Text>
         </View>
@@ -1613,7 +1613,7 @@ export default function RehearsalScreen() {
       <View style={styles.currentLineContainer}>
         {state === 'finished' ? (
           <View style={styles.finishedContainer}>
-            <Ionicons name="checkmark-circle" size={64} color="#10b981" />
+            <Ionicons name="checkmark-circle" size={64} color="#34D399" />
             <Text style={styles.finishedTitle}>Scene Complete!</Text>
             <Text style={styles.finishedSubtitle} testID="finished-line-completion">
               Line completion: {Number.isFinite(stats.accuracy) ? stats.accuracy : 0}% • Avg. Response: {(Number.isFinite(stats.avgHesitation) ? stats.avgHesitation : 0).toFixed(1)}s
@@ -1637,14 +1637,14 @@ export default function RehearsalScreen() {
                 style={[styles.finishedButton, styles.finishedButtonSecondary]} 
                 onPress={() => setShowStatsModal(true)}
               >
-                <Ionicons name="analytics" size={20} color="#6366f1" />
-                <Text style={[styles.finishedButtonText, { color: '#6366f1' }]}>View Stats</Text>
+                <Ionicons name="analytics" size={20} color="#7C5CFF" />
+                <Text style={[styles.finishedButtonText, { color: '#7C5CFF' }]}>View Stats</Text>
               </TouchableOpacity>
             </View>
           </View>
         ) : state === 'idle' ? (
           <View style={styles.idleContainer}>
-            <Ionicons name="play-circle" size={80} color="#6366f1" />
+            <Ionicons name="play-circle" size={80} color="#7C5CFF" />
             <Text style={styles.idleTitle}>Ready to Rehearse</Text>
             <Text style={styles.idleSubtitle}>
               Mode: {mode === 'full_read' ? 'Full Read' : mode === 'cue_only' ? 'Cue Only' : 'Full Read'}
@@ -1655,7 +1655,7 @@ export default function RehearsalScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.activeLineContainer}>
+          <View style={[styles.activeLineContainer, currentLine?.is_stage_direction ? null : isUserLine ? styles.activeLineUser : styles.activeLinePartner]}>
             {/* Speaker indicator */}
             <View style={styles.speakerRow}>
               <View
@@ -1677,17 +1677,32 @@ export default function RehearsalScreen() {
               </View>
               {speaking && (
                 <View style={styles.speakingIndicator}>
-                  <Ionicons name="volume-high" size={20} color="#10b981" />
+                  <Ionicons name="volume-high" size={20} color="#34D399" />
                   <Text style={styles.speakingText}>Speaking...</Text>
                 </View>
               )}
               {weakLines.includes(currentLineIndex) && (
                 <View style={styles.weakBadge}>
-                  <Ionicons name="warning" size={14} color="#f59e0b" />
+                  <Ionicons name="warning" size={14} color="#FFB18A" />
                   <Text style={styles.weakBadgeText}>Weak</Text>
                 </View>
               )}
             </View>
+
+            {/* Assigned voice (display only) */}
+            {!isUserLine && !currentLine?.is_stage_direction && (() => {
+              const r = resolveVoiceForCharacter(voiceAssignmentsRef.current, currentLine?.character);
+              const v = r.voiceKey ? getVoiceByKey(r.voiceKey) : null;
+              const ai = !!v && elevenLabsAvailable.current;
+              return (
+                <View style={[styles.voiceChip, !ai && styles.voiceChipDevice]} testID="rehearsal-voice-indicator">
+                  <Ionicons name={ai ? 'sparkles' : 'phone-portrait-outline'} size={12} color={ai ? '#62E0FF' : '#A19DC6'} />
+                  <Text style={[styles.voiceChipText, !ai && styles.voiceChipTextDevice]}>
+                    {ai ? `${v!.name} · AI voice` : 'Device voice'}
+                  </Text>
+                </View>
+              );
+            })()}
 
             {/* Line Text */}
             {currentLine?.is_stage_direction ? (
@@ -1698,7 +1713,7 @@ export default function RehearsalScreen() {
                   <Text style={styles.userLineText}>{currentLine?.text}</Text>
                 ) : (
                   <View style={styles.hiddenLineContainer}>
-                    <Ionicons name="eye-off" size={32} color="#6b7280" />
+                    <Ionicons name="eye-off" size={32} color="#A19DC6" />
                     <Text style={styles.hiddenLineText}>Your line is hidden</Text>
                     <TouchableOpacity style={styles.hintButton} onPress={showHint}>
                       <Text style={styles.hintButtonText}>Show Hint</Text>
@@ -1715,7 +1730,7 @@ export default function RehearsalScreen() {
                           { transform: [{ scale: pulseAnim }] }
                         ]}
                       >
-                        <Ionicons name="mic" size={24} color="#10b981" />
+                        <Ionicons name="mic" size={24} color="#34D399" />
                       </Animated.View>
                       <Text style={styles.listeningText}>Listening...</Text>
                       
@@ -1759,7 +1774,7 @@ export default function RehearsalScreen() {
                         style={styles.listenButton}
                         onPress={startListening}
                       >
-                        <Ionicons name="mic" size={20} color="#10b981" />
+                        <Ionicons name="mic" size={20} color="#34D399" />
                         <Text style={styles.listenButtonText}>Auto</Text>
                       </TouchableOpacity>
                     )}
@@ -1770,7 +1785,7 @@ export default function RehearsalScreen() {
                         style={styles.stopListenButton}
                         onPress={stopListening}
                       >
-                        <Ionicons name="stop" size={20} color="#ef4444" />
+                        <Ionicons name="stop" size={20} color="#FF5C7A" />
                         <Text style={styles.stopListenButtonText}>Stop</Text>
                       </TouchableOpacity>
                     )}
@@ -1792,7 +1807,7 @@ export default function RehearsalScreen() {
                         onLineMissed();
                       }}
                     >
-                      <Ionicons name="close" size={20} color="#ef4444" />
+                      <Ionicons name="close" size={20} color="#FF5C7A" />
                     </TouchableOpacity>
                   </View>
                   
@@ -1805,7 +1820,7 @@ export default function RehearsalScreen() {
                       <Ionicons 
                         name={autoAdvanceEnabled ? 'checkbox' : 'square-outline'} 
                         size={18} 
-                        color={autoAdvanceEnabled ? '#10b981' : '#6b7280'} 
+                        color={autoAdvanceEnabled ? '#34D399' : '#A19DC6'} 
                       />
                       <Text style={styles.autoAdvanceText}>Auto-advance when line detected</Text>
                     </TouchableOpacity>
@@ -1872,7 +1887,7 @@ export default function RehearsalScreen() {
                       {line.character}
                     </Text>
                     {weakLines.includes(index) && (
-                      <Ionicons name="warning" size={12} color="#f59e0b" />
+                      <Ionicons name="warning" size={12} color="#FFB18A" />
                     )}
                   </View>
                   <Text style={styles.scriptText}>{line.text}</Text>
@@ -1886,17 +1901,19 @@ export default function RehearsalScreen() {
       {/* Controls */}
       {state !== 'idle' && state !== 'finished' && (
         <View style={styles.controls}>
-          <TouchableOpacity style={styles.controlButton} onPress={skipLine}>
-            <Ionicons name="play-skip-forward" size={24} color="#fff" />
+          <TouchableOpacity style={styles.controlItem} onPress={restartRehearsal} testID="rehearsal-restart-btn">
+            <View style={styles.controlButton}><Ionicons name="refresh" size={22} color="#DAD7F7" /></View>
+            <Text style={styles.controlLabel}>Restart</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.controlButton, styles.controlButtonMain]}
-            onPress={togglePause}
-          >
-            <Ionicons name={isPaused ? 'play' : 'pause'} size={32} color="#fff" />
+          <TouchableOpacity style={styles.controlItem} onPress={togglePause} testID="rehearsal-pause-btn">
+            <View style={[styles.controlButton, styles.controlButtonMain]}>
+              <Ionicons name={isPaused ? 'play' : 'pause'} size={30} color="#fff" />
+            </View>
+            <Text style={[styles.controlLabel, styles.controlLabelMain]}>{isPaused ? 'Resume' : 'Pause'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.controlButton} onPress={restartRehearsal}>
-            <Ionicons name="refresh" size={24} color="#fff" />
+          <TouchableOpacity style={styles.controlItem} onPress={skipLine} testID="rehearsal-skip-btn">
+            <View style={styles.controlButton}><Ionicons name="play-skip-forward" size={22} color="#DAD7F7" /></View>
+            <Text style={styles.controlLabel}>Skip</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1913,12 +1930,12 @@ export default function RehearsalScreen() {
             </View>
             <ScrollView style={styles.modalScroll}>
               <View style={styles.statCard}>
-                <Ionicons name="checkmark-circle" size={32} color="#10b981" />
+                <Ionicons name="checkmark-circle" size={32} color="#34D399" />
                 <Text style={styles.statValue} testID="stats-line-completion">{stats.accuracy}%</Text>
                 <Text style={styles.statLabel}>Line Completion</Text>
               </View>
               <View style={styles.statCard}>
-                <Ionicons name="mic" size={32} color="#10b981" />
+                <Ionicons name="mic" size={32} color="#34D399" />
                 <Text style={styles.statValue} testID="stats-speech-match">
                   {stats.speechMatch !== null ? `${stats.speechMatch}%` : '—'}
                 </Text>
@@ -1929,23 +1946,23 @@ export default function RehearsalScreen() {
                 </Text>
               </View>
               <View style={styles.statCard}>
-                <Ionicons name="time" size={32} color="#6366f1" />
+                <Ionicons name="time" size={32} color="#7C5CFF" />
                 <Text style={styles.statValue}>{stats.avgHesitation.toFixed(1)}s</Text>
                 <Text style={styles.statLabel}>Avg. Response Time</Text>
               </View>
               <View style={styles.statCard}>
-                <Ionicons name="eye" size={32} color="#f59e0b" />
+                <Ionicons name="eye" size={32} color="#FFB18A" />
                 <Text style={styles.statValue}>{stats.hintsUsed}</Text>
                 <Text style={styles.statLabel}>Hints Used</Text>
               </View>
               <View style={styles.statCard}>
-                <Ionicons name="warning" size={32} color="#ef4444" />
+                <Ionicons name="warning" size={32} color="#FF5C7A" />
                 <Text style={styles.statValue}>{weakLines.length}</Text>
                 <Text style={styles.statLabel}>Weak Lines</Text>
               </View>
               {!isPremium && (
                 <View style={styles.premiumPrompt}>
-                  <Ionicons name="star" size={24} color="#f59e0b" />
+                  <Ionicons name="star" size={24} color="#FFB18A" />
                   <Text style={styles.premiumPromptText}>
                     Upgrade to Premium for detailed analytics and weak line drills
                   </Text>
@@ -1976,7 +1993,7 @@ export default function RehearsalScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.recordingModalContent}>
-              <Ionicons name="checkmark-circle" size={64} color="#10b981" />
+              <Ionicons name="checkmark-circle" size={64} color="#34D399" />
               <Text style={styles.recordingModalText}>Your performance has been recorded!</Text>
               <TouchableOpacity style={styles.playbackButton} onPress={playRecording}>
                 <Ionicons name="play" size={24} color="#fff" />
@@ -1999,7 +2016,7 @@ export default function RehearsalScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#0B0A1A',
   },
   loadingContainer: {
     flex: 1,
@@ -2007,7 +2024,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingText: {
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 16,
     fontSize: 16,
   },
@@ -2024,13 +2041,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   errorSubtext: {
-    color: '#9ca3af',
+    color: '#C9C5EA',
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
   },
   errorButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 10,
@@ -2047,7 +2064,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
+    borderBottomColor: '#14122A',
   },
   headerButton: {
     padding: 8,
@@ -2068,19 +2085,19 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#6366f1',
+    color: '#7C5CFF',
     marginTop: 2,
   },
   recordButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     alignItems: 'center',
     justifyContent: 'center',
   },
   recordButtonActive: {
-    backgroundColor: '#ef4444',
+    backgroundColor: '#FF5C7A',
   },
   progressContainer: {
     flexDirection: 'row',
@@ -2092,18 +2109,18 @@ const styles = StyleSheet.create({
   progressBar: {
     flex: 1,
     height: 6,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     borderRadius: 3,
   },
   progressText: {
     fontSize: 13,
-    color: '#6b7280',
+    color: '#A19DC6',
     minWidth: 50,
     textAlign: 'right',
   },
@@ -2111,7 +2128,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: 'rgba(255, 92, 122, 0.2)',
     paddingVertical: 8,
     gap: 8,
   },
@@ -2119,10 +2136,10 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#ef4444',
+    backgroundColor: '#FF5C7A',
   },
   recordingText: {
-    color: '#ef4444',
+    color: '#FF5C7A',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -2142,12 +2159,12 @@ const styles = StyleSheet.create({
   },
   finishedSubtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 8,
   },
   weakLinesText: {
     fontSize: 14,
-    color: '#f59e0b',
+    color: '#FFB18A',
     marginTop: 8,
   },
   finishedButtons: {
@@ -2158,7 +2175,7 @@ const styles = StyleSheet.create({
   finishedButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 10,
@@ -2167,7 +2184,7 @@ const styles = StyleSheet.create({
   finishedButtonSecondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#6366f1',
+    borderColor: '#7C5CFF',
   },
   finishedButtonText: {
     color: '#fff',
@@ -2186,13 +2203,13 @@ const styles = StyleSheet.create({
   },
   idleSubtitle: {
     fontSize: 15,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 8,
   },
   startButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 12,
@@ -2205,11 +2222,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   activeLineContainer: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#14122A',
+    borderRadius: 22,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
   },
   speakerRow: {
     flexDirection: 'row',
@@ -2226,14 +2243,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   speakerBadgeUser: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
   },
   speakerBadgeAI: {
-    backgroundColor: '#10b981',
+    backgroundColor: 'rgba(98, 224, 255, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(98, 224, 255, 0.45)',
   },
   speakerName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
+    letterSpacing: 0.4,
     color: '#fff',
   },
   speakingIndicator: {
@@ -2243,12 +2263,12 @@ const styles = StyleSheet.create({
   },
   speakingText: {
     fontSize: 13,
-    color: '#10b981',
+    color: '#34D399',
   },
   weakBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: 'rgba(255, 177, 138, 0.2)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
@@ -2256,12 +2276,12 @@ const styles = StyleSheet.create({
   },
   weakBadgeText: {
     fontSize: 11,
-    color: '#f59e0b',
+    color: '#FFB18A',
     fontWeight: '600',
   },
   stageDirection: {
     fontSize: 15,
-    color: '#9ca3af',
+    color: '#C9C5EA',
     fontStyle: 'italic',
     lineHeight: 22,
   },
@@ -2269,10 +2289,10 @@ const styles = StyleSheet.create({
     minHeight: 100,
   },
   userLineText: {
-    fontSize: 20,
+    fontSize: 21,
     color: '#fff',
-    lineHeight: 30,
-    fontWeight: '500',
+    lineHeight: 31,
+    fontWeight: '600',
   },
   hiddenLineContainer: {
     alignItems: 'center',
@@ -2280,18 +2300,18 @@ const styles = StyleSheet.create({
   },
   hiddenLineText: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 8,
   },
   hintButton: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: 'rgba(124, 92, 255, 0.2)',
     borderRadius: 8,
     marginTop: 12,
   },
   hintButtonText: {
-    color: '#6366f1',
+    color: '#7C5CFF',
     fontSize: 15,
     fontWeight: '500',
   },
@@ -2301,7 +2321,7 @@ const styles = StyleSheet.create({
   },
   userActionLabel: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginBottom: 12,
   },
   userActionButtons: {
@@ -2312,7 +2332,7 @@ const styles = StyleSheet.create({
   doneButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#10b981',
+    backgroundColor: '#34D399',
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 12,
@@ -2327,23 +2347,23 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: 'rgba(255, 92, 122, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   listenButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(52, 211, 153, 0.2)',
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 12,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#10b981',
+    borderColor: '#34D399',
   },
   listenButtonText: {
-    color: '#10b981',
+    color: '#34D399',
     fontSize: 15,
     fontWeight: '600',
   },
@@ -2351,28 +2371,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     padding: 16,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    backgroundColor: 'rgba(52, 211, 153, 0.1)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: 'rgba(52, 211, 153, 0.3)',
   },
   listeningPulse: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(52, 211, 153, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   listeningText: {
     fontSize: 14,
-    color: '#10b981',
+    color: '#34D399',
     fontWeight: '600',
   },
   recognizedText: {
     fontSize: 13,
-    color: '#9ca3af',
+    color: '#C9C5EA',
     fontStyle: 'italic',
     marginTop: 8,
     textAlign: 'center',
@@ -2386,7 +2406,7 @@ const styles = StyleSheet.create({
   },
   autoAdvanceText: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#A19DC6',
   },
   // Accuracy feedback styles
   accuracyContainer: {
@@ -2428,23 +2448,24 @@ const styles = StyleSheet.create({
   stopListenButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: 'rgba(255, 92, 122, 0.2)',
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 12,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#ef4444',
+    borderColor: '#FF5C7A',
   },
   stopListenButtonText: {
-    color: '#ef4444',
+    color: '#FF5C7A',
     fontSize: 15,
     fontWeight: '600',
   },
   aiLineText: {
-    fontSize: 18,
-    color: '#e5e7eb',
-    lineHeight: 28,
+    fontSize: 20,
+    color: '#F4F3FF',
+    lineHeight: 30,
+    fontWeight: '600',
   },
   scriptContainer: {
     flex: 1,
@@ -2453,15 +2474,15 @@ const styles = StyleSheet.create({
   scriptViewTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6b7280',
+    color: '#A19DC6',
     marginBottom: 8,
   },
   scriptScroll: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
   },
   scriptContent: {
     padding: 12,
@@ -2473,19 +2494,19 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   scriptLineCurrent: {
-    backgroundColor: 'rgba(99, 102, 241, 0.3)',
+    backgroundColor: 'rgba(124, 92, 255, 0.22)',
     borderLeftWidth: 3,
-    borderLeftColor: '#6366f1',
+    borderLeftColor: '#7C5CFF',
   },
   scriptLineCompleted: {
     opacity: 0.5,
   },
   scriptLineUser: {
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    backgroundColor: 'rgba(124, 92, 255, 0.1)',
   },
   scriptLineWeak: {
     borderLeftWidth: 3,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: '#FFB18A',
   },
   scriptLineHeader: {
     flexDirection: 'row',
@@ -2494,46 +2515,94 @@ const styles = StyleSheet.create({
   },
   scriptDirection: {
     fontSize: 13,
-    color: '#6b7280',
+    color: '#A19DC6',
     fontStyle: 'italic',
   },
   scriptCharacter: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#6b7280',
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    color: '#62E0FF',
     marginBottom: 2,
   },
   scriptCharacterUser: {
-    color: '#6366f1',
+    color: '#A993FF',
   },
   scriptText: {
     fontSize: 14,
-    color: '#d1d5db',
+    color: '#D6D3F2',
     lineHeight: 20,
   },
   controls: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingTop: 12,
+    paddingBottom: 14,
     paddingHorizontal: 20,
-    gap: 20,
+    gap: 28,
     borderTopWidth: 1,
-    borderTopColor: '#1a1a2e',
+    borderTopColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(14,12,32,0.96)',
+  },
+  controlItem: {
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 64,
+  },
+  controlLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#A19DC6',
+  },
+  controlLabelMain: {
+    color: '#fff',
+  },
+  activeLineUser: {
+    borderColor: 'rgba(124, 92, 255, 0.55)',
+  },
+  activeLinePartner: {
+    borderColor: 'rgba(98, 224, 255, 0.35)',
+    backgroundColor: '#121A33',
+  },
+  voiceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(98, 224, 255, 0.10)',
+    marginBottom: 10,
+  },
+  voiceChipDevice: {
+    backgroundColor: 'rgba(161, 157, 198, 0.12)',
+  },
+  voiceChipText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#62E0FF',
+  },
+  voiceChipTextDevice: {
+    color: '#A19DC6',
   },
   controlButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#1a1a2e',
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: '#1C1938',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   controlButtonMain: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#6366f1',
+    width: 70,
+    height: 70,
+    borderRadius: 24,
+    backgroundColor: '#7C5CFF',
+    borderWidth: 0,
   },
   modalOverlay: {
     flex: 1,
@@ -2541,7 +2610,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
@@ -2564,7 +2633,7 @@ const styles = StyleSheet.create({
   statCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#0B0A1A',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -2578,26 +2647,26 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#A19DC6',
   },
   premiumPrompt: {
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    backgroundColor: 'rgba(255, 177, 138, 0.1)',
     borderRadius: 12,
     padding: 20,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.2)',
+    borderColor: 'rgba(255, 177, 138, 0.2)',
   },
   premiumPromptText: {
     fontSize: 14,
-    color: '#9ca3af',
+    color: '#C9C5EA',
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 16,
   },
   premiumPromptButton: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#FFB18A',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 10,
@@ -2613,7 +2682,7 @@ const styles = StyleSheet.create({
   },
   recordingModalText: {
     fontSize: 16,
-    color: '#9ca3af',
+    color: '#C9C5EA',
     marginTop: 16,
     marginBottom: 24,
     textAlign: 'center',
@@ -2621,7 +2690,7 @@ const styles = StyleSheet.create({
   playbackButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 12,
@@ -2638,7 +2707,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   dismissButtonText: {
-    color: '#6b7280',
+    color: '#A19DC6',
     fontSize: 15,
   },
 });
