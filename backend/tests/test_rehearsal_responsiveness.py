@@ -152,8 +152,8 @@ def test_scene_partner_continue_double_tap_does_not_queue_two_advances():
 
 def test_test_branch_version_code_above_pending_release():
     cfg = json.loads((FRONTEND / "app.json").read_text())["expo"]
-    assert cfg["version"] == "1.1.1"
-    assert cfg["android"]["versionCode"] == 1150  # EAS local auto-increment -> 1151
+    assert cfg["version"] == "1.1.2"
+    assert cfg["android"]["versionCode"] == 1158  # last known Play version code (user-confirmed)
 
 
 # ─── 2026-10-15 stability pass ────────────────────────────────────────
