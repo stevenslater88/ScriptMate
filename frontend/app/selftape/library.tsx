@@ -12,6 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { getRecordings, deleteRecording, SelfTapeRecording } from '../../services/selfTapeStorage';
+import { C, RADIUS, TYPE, tint } from '../../constants/cinematicTheme';
+import { GradientButton, IconButton, IconWell, ScreenGlow } from '../../components/cinematic';
 
 export default function LibraryScreen() {
   const [recordings, setRecordings] = useState<SelfTapeRecording[]>([]);
@@ -76,9 +78,11 @@ export default function LibraryScreen() {
     <TouchableOpacity
       style={styles.recordingItem}
       onPress={() => router.push(`/selftape/review?id=${item.id}`)}
+      activeOpacity={0.85}
+      testID={`library-take-${item.id}`}
     >
       <View style={styles.recordingThumbnail}>
-        <Ionicons name="videocam" size={28} color="#6366f1" />
+        <Ionicons name="play" size={22} color={C.violetSoft} />
       </View>
       <View style={styles.recordingInfo}>
         <Text style={styles.recordingTitle} numberOfLines={1}>{item.scriptTitle}</Text>
@@ -91,26 +95,31 @@ export default function LibraryScreen() {
       <TouchableOpacity 
         style={styles.deleteButton}
         onPress={() => handleDelete(item)}
+        testID={`library-delete-${item.id}`}
+        accessibilityLabel={`Delete ${item.scriptTitle} take`}
       >
-        <Ionicons name="trash-outline" size={20} color="#ef4444" />
+        <Ionicons name="trash-outline" size={18} color="#FF5C7A" />
       </TouchableOpacity>
     </TouchableOpacity>
   );
 
   const renderEmpty = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="folder-open-outline" size={64} color="#4b5563" />
+    <View style={styles.emptyState} testID="library-empty-state">
+      <View style={styles.emptyIcon}>
+        <IconWell icon="folder-open-outline" color={C.violetSoft} size={56} />
+      </View>
       <Text style={styles.emptyTitle}>No Recordings Yet</Text>
       <Text style={styles.emptyText}>
         Your self-tape recordings will appear here.
         Start by selecting a script to record!
       </Text>
-      <TouchableOpacity 
-        style={styles.startButton}
+      <GradientButton
+        label="Record Self-Tape"
+        icon="videocam"
         onPress={() => router.push('/selftape')}
-      >
-        <Text style={styles.startButtonText}>Record Self-Tape</Text>
-      </TouchableOpacity>
+        testID="library-record-btn"
+        style={styles.startButton}
+      />
     </View>
   );
 
@@ -128,18 +137,17 @@ export default function LibraryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenGlow />
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Takes</Text>
-        <Text style={styles.recordingCount}>{recordings.length}</Text>
+        <IconButton icon="chevron-back" onPress={() => router.back()} testID="library-back-btn" />
+        <Text style={styles.headerTitle} testID="library-header-title">My Takes</Text>
+        <Text style={styles.recordingCount} testID="library-count">{recordings.length}</Text>
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366f1" />
+          <ActivityIndicator size="large" color="#7C5CFF" />
         </View>
       ) : (
         <FlatList
@@ -158,69 +166,25 @@ export default function LibraryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0f' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
-  },
-  backButton: { padding: 4 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '600', color: '#fff', marginLeft: 8 },
-  recordingCount: {
-    fontSize: 14,
-    color: '#6366f1',
-    fontWeight: '600',
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
+  container: { flex: 1, backgroundColor: C.ink },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 },
+  headerTitle: { flex: 1, ...TYPE.title, fontSize: 20, marginLeft: 12 },
+  recordingCount: { fontSize: 13, color: C.violetSoft, fontWeight: '700', backgroundColor: tint(C.violet, 0.15), paddingHorizontal: 12, paddingVertical: 4, borderRadius: RADIUS.pill, overflow: 'hidden' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { padding: 16 },
+  listContent: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 32 },
   emptyContainer: { flex: 1 },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyTitle: { fontSize: 20, fontWeight: '600', color: '#fff', marginTop: 20 },
-  emptyText: { fontSize: 14, color: '#9ca3af', textAlign: 'center', marginTop: 8, lineHeight: 20 },
-  startButton: {
-    backgroundColor: '#6366f1',
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 12,
-    marginTop: 24,
-  },
-  startButtonText: { fontSize: 15, fontWeight: '600', color: '#fff' },
-  recordingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-  recordingThumbnail: {
-    width: 56,
-    height: 56,
-    borderRadius: 10,
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  emptyIcon: { padding: 12, borderRadius: 24, backgroundColor: tint(C.violet, 0.08), borderWidth: 1, borderColor: tint(C.violet, 0.25) },
+  emptyTitle: { ...TYPE.title, marginTop: 18 },
+  emptyText: { fontSize: 14, color: C.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 },
+  startButton: { marginTop: 24, alignSelf: 'stretch' },
+  recordingItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: RADIUS.lg, padding: 12, marginTop: 10, borderWidth: 1, borderColor: C.line },
+  recordingThumbnail: { width: 56, height: 56, borderRadius: RADIUS.md, backgroundColor: tint(C.violet, 0.14), borderWidth: 1, borderColor: tint(C.violet, 0.3), justifyContent: 'center', alignItems: 'center' },
   recordingInfo: { flex: 1, marginLeft: 12 },
-  recordingTitle: { fontSize: 15, fontWeight: '600', color: '#fff' },
-  recordingScene: { fontSize: 13, color: '#9ca3af', marginTop: 2 },
+  recordingTitle: { fontSize: 15, fontWeight: '700', color: C.text },
+  recordingScene: { fontSize: 13, color: C.muted, marginTop: 2 },
   recordingMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 12 },
-  recordingDuration: { fontSize: 12, color: '#6366f1', fontWeight: '500' },
-  recordingDate: { fontSize: 11, color: '#6b7280' },
-  deleteButton: {
-    padding: 8,
-    marginLeft: 8,
-  },
+  recordingDuration: { fontSize: 12, color: C.cyan, fontWeight: '700' },
+  recordingDate: { fontSize: 11, color: C.dim },
+  deleteButton: { width: 36, height: 36, borderRadius: 10, marginLeft: 8, backgroundColor: tint(C.danger, 0.1), alignItems: 'center', justifyContent: 'center' },
 });

@@ -38,6 +38,7 @@ import {
   trackWatermarkApplied,
 } from '../../services/analyticsService';
 import { saveRecording, checkStorageAvailable, saveToGallery } from '../../services/selfTapeStorage';
+import { C, RADIUS, TYPE, tint } from '../../constants/cinematicTheme';
 import ShotCoachOverlay from '../../components/ShotCoachOverlay';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -553,8 +554,10 @@ export default function RecordScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.permissionView}>
-          <Ionicons name="videocam-off" size={64} color="#6b7280" />
-          <Text style={styles.permissionTitle}>Permissions Required</Text>
+          <View style={styles.permissionIcon}>
+            <Ionicons name="videocam-off" size={40} color={C.violetSoft} />
+          </View>
+          <Text style={styles.permissionTitle} testID="record-permission-title">Permissions Required</Text>
           <Text style={styles.permissionText}>
             Self Tape needs access to your {!cameraGranted && 'camera'}{!cameraGranted && !micGranted && ' and '}{!micGranted && 'microphone'} to record videos.
           </Text>
@@ -562,6 +565,7 @@ export default function RecordScreen() {
           {(cameraPermission?.canAskAgain || micPermission?.canAskAgain) ? (
             <TouchableOpacity 
               style={styles.permissionButton}
+              testID="record-grant-permission-btn"
               onPress={async () => {
                 if (!cameraGranted) await requestCameraPermission();
                 if (!micGranted) await requestMicPermission();
@@ -572,6 +576,7 @@ export default function RecordScreen() {
           ) : (
             <TouchableOpacity 
               style={styles.permissionButton}
+              testID="record-open-settings-btn"
               onPress={openSettings}
             >
               <Ionicons name="settings-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
@@ -579,7 +584,7 @@ export default function RecordScreen() {
             </TouchableOpacity>
           )}
           
-          <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()} testID="record-permission-cancel-btn">
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -598,17 +603,17 @@ export default function RecordScreen() {
         onPress={handleScriptTap}
       >
         <View style={styles.scriptHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-            <Ionicons name="close" size={28} color="#fff" />
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} testID="record-close-btn">
+            <Ionicons name="close" size={20} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.scriptTitle} numberOfLines={1}>
+          <Text style={styles.scriptTitle} numberOfLines={1} testID="record-scene-title">
             {currentScene?.name || script?.title}
           </Text>
-          <TouchableOpacity onPress={toggleTeleprompter} style={styles.teleprompterButton}>
+          <TouchableOpacity onPress={toggleTeleprompter} style={[styles.teleprompterButton, teleprompterActive && styles.teleprompterButtonActive]} testID="record-teleprompter-toggle">
             <Ionicons 
               name={teleprompterActive ? 'reader' : 'reader-outline'} 
               size={22} 
-              color={teleprompterActive ? '#6366f1' : '#9ca3af'} 
+              color={teleprompterActive ? '#fff' : '#A19DC6'} 
             />
           </TouchableOpacity>
         </View>
@@ -671,6 +676,7 @@ export default function RecordScreen() {
             <TouchableOpacity 
               style={styles.controlPlayButton} 
               onPress={toggleTeleprompterPlayPause}
+              testID="record-teleprompter-play-btn"
             >
               <Ionicons 
                 name={teleprompterPlaying ? 'pause' : 'play'} 
@@ -681,10 +687,11 @@ export default function RecordScreen() {
 
             {/* Speed Segmented Control (Fabric-safe replacement for Slider) */}
             <View style={styles.speedControlContainer}>
-              <Ionicons name="speedometer-outline" size={16} color="#9ca3af" />
+              <Ionicons name="speedometer-outline" size={16} color="#A19DC6" />
               {[1, 2, 3, 4, 5].map((speed) => (
                 <TouchableOpacity
                   key={speed}
+                  testID={`record-speed-${speed}`}
                   onPress={() => handleSpeedChange(speed)}
                   style={[
                     styles.speedSegment,
@@ -709,12 +716,14 @@ export default function RecordScreen() {
               <TouchableOpacity 
                 style={styles.fontButton} 
                 onPress={() => adjustFontSize(-2)}
+                testID="record-font-decrease-btn"
               >
                 <Text style={styles.fontButtonText}>A-</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.fontButton} 
                 onPress={() => adjustFontSize(2)}
+                testID="record-font-increase-btn"
               >
                 <Text style={styles.fontButtonText}>A+</Text>
               </TouchableOpacity>
@@ -727,11 +736,12 @@ export default function RecordScreen() {
                 highlightEnabled && styles.highlightToggleActive
               ]} 
               onPress={toggleHighlight}
+              testID="record-highlight-toggle"
             >
               <Ionicons 
                 name="color-wand" 
                 size={18} 
-                color={highlightEnabled ? '#6366f1' : '#6b7280'} 
+                color={highlightEnabled ? '#A993FF' : '#6E6A95'} 
               />
             </TouchableOpacity>
           </Animated.View>
@@ -771,7 +781,7 @@ export default function RecordScreen() {
 
           {/* Recording Indicator */}
           {isRecording && (
-            <View style={styles.recordingIndicator}>
+            <View style={styles.recordingIndicator} testID="record-recording-indicator">
               <View style={styles.recordingDot} />
               <Text style={styles.recordingTime}>{formatDuration(recordingDuration)}</Text>
             </View>
@@ -780,7 +790,7 @@ export default function RecordScreen() {
           {/* Countdown Overlay */}
           {countdown !== null && (
             <View style={styles.countdownOverlay}>
-              <Text style={styles.countdownText}>{countdown}</Text>
+              <Text style={styles.countdownText} testID="record-countdown">{countdown}</Text>
             </View>
           )}
 
@@ -792,8 +802,9 @@ export default function RecordScreen() {
                 style={styles.controlButton} 
                 onPress={toggleCamera}
                 disabled={isRecording}
+                testID="record-flip-camera-btn"
               >
-                <Ionicons name="camera-reverse" size={28} color="#fff" />
+                <Ionicons name="camera-reverse" size={24} color="#fff" />
               </TouchableOpacity>
               
               {/* Shot Coach Toggle */}
@@ -801,8 +812,9 @@ export default function RecordScreen() {
                 style={[styles.controlButton, showShotCoach && styles.controlButtonActive]} 
                 onPress={() => setShowShotCoach(!showShotCoach)}
                 onLongPress={() => setShowShotCoachMenu(true)}
+                testID="record-shot-coach-toggle"
               >
-                <Ionicons name="grid" size={24} color={showShotCoach ? '#10b981' : '#fff'} />
+                <Ionicons name="grid" size={22} color={showShotCoach ? '#62E0FF' : '#fff'} />
               </TouchableOpacity>
             </View>
 
@@ -812,6 +824,8 @@ export default function RecordScreen() {
               <TouchableOpacity
                 style={[styles.recordButton, isRecording && styles.recordButtonRecording]}
                 onPress={isRecording ? stopRecording : startRecording}
+                testID="record-record-btn"
+                accessibilityLabel={isRecording ? 'Stop recording' : 'Start recording'}
               >
                 {isRecording ? (
                   <View style={styles.stopIcon} />
@@ -823,9 +837,9 @@ export default function RecordScreen() {
           </View>
         </CameraView>
         ) : (
-          <View style={[styles.camera, { backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }]}>
-            <Ionicons name="videocam-off" size={48} color="#6b7280" />
-            <Text style={{ color: '#9ca3af', marginTop: 12 }}>Waiting for camera permission...</Text>
+          <View style={[styles.camera, { backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }]}>
+            <Ionicons name="videocam-off" size={48} color="#6E6A95" />
+            <Text style={{ color: C.muted, marginTop: 12 }}>Waiting for camera permission...</Text>
           </View>
         )}
       </View>
@@ -843,39 +857,43 @@ export default function RecordScreen() {
             <TouchableOpacity 
               style={styles.shotCoachMenuItem} 
               onPress={() => setShowGrid(!showGrid)}
+              testID="shot-coach-grid-toggle"
             >
-              <Ionicons name="grid-outline" size={20} color={showGrid ? '#10b981' : '#6b7280'} />
+              <Ionicons name="grid-outline" size={20} color={showGrid ? '#34D399' : '#6E6A95'} />
               <Text style={[styles.shotCoachMenuText, showGrid && styles.shotCoachMenuTextActive]}>
                 Rule of Thirds Grid
               </Text>
-              <Ionicons name={showGrid ? 'checkbox' : 'square-outline'} size={20} color={showGrid ? '#10b981' : '#6b7280'} />
+              <Ionicons name={showGrid ? 'checkbox' : 'square-outline'} size={20} color={showGrid ? '#34D399' : '#6E6A95'} />
             </TouchableOpacity>
             
             <TouchableOpacity 
               style={styles.shotCoachMenuItem} 
               onPress={() => setShowEyeLine(!showEyeLine)}
+              testID="shot-coach-eyeline-toggle"
             >
-              <Ionicons name="eye-outline" size={20} color={showEyeLine ? '#6366f1' : '#6b7280'} />
+              <Ionicons name="eye-outline" size={20} color={showEyeLine ? '#7C5CFF' : '#6E6A95'} />
               <Text style={[styles.shotCoachMenuText, showEyeLine && styles.shotCoachMenuTextActive]}>
                 Eye-line Markers
               </Text>
-              <Ionicons name={showEyeLine ? 'checkbox' : 'square-outline'} size={20} color={showEyeLine ? '#6366f1' : '#6b7280'} />
+              <Ionicons name={showEyeLine ? 'checkbox' : 'square-outline'} size={20} color={showEyeLine ? '#7C5CFF' : '#6E6A95'} />
             </TouchableOpacity>
             
             <TouchableOpacity 
               style={styles.shotCoachMenuItem} 
               onPress={() => setShowHeadroom(!showHeadroom)}
+              testID="shot-coach-headroom-toggle"
             >
-              <Ionicons name="resize-outline" size={20} color={showHeadroom ? '#f59e0b' : '#6b7280'} />
+              <Ionicons name="resize-outline" size={20} color={showHeadroom ? '#FFC37A' : '#6E6A95'} />
               <Text style={[styles.shotCoachMenuText, showHeadroom && styles.shotCoachMenuTextActive]}>
                 Headroom Boundary
               </Text>
-              <Ionicons name={showHeadroom ? 'checkbox' : 'square-outline'} size={20} color={showHeadroom ? '#f59e0b' : '#6b7280'} />
+              <Ionicons name={showHeadroom ? 'checkbox' : 'square-outline'} size={20} color={showHeadroom ? '#FFC37A' : '#6E6A95'} />
             </TouchableOpacity>
             
             <TouchableOpacity 
               style={styles.shotCoachMenuClose} 
               onPress={() => setShowShotCoachMenu(false)}
+              testID="shot-coach-done-btn"
             >
               <Text style={styles.shotCoachMenuCloseText}>Done</Text>
             </TouchableOpacity>
@@ -886,8 +904,8 @@ export default function RecordScreen() {
       {/* Processing Overlay */}
       {processingVideo && (
         <View style={styles.processingOverlay}>
-          <ActivityIndicator size="large" color="#6366f1" />
-          <Text style={styles.processingText}>Processing...</Text>
+          <ActivityIndicator size="large" color="#7C5CFF" />
+          <Text style={styles.processingText} testID="record-processing">Processing...</Text>
         </View>
       )}
 
@@ -902,7 +920,10 @@ export default function RecordScreen() {
           <View style={styles.actionSheet}>
             <View style={styles.actionSheetHandle} />
             
-            <Text style={styles.actionSheetTitle}>Take Complete! 🎬</Text>
+            <View style={styles.actionSheetBadge}>
+              <Ionicons name="film-outline" size={22} color={C.violetSoft} />
+            </View>
+            <Text style={styles.actionSheetTitle} testID="record-take-complete-title">Take Complete!</Text>
             <Text style={styles.actionSheetSubtitle}>
               {formatDuration(recordingDuration)} • {currentScene?.name || 'Scene'}
             </Text>
@@ -912,6 +933,7 @@ export default function RecordScreen() {
               style={styles.primaryActionButton}
               onPress={handleShareNow}
               disabled={isSharing}
+              testID="record-share-now-btn"
             >
               {isSharing ? (
                 <ActivityIndicator color="#fff" />
@@ -929,12 +951,13 @@ export default function RecordScreen() {
                 style={styles.secondaryActionButton}
                 onPress={handleSave}
                 disabled={isSaving}
+                testID="record-save-btn"
               >
                 {isSaving ? (
-                  <ActivityIndicator color="#6366f1" size="small" />
+                  <ActivityIndicator color={C.violetSoft} size="small" />
                 ) : (
                   <>
-                    <Ionicons name="bookmark" size={22} color="#6366f1" />
+                    <Ionicons name="bookmark" size={20} color={C.violetSoft} />
                     <Text style={styles.secondaryActionText}>Save</Text>
                   </>
                 )}
@@ -943,8 +966,9 @@ export default function RecordScreen() {
               <TouchableOpacity 
                 style={styles.secondaryActionButton}
                 onPress={handleRetake}
+                testID="record-retake-btn"
               >
-                <Ionicons name="refresh" size={22} color="#6366f1" />
+                <Ionicons name="refresh" size={20} color={C.violetSoft} />
                 <Text style={styles.secondaryActionText}>Retake</Text>
               </TouchableOpacity>
             </View>
@@ -952,6 +976,7 @@ export default function RecordScreen() {
             {/* Review option */}
             <TouchableOpacity 
               style={styles.reviewButton}
+              testID="record-review-btn"
               onPress={() => {
                 setShowActionSheet(false);
                 router.replace({
@@ -966,7 +991,7 @@ export default function RecordScreen() {
               }}
             >
               <Text style={styles.reviewButtonText}>Review Recording</Text>
-              <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+              <Ionicons name="chevron-forward" size={18} color="#6E6A95" />
             </TouchableOpacity>
           </View>
         </View>
@@ -975,400 +1000,100 @@ export default function RecordScreen() {
   );
 }
 
+const glass = 'rgba(11, 10, 26, 0.55)';
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  
+
   // Script Section
-  scriptContainer: {
-    height: '40%',
-    backgroundColor: '#0a0a0f',
-  },
-  scriptHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
-    backgroundColor: '#0a0a0f',
-  },
-  closeButton: { padding: 4 },
-  scriptTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: '#fff', textAlign: 'center', marginHorizontal: 8 },
-  teleprompterButton: {
-    padding: 8,
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    borderRadius: 8,
-  },
+  scriptContainer: { height: '40%', backgroundColor: C.ink, borderBottomWidth: 1, borderBottomColor: tint(C.violet, 0.25) },
+  scriptHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 8, paddingTop: Platform.OS === 'ios' ? 50 : 30, backgroundColor: C.ink },
+  closeButton: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
+  scriptTitle: { flex: 1, ...TYPE.heading, fontSize: 14, textAlign: 'center', marginHorizontal: 8 },
+  teleprompterButton: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: tint(C.violet, 0.14), borderWidth: 1, borderColor: tint(C.violet, 0.3) },
+  teleprompterButtonActive: { backgroundColor: C.violet, borderColor: C.violet },
   scriptScroll: { flex: 1, paddingHorizontal: 16 },
-  lineContainer: {
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
-  },
-  myLineContainer: {
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: '#6366f1',
-  },
-  characterName: { fontSize: 11, fontWeight: '700', color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' },
-  myCharacterName: { color: '#6366f1' },
-  otherCharacter: { color: '#4b5563' },
-  lineText: { color: '#e5e7eb', lineHeight: 24 },
-  myLineText: { color: '#fff', fontWeight: '500' },
-  hiddenLine: { color: '#4b5563', fontStyle: 'italic' },
+  lineContainer: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line },
+  myLineContainer: { backgroundColor: tint(C.violet, 0.12), marginHorizontal: -16, paddingHorizontal: 16, borderLeftWidth: 3, borderLeftColor: C.violet },
+  characterName: { fontSize: 11, fontWeight: '800', letterSpacing: 1, color: C.dim, marginBottom: 4, textTransform: 'uppercase' },
+  myCharacterName: { color: C.violetSoft },
+  otherCharacter: { color: '#4A4670' },
+  lineText: { color: '#E4E1FA', lineHeight: 24 },
+  myLineText: { color: C.text, fontWeight: '600' },
+  hiddenLine: { color: '#4A4670', fontStyle: 'italic' },
 
   // Camera Section
-  cameraContainer: {
-    height: '60%',
-    backgroundColor: '#000',
-  },
+  cameraContainer: { height: '60%', backgroundColor: '#000' },
   camera: { flex: 1 },
-  faceGuide: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  faceGuideOval: {
-    width: 180,
-    height: 240,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 90,
-    marginTop: -60,
-  },
-  recordingIndicator: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  recordingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#ef4444',
-    marginRight: 8,
-  },
-  recordingTime: { fontSize: 14, fontWeight: '600', color: '#fff' },
-  countdownOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  countdownText: { fontSize: 120, fontWeight: '700', color: '#fff' },
-  controlsContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
-  },
-  topControls: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 20,
-  },
-  controlButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bottomControls: {
-    alignItems: 'center',
-    paddingBottom: 40,
-  },
-  recordButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: '#fff',
-  },
-  recordButtonRecording: {
-    backgroundColor: 'rgba(239, 68, 68, 0.3)',
-    borderColor: '#ef4444',
-  },
-  recordIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#ef4444',
-  },
-  stopIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 4,
-    backgroundColor: '#ef4444',
-  },
+  faceGuide: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+  faceGuideOval: { width: 180, height: 240, borderWidth: 2, borderColor: tint(C.violetSoft, 0.28), borderRadius: 90, marginTop: -60 },
+  recordingIndicator: { position: 'absolute', top: 20, left: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: glass, paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.pill, borderWidth: 1, borderColor: tint(C.danger, 0.45) },
+  recordingDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: C.danger, marginRight: 8 },
+  recordingTime: { fontSize: 14, fontWeight: '700', color: '#fff', fontVariant: ['tabular-nums'] },
+  countdownOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(11, 10, 26, 0.72)', justifyContent: 'center', alignItems: 'center' },
+  countdownText: { fontSize: 120, fontWeight: '800', color: '#fff', textShadowColor: tint(C.violet, 0.8), textShadowRadius: 30, textShadowOffset: { width: 0, height: 0 } },
+  controlsContainer: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
+  topControls: { flexDirection: 'row', justifyContent: 'flex-end', padding: 20, gap: 10 },
+  controlButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: glass, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', justifyContent: 'center', alignItems: 'center' },
+  bottomControls: { alignItems: 'center', paddingBottom: 40 },
+  recordButton: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255, 255, 255, 0.18)', justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#fff' },
+  recordButtonRecording: { backgroundColor: tint(C.danger, 0.25), borderColor: C.danger },
+  recordIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: C.danger },
+  stopIcon: { width: 30, height: 30, borderRadius: 6, backgroundColor: C.danger },
 
   // Processing Overlay
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  processingText: {
-    fontSize: 16,
-    color: '#fff',
-    marginTop: 16,
-  },
+  processingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(11, 10, 26, 0.85)', justifyContent: 'center', alignItems: 'center' },
+  processingText: { fontSize: 15, fontWeight: '600', color: C.text, marginTop: 16 },
 
   // Action Sheet
-  actionSheetBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
-  },
-  actionSheet: {
-    backgroundColor: '#1a1a2e',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  actionSheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#374151',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  actionSheetTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
-    textAlign: 'center',
-  },
-  actionSheetSubtitle: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  primaryActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#6366f1',
-    paddingVertical: 18,
-    borderRadius: 14,
-    gap: 10,
-  },
-  primaryActionText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  secondaryActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  secondaryActionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 8,
-  },
-  secondaryActionText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#6366f1',
-  },
-  reviewButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    marginTop: 8,
-  },
-  reviewButtonText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginRight: 4,
-  },
+  actionSheetBackdrop: { flex: 1, backgroundColor: 'rgba(5, 4, 14, 0.7)', justifyContent: 'flex-end' },
+  actionSheet: { backgroundColor: C.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, borderWidth: 1, borderColor: C.line },
+  actionSheetHandle: { width: 40, height: 4, backgroundColor: C.surface2, borderRadius: 2, alignSelf: 'center', marginBottom: 18 },
+  actionSheetBadge: { alignSelf: 'center', width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: tint(C.violet, 0.16), borderWidth: 1, borderColor: tint(C.violet, 0.35), marginBottom: 12 },
+  actionSheetTitle: { ...TYPE.display, textAlign: 'center' },
+  actionSheetSubtitle: { fontSize: 14, color: C.muted, textAlign: 'center', marginTop: 6, marginBottom: 22 },
+  primaryActionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: C.violet, paddingVertical: 17, borderRadius: RADIUS.md, gap: 10 },
+  primaryActionText: { fontSize: 17, fontWeight: '700', color: '#fff' },
+  secondaryActions: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  secondaryActionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface2, borderWidth: 1, borderColor: C.line, paddingVertical: 14, borderRadius: RADIUS.md, gap: 8 },
+  secondaryActionText: { fontSize: 15, fontWeight: '700', color: C.text },
+  reviewButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, marginTop: 6 },
+  reviewButtonText: { fontSize: 14, fontWeight: '600', color: C.muted, marginRight: 4 },
 
   // Teleprompter Controls
-  teleprompterControls: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(10, 10, 15, 0.95)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(99, 102, 241, 0.2)',
-  },
-  controlPlayButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  speedControlContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 8,
-    gap: 4,
-  },
-  speedSlider: {
-    flex: 1,
-    height: 40,
-  },
-  speedSegment: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    minWidth: 24,
-    alignItems: 'center',
-    backgroundColor: '#374151',
-  },
-  speedSegmentActive: {
-    backgroundColor: '#6366f1',
-  },
-  speedSegmentText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#9ca3af',
-  },
-  speedSegmentTextActive: {
-    color: '#ffffff',
-  },
-  speedLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6366f1',
-    width: 24,
-    textAlign: 'center',
-  },
-  fontControls: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  fontButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fontButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#e5e7eb',
-  },
-  highlightToggle: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: 'rgba(107, 114, 128, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 4,
-  },
-  highlightToggleActive: {
-    backgroundColor: 'rgba(99, 102, 241, 0.25)',
-  },
+  teleprompterControls: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(20, 18, 42, 0.94)', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: tint(C.violet, 0.3) },
+  controlPlayButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.violet, justifyContent: 'center', alignItems: 'center' },
+  speedControlContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', marginHorizontal: 8, gap: 4 },
+  speedSlider: { flex: 1, height: 40 },
+  speedSegment: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, minWidth: 24, alignItems: 'center', backgroundColor: C.surface2 },
+  speedSegmentActive: { backgroundColor: C.violet },
+  speedSegmentText: { fontSize: 12, fontWeight: '700', color: C.muted },
+  speedSegmentTextActive: { color: '#ffffff' },
+  speedLabel: { fontSize: 12, fontWeight: '700', color: C.violetSoft, width: 24, textAlign: 'center' },
+  fontControls: { flexDirection: 'row', gap: 4 },
+  fontButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.line, justifyContent: 'center', alignItems: 'center' },
+  fontButtonText: { fontSize: 13, fontWeight: '800', color: C.text },
+  highlightToggle: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.line, justifyContent: 'center', alignItems: 'center', marginLeft: 4 },
+  highlightToggleActive: { backgroundColor: tint(C.violet, 0.22), borderColor: tint(C.violet, 0.5) },
 
   // Permission View
-  permissionView: {
-    flex: 1,
-    backgroundColor: '#0a0a0f',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  permissionTitle: { fontSize: 22, fontWeight: '700', color: '#fff', marginTop: 20 },
-  permissionText: { fontSize: 15, color: '#9ca3af', textAlign: 'center', marginTop: 12, lineHeight: 22 },
-  permissionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#6366f1',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    marginTop: 32,
-  },
-  permissionButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  cancelButton: { marginTop: 16 },
-  cancelButtonText: { fontSize: 15, color: '#6b7280' },
-  
+  permissionView: { flex: 1, backgroundColor: C.ink, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  permissionIcon: { width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: tint(C.violet, 0.12), borderWidth: 1, borderColor: tint(C.violet, 0.3) },
+  permissionTitle: { ...TYPE.title, fontSize: 22, marginTop: 20 },
+  permissionText: { fontSize: 15, color: C.muted, textAlign: 'center', marginTop: 12, lineHeight: 22 },
+  permissionButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.violet, paddingVertical: 14, paddingHorizontal: 32, borderRadius: RADIUS.md, marginTop: 32 },
+  permissionButtonText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  cancelButton: { marginTop: 16, padding: 8 },
+  cancelButtonText: { fontSize: 15, color: C.muted, fontWeight: '600' },
+
   // Shot Coach Menu
-  controlButtonActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-  },
-  shotCoachMenuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  shotCoachMenu: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 16,
-    padding: 20,
-    width: '80%',
-    maxWidth: 300,
-  },
-  shotCoachMenuTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  shotCoachMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2a2a3e',
-  },
-  shotCoachMenuText: {
-    flex: 1,
-    fontSize: 15,
-    color: '#9ca3af',
-    marginLeft: 12,
-  },
-  shotCoachMenuTextActive: {
-    color: '#fff',
-  },
-  shotCoachMenuClose: {
-    backgroundColor: '#6366f1',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  shotCoachMenuCloseText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
+  controlButtonActive: { backgroundColor: tint(C.cyan, 0.2), borderColor: tint(C.cyan, 0.5) },
+  shotCoachMenuOverlay: { flex: 1, backgroundColor: 'rgba(5, 4, 14, 0.75)', justifyContent: 'center', alignItems: 'center' },
+  shotCoachMenu: { backgroundColor: C.surface, borderRadius: RADIUS.lg, padding: 20, width: '80%', maxWidth: 300, borderWidth: 1, borderColor: C.line },
+  shotCoachMenuTitle: { ...TYPE.title, fontSize: 17, marginBottom: 12, textAlign: 'center' },
+  shotCoachMenuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.line },
+  shotCoachMenuText: { flex: 1, fontSize: 15, color: C.muted, marginLeft: 12 },
+  shotCoachMenuTextActive: { color: C.text, fontWeight: '600' },
+  shotCoachMenuClose: { backgroundColor: C.violet, borderRadius: RADIUS.md, paddingVertical: 12, alignItems: 'center', marginTop: 16 },
+  shotCoachMenuCloseText: { fontSize: 16, fontWeight: '700', color: '#fff' },
 });

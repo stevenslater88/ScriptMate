@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { router, useLocalSearchParams } from 'expo-router';
 import { useScriptStore } from '../../store/scriptStore';
 import Slider from '../../components/FabricSafeSlider';
+import { C, RADIUS, TYPE, tint } from '../../constants/cinematicTheme';
+import { GradientButton, IconButton, ScreenGlow } from '../../components/cinematic';
 
 export default function PrepScreen() {
   const { scriptId } = useLocalSearchParams<{ scriptId: string }>();
@@ -40,10 +42,10 @@ export default function PrepScreen() {
   if (!script) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.errorState}>
-          <Ionicons name="alert-circle" size={48} color="#ef4444" />
+        <View style={styles.errorState} testID="prep-script-not-found">
+          <Ionicons name="alert-circle" size={48} color="#FF5C7A" />
           <Text style={styles.errorText}>Script not found</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} testID="prep-error-back-btn">
             <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -70,16 +72,18 @@ export default function PrepScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenGlow />
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-          <Ionicons name="chevron-back" size={28} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{script.title}</Text>
+        <IconButton icon="chevron-back" onPress={() => router.back()} testID="prep-back-btn" />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerEyebrow}>Self-Tape Setup</Text>
+          <Text style={styles.headerTitle} numberOfLines={1} testID="prep-script-title">{script.title}</Text>
+        </View>
         <View style={styles.headerButton} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         {/* Scene Selection */}
         {scenes.length > 1 && (
           <View style={styles.section}>
@@ -88,6 +92,7 @@ export default function PrepScreen() {
               {scenes.map((scene, index) => (
                 <TouchableOpacity
                   key={index}
+                  testID={`prep-scene-chip-${index}`}
                   style={[styles.sceneChip, selectedScene === index && styles.sceneChipActive]}
                   onPress={() => setSelectedScene(index)}
                 >
@@ -109,6 +114,7 @@ export default function PrepScreen() {
               {script.characters.map((char) => (
                 <TouchableOpacity
                   key={char.name}
+                  testID={`prep-character-chip-${char.name}`}
                   style={[styles.characterChip, selectedCharacter === char.name && styles.characterChipActive]}
                   onPress={() => setSelectedCharacter(char.name)}
                 >
@@ -127,7 +133,7 @@ export default function PrepScreen() {
           
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Font Size</Text>
-            <Text style={styles.settingValue}>{fontSize}pt</Text>
+            <Text style={styles.settingValue} testID="prep-font-size-value">{fontSize}pt</Text>
           </View>
           <Slider
             style={styles.slider}
@@ -136,9 +142,9 @@ export default function PrepScreen() {
             step={2}
             value={fontSize}
             onValueChange={setFontSize}
-            minimumTrackTintColor="#6366f1"
-            maximumTrackTintColor="#374151"
-            thumbTintColor="#6366f1"
+            minimumTrackTintColor="#7C5CFF"
+            maximumTrackTintColor="#2A2650"
+            thumbTintColor="#7C5CFF"
           />
 
           <View style={styles.toggleRow}>
@@ -147,9 +153,10 @@ export default function PrepScreen() {
               <Text style={styles.toggleDescription}>Only show your lines and cues</Text>
             </View>
             <Switch
+              testID="prep-hide-others-switch"
               value={hideOthers}
               onValueChange={setHideOthers}
-              trackColor={{ false: '#374151', true: '#6366f1' }}
+              trackColor={{ false: '#2A2650', true: '#7C5CFF' }}
               thumbColor="#fff"
             />
           </View>
@@ -165,9 +172,10 @@ export default function PrepScreen() {
               <Text style={styles.toggleDescription}>Get ready before recording starts</Text>
             </View>
             <Switch
+              testID="prep-countdown-switch"
               value={countdownEnabled}
               onValueChange={setCountdownEnabled}
-              trackColor={{ false: '#374151', true: '#6366f1' }}
+              trackColor={{ false: '#2A2650', true: '#7C5CFF' }}
               thumbColor="#fff"
             />
           </View>
@@ -183,7 +191,7 @@ export default function PrepScreen() {
         {/* Preview */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Script Preview</Text>
-          <View style={styles.previewBox}>
+          <View style={styles.previewBox} testID="prep-script-preview">
             <Text style={[styles.previewText, { fontSize }]}>
               {currentScene?.lines?.slice(0, 3).map((line: any, idx: number) => {
                 const isMyLine = line.character === selectedCharacter;
@@ -199,107 +207,48 @@ export default function PrepScreen() {
 
       {/* Start Button */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.startButton} onPress={handleStartRecording}>
-          <Ionicons name="videocam" size={24} color="#fff" />
-          <Text style={styles.startButtonText}>Start Recording</Text>
-        </TouchableOpacity>
+        <GradientButton label="Start Recording" icon="videocam" onPress={handleStartRecording} testID="prep-start-recording-btn" />
       </View>
     </SafeAreaView>
   );
 }
 
+const chip = { backgroundColor: C.surface, paddingVertical: 9, paddingHorizontal: 16, borderRadius: RADIUS.pill, marginRight: 8, borderWidth: 1, borderColor: C.line };
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0f' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
-  },
-  headerButton: { width: 36 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '600', color: '#fff', textAlign: 'center' },
+  container: { flex: 1, backgroundColor: C.ink },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 },
+  headerButton: { width: 40 },
+  headerCenter: { flex: 1, alignItems: 'center', marginHorizontal: 8 },
+  headerEyebrow: { ...TYPE.label, fontSize: 10 },
+  headerTitle: { ...TYPE.heading, fontSize: 16, marginTop: 2, textAlign: 'center' },
   content: { flex: 1 },
-  section: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
-  },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#fff', marginBottom: 4 },
-  sectionSubtitle: { fontSize: 13, color: '#9ca3af', marginBottom: 12 },
-  sceneScroll: { marginTop: 12 },
-  sceneChip: {
-    backgroundColor: '#1a1a2e',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    marginRight: 10,
-  },
-  sceneChipActive: { backgroundColor: '#6366f1' },
-  sceneChipText: { fontSize: 14, color: '#9ca3af' },
-  sceneChipTextActive: { color: '#fff', fontWeight: '600' },
-  characterScroll: { marginTop: 8 },
-  characterChip: {
-    backgroundColor: '#1a1a2e',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    marginRight: 10,
-  },
-  characterChipActive: { backgroundColor: '#6366f1' },
-  characterChipText: { fontSize: 14, color: '#9ca3af' },
-  characterChipTextActive: { color: '#fff', fontWeight: '600' },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  settingLabel: { fontSize: 14, color: '#e5e7eb' },
-  settingValue: { fontSize: 14, color: '#6366f1', fontWeight: '600' },
+  section: { marginHorizontal: 18, marginTop: 14, padding: 16, backgroundColor: C.surface, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: C.line },
+  sectionTitle: { ...TYPE.label, marginBottom: 4 },
+  sectionSubtitle: { ...TYPE.caption, marginTop: 2, marginBottom: 10 },
+  sceneScroll: { marginTop: 10 },
+  sceneChip: chip,
+  sceneChipActive: { backgroundColor: tint(C.violet, 0.22), borderColor: C.violet },
+  sceneChipText: { fontSize: 14, color: C.muted, fontWeight: '600' },
+  sceneChipTextActive: { color: C.text, fontWeight: '700' },
+  characterScroll: { marginTop: 6 },
+  characterChip: chip,
+  characterChipActive: { backgroundColor: tint(C.violet, 0.22), borderColor: C.violet },
+  characterChipText: { fontSize: 14, color: C.muted, fontWeight: '600' },
+  characterChipTextActive: { color: C.text, fontWeight: '700' },
+  settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
+  settingLabel: { fontSize: 14, color: C.text, fontWeight: '600' },
+  settingValue: { fontSize: 13, color: C.violetSoft, fontWeight: '700' },
   slider: { marginTop: 8, height: 40 },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 },
   toggleInfo: { flex: 1, marginRight: 16 },
-  toggleLabel: { fontSize: 14, fontWeight: '500', color: '#e5e7eb' },
-  toggleDescription: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
-  previewBox: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
-    maxHeight: 150,
-  },
-  previewText: { color: '#e5e7eb', lineHeight: 24 },
-  footer: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#1a1a2e',
-  },
-  startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#6366f1',
-    paddingVertical: 16,
-    borderRadius: 14,
-    gap: 10,
-  },
-  startButtonText: { fontSize: 17, fontWeight: '600', color: '#fff' },
+  toggleLabel: { fontSize: 14, fontWeight: '600', color: C.text },
+  toggleDescription: { ...TYPE.caption, marginTop: 2 },
+  previewBox: { backgroundColor: C.ink, borderRadius: RADIUS.md, padding: 16, marginTop: 12, maxHeight: 150, borderWidth: 1, borderColor: C.line, borderLeftWidth: 3, borderLeftColor: C.violet },
+  previewText: { color: C.text, lineHeight: 24 },
+  footer: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 16, borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.ink },
   errorState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  errorText: { fontSize: 16, color: '#ef4444', marginTop: 12 },
-  backButton: {
-    backgroundColor: '#374151',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    marginTop: 20,
-  },
-  backButtonText: { fontSize: 14, color: '#fff' },
+  errorText: { fontSize: 16, color: C.danger, marginTop: 12, fontWeight: '600' },
+  backButton: { backgroundColor: C.surface2, paddingVertical: 12, paddingHorizontal: 24, borderRadius: RADIUS.md, marginTop: 20, borderWidth: 1, borderColor: C.line },
+  backButtonText: { fontSize: 14, color: C.text, fontWeight: '600' },
 });

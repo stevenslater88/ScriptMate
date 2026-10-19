@@ -160,61 +160,6 @@ export default function TeleprompterScreen() {
 
   const lines = currentScene?.lines || [];
 
-  // --- GATE: Script loading / error / empty states (before anything else renders) ---
-
-  // Script loading state
-  if (scriptLoading) {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        <View style={styles.permissionView}>
-          <ActivityIndicator size="large" color="#7C5CFF" />
-          <Text style={styles.permissionTitle}>Loading script...</Text>
-        </View>
-      </View>
-    );
-  }
-
-  // Script not found / error state
-  if (!script || scriptError) {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        <View style={styles.permissionView}>
-          <Ionicons name="document-text-outline" size={64} color="#FF5C7A" />
-          <Text style={styles.permissionTitle}>
-            {scriptError || 'Unable to load script for teleprompter'}
-          </Text>
-          <Text style={[styles.permissionText, { marginTop: 8 }]}>
-            {!params.scriptId ? 'No script ID provided.' : `Script ID: ${params.scriptId.substring(0, 12)}...`}
-          </Text>
-          <TouchableOpacity style={styles.permissionButton} onPress={() => router.back()}>
-            <Text style={styles.permissionButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  // No content in script
-  if (lines.length === 0) {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        <View style={styles.permissionView}>
-          <Ionicons name="document-text-outline" size={64} color="#f59e0b" />
-          <Text style={styles.permissionTitle}>No script content found</Text>
-          <Text style={styles.permissionText}>
-            This script has no lines to display. Try re-uploading it.
-          </Text>
-          <TouchableOpacity style={styles.permissionButton} onPress={() => router.back()}>
-            <Text style={styles.permissionButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
   // Content height is measured via ScrollView.onContentSizeChange into
   // teleprompterTotalHeight, so the previous
   //   totalContentHeight = lines.length * (fontSize + 16)
@@ -557,6 +502,61 @@ export default function TeleprompterScreen() {
         return { bottom: 180 };
     }
   };
+
+  // --- GATE: Script loading / error / empty states (after all hooks — Rules of Hooks) ---
+
+  // Script loading state
+  if (scriptLoading) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.permissionView}>
+          <ActivityIndicator size="large" color="#7C5CFF" />
+          <Text style={styles.permissionTitle}>Loading script...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Script not found / error state
+  if (!script || scriptError) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.permissionView}>
+          <Ionicons name="document-text-outline" size={64} color="#FF5C7A" />
+          <Text style={styles.permissionTitle}>
+            {scriptError || 'Unable to load script for teleprompter'}
+          </Text>
+          <Text style={[styles.permissionText, { marginTop: 8 }]}>
+            {!params.scriptId ? 'No script ID provided.' : `Script ID: ${params.scriptId.substring(0, 12)}...`}
+          </Text>
+          <TouchableOpacity style={styles.permissionButton} onPress={() => router.back()}>
+            <Text style={styles.permissionButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // No content in script
+  if (lines.length === 0) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.permissionView}>
+          <Ionicons name="document-text-outline" size={64} color="#f59e0b" />
+          <Text style={styles.permissionTitle}>No script content found</Text>
+          <Text style={styles.permissionText}>
+            This script has no lines to display. Try re-uploading it.
+          </Text>
+          <TouchableOpacity style={styles.permissionButton} onPress={() => router.back()}>
+            <Text style={styles.permissionButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   // Permission loading state — hooks haven't returned status yet
   if (cameraPermission === null || micPermission === null) {
