@@ -24,6 +24,8 @@ import { WATERMARK_TEXT, WATERMARK_SUBTEXT } from '../services/watermarkService'
 import { useScriptStore, type Script } from '../store/scriptStore';
 
 import { API_BASE_URL } from '../services/apiConfig';
+import { C, RADIUS, TYPE, tint } from '../constants/cinematicTheme';
+import { ScreenGlow } from '../components/cinematic';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const BAR_COUNT = 30;
@@ -461,22 +463,26 @@ export default function VoiceStudioScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenGlow />
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} data-testid="voice-studio-back">
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn} data-testid="voice-studio-back" testID="voice-studio-back" accessibilityLabel="Go back">
+          <Ionicons name="chevron-back" size={19} color="#CFCBF2" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Voice Actor Studio</Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} testID="voice-studio-title">Voice Actor Studio</Text>
+          <Text style={styles.headerSub}>Record and manage your own voice takes</Text>
+        </View>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Error Banner */}
       {loadError && (
-        <View style={styles.errorBanner} data-testid="voice-studio-error-banner">
-          <Ionicons name="warning" size={18} color="#f59e0b" />
+        <View style={styles.errorBanner} data-testid="voice-studio-error-banner" testID="voice-studio-error-banner">
+          <Ionicons name="warning" size={18} color="#FFC37A" />
           <Text style={styles.errorBannerText}>Failed to load saved data</Text>
-          <TouchableOpacity onPress={loadData} data-testid="voice-studio-retry-btn">
-            <Ionicons name="refresh" size={18} color="#6366f1" />
+          <TouchableOpacity onPress={loadData} data-testid="voice-studio-retry-btn" testID="voice-studio-retry-btn">
+            <Ionicons name="refresh" size={18} color="#7C5CFF" />
           </TouchableOpacity>
         </View>
       )}
@@ -493,8 +499,9 @@ export default function VoiceStudioScreen() {
             style={[styles.tab, activeTab === tab.key && styles.tabActive]}
             onPress={() => setActiveTab(tab.key)}
             data-testid={`tab-${tab.key}`}
+            testID={`tab-${tab.key}`}
           >
-            <Ionicons name={tab.icon as any} size={18} color={activeTab === tab.key ? '#6366f1' : '#6b7280'} />
+            <Ionicons name={tab.icon as any} size={16} color={activeTab === tab.key ? '#fff' : '#6E6A95'} />
             <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>{tab.label}</Text>
           </TouchableOpacity>
         ))}
@@ -508,7 +515,7 @@ export default function VoiceStudioScreen() {
               start recording, and scroll/highlight lines while their
               voice is being captured. Empty script list is handled
               gracefully via the "Choose from library" affordance. */}
-          <View style={styles.scriptPickerRow} data-testid="script-picker-row">
+          <View style={styles.scriptPickerRow} data-testid="script-picker-row" testID="script-picker-row">
             {selectedScript ? (
               <View style={{ flex: 1 }}>
                 <Text style={styles.scriptPickerLabel}>Reading</Text>
@@ -528,7 +535,7 @@ export default function VoiceStudioScreen() {
             <TouchableOpacity
               style={styles.scriptPickerBtn}
               onPress={() => setShowScriptPicker(true)}
-              data-testid="choose-script-btn"
+              data-testid="choose-script-btn" testID="choose-script-btn"
             >
               <Ionicons name="library" size={16} color="#fff" />
               <Text style={styles.scriptPickerBtnText}>
@@ -543,9 +550,9 @@ export default function VoiceStudioScreen() {
                   setSelectedCharacter(null);
                   setActiveLineIndex(0);
                 }}
-                data-testid="clear-script-btn"
+                data-testid="clear-script-btn" testID="clear-script-btn"
               >
-                <Ionicons name="close-circle" size={22} color="#6b7280" />
+                <Ionicons name="close-circle" size={22} color="#6E6A95" />
               </TouchableOpacity>
             )}
           </View>
@@ -553,7 +560,7 @@ export default function VoiceStudioScreen() {
           {/* Character chips — visible only when a script is selected
               and it exposes characters (screenplay-parsed scripts do). */}
           {selectedScript && selectedScript.characters && selectedScript.characters.length > 0 && (
-            <View style={styles.characterChips} data-testid="voice-studio-character-chips">
+            <View style={styles.characterChips} data-testid="voice-studio-character-chips" testID="voice-studio-character-chips">
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <TouchableOpacity
                   style={[
@@ -561,7 +568,7 @@ export default function VoiceStudioScreen() {
                     selectedCharacter === null && styles.charChipActive,
                   ]}
                   onPress={() => setSelectedCharacter(null)}
-                  data-testid="char-chip-all"
+                  data-testid="char-chip-all" testID="char-chip-all"
                 >
                   <Text style={[
                     styles.charChipText,
@@ -576,7 +583,7 @@ export default function VoiceStudioScreen() {
                       selectedCharacter === c.name && styles.charChipActive,
                     ]}
                     onPress={() => { setSelectedCharacter(c.name); setActiveLineIndex(0); }}
-                    data-testid={`char-chip-${c.name}`}
+                    data-testid={`char-chip-${c.name}`} testID={`char-chip-${c.name}`}
                   >
                     <Text style={[
                       styles.charChipText,
@@ -599,7 +606,7 @@ export default function VoiceStudioScreen() {
               : selectedScript.lines;
             const safeIndex = Math.min(activeLineIndex, Math.max(0, displayLines.length - 1));
             return (
-              <View style={styles.scriptPanel} data-testid="voice-studio-script-panel">
+              <View style={styles.scriptPanel} data-testid="voice-studio-script-panel" testID="voice-studio-script-panel">
                 <ScrollView style={styles.scriptScroll} nestedScrollEnabled>
                   {displayLines.map((line, i) => {
                     const isActive = i === safeIndex;
@@ -612,6 +619,7 @@ export default function VoiceStudioScreen() {
                           isActive && styles.scriptLineActive,
                         ]}
                         data-testid={isActive ? 'active-script-line' : undefined}
+                        testID={isActive ? 'active-script-line' : undefined}
                       >
                         {!isDirection && (
                           <Text style={[
@@ -633,13 +641,13 @@ export default function VoiceStudioScreen() {
                     style={styles.scriptNavBtn}
                     onPress={() => setActiveLineIndex((i) => Math.max(0, i - 1))}
                     disabled={safeIndex === 0}
-                    data-testid="prev-line-btn"
+                    data-testid="prev-line-btn" testID="prev-line-btn"
                   >
                     <Ionicons name="chevron-back" size={18}
-                      color={safeIndex === 0 ? '#374151' : '#fff'} />
+                      color={safeIndex === 0 ? '#3A3666' : '#fff'} />
                     <Text style={[
                       styles.scriptNavText,
-                      safeIndex === 0 && { color: '#374151' },
+                      safeIndex === 0 && { color: '#3A3666' },
                     ]}>Prev</Text>
                   </TouchableOpacity>
                   <Text style={styles.scriptNavCount}>
@@ -649,14 +657,14 @@ export default function VoiceStudioScreen() {
                     style={styles.scriptNavBtn}
                     onPress={() => setActiveLineIndex((i) => Math.min(displayLines.length - 1, i + 1))}
                     disabled={safeIndex >= displayLines.length - 1}
-                    data-testid="next-line-btn"
+                    data-testid="next-line-btn" testID="next-line-btn"
                   >
                     <Text style={[
                       styles.scriptNavText,
-                      safeIndex >= displayLines.length - 1 && { color: '#374151' },
+                      safeIndex >= displayLines.length - 1 && { color: '#3A3666' },
                     ]}>Next</Text>
                     <Ionicons name="chevron-forward" size={18}
-                      color={safeIndex >= displayLines.length - 1 ? '#374151' : '#fff'} />
+                      color={safeIndex >= displayLines.length - 1 ? '#3A3666' : '#fff'} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -677,15 +685,15 @@ export default function VoiceStudioScreen() {
                         outputRange: [4, 80],
                       }),
                       backgroundColor: isRecording
-                        ? (isPaused ? '#f59e0b' : '#ef4444')
-                        : '#6366f1',
+                        ? (isPaused ? '#FFC37A' : '#FF5C7A')
+                        : '#7C5CFF',
                     },
                   ]}
                 />
               ))}
             </View>
-            <Text style={styles.recTime}>{formatDuration(recDuration)}</Text>
-            <Text style={styles.recLabel}>
+            <Text style={styles.recTime} testID="voice-rec-time">{formatDuration(recDuration)}</Text>
+            <Text style={styles.recLabel} testID="voice-rec-status">
               {isRecording ? (isPaused ? 'Paused' : 'Recording...') : 'Ready to record'}
             </Text>
           </View>
@@ -693,7 +701,7 @@ export default function VoiceStudioScreen() {
           {/* Controls */}
           <View style={styles.controlsRow}>
             {!isRecording ? (
-              <TouchableOpacity style={styles.recordBtn} onPress={startRecording} data-testid="start-record-btn">
+              <TouchableOpacity style={styles.recordBtn} onPress={startRecording} data-testid="start-record-btn" testID="start-record-btn" accessibilityLabel="Start recording">
                 <View style={styles.recordBtnInner}>
                   <Ionicons name="mic" size={36} color="#fff" />
                 </View>
@@ -703,20 +711,20 @@ export default function VoiceStudioScreen() {
                 <TouchableOpacity
                   style={styles.controlBtn}
                   onPress={isPaused ? resumeRecording : pauseRecording}
-                  data-testid="pause-resume-btn"
+                  data-testid="pause-resume-btn" testID="pause-resume-btn"
                 >
                   <Ionicons name={isPaused ? 'play' : 'pause'} size={28} color="#fff" />
                   <Text style={styles.controlLabel}>{isPaused ? 'Resume' : 'Pause'}</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.stopBtn} onPress={stopRecording} data-testid="stop-record-btn">
+                <TouchableOpacity style={styles.stopBtn} onPress={stopRecording} data-testid="stop-record-btn" testID="stop-record-btn" accessibilityLabel="Stop recording">
                   <View style={styles.stopBtnInner}>
                     <Ionicons name="stop" size={32} color="#fff" />
                   </View>
                 </TouchableOpacity>
 
                 <View style={styles.controlBtn}>
-                  <Ionicons name="time" size={28} color="#6b7280" />
+                  <Ionicons name="time" size={28} color="#6E6A95" />
                   <Text style={styles.controlLabel}>{formatDuration(recDuration)}</Text>
                 </View>
               </>
@@ -727,15 +735,15 @@ export default function VoiceStudioScreen() {
           <View style={styles.tipsCard}>
             <Text style={styles.tipsTitle}>Voice-Over Tips</Text>
             <View style={styles.tipRow}>
-              <Ionicons name="volume-medium" size={16} color="#6366f1" />
+              <Ionicons name="volume-medium" size={16} color="#7C5CFF" />
               <Text style={styles.tipText}>Maintain consistent distance from mic</Text>
             </View>
             <View style={styles.tipRow}>
-              <Ionicons name="water" size={16} color="#6366f1" />
+              <Ionicons name="water" size={16} color="#7C5CFF" />
               <Text style={styles.tipText}>Stay hydrated for clear vocal quality</Text>
             </View>
             <View style={styles.tipRow}>
-              <Ionicons name="happy" size={16} color="#6366f1" />
+              <Ionicons name="happy" size={16} color="#7C5CFF" />
               <Text style={styles.tipText}>Smile while recording for warmth</Text>
             </View>
           </View>
@@ -746,11 +754,11 @@ export default function VoiceStudioScreen() {
       {activeTab === 'takes' && (
         <ScrollView contentContainerStyle={styles.tabContent}>
           {takes.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="mic-off" size={48} color="#374151" />
+            <View style={styles.emptyState} testID="voice-takes-empty">
+              <View style={styles.emptyIcon}><Ionicons name="mic-off" size={34} color={C.violetSoft} /></View>
               <Text style={styles.emptyTitle}>No Takes Yet</Text>
               <Text style={styles.emptyDesc}>Record your first voice-over take to get started</Text>
-              <TouchableOpacity style={styles.emptyBtn} onPress={() => setActiveTab('record')}>
+              <TouchableOpacity style={styles.emptyBtn} onPress={() => setActiveTab('record')} testID="voice-takes-empty-record-btn">
                 <Ionicons name="mic" size={20} color="#fff" />
                 <Text style={styles.emptyBtnText}>Start Recording</Text>
               </TouchableOpacity>
@@ -767,13 +775,13 @@ export default function VoiceStudioScreen() {
                         onChangeText={setEditName}
                         autoFocus
                         onSubmitEditing={() => renameTake(take.id, editName)}
-                        data-testid={`rename-input-${take.id}`}
+                        data-testid={`rename-input-${take.id}`} testID={`rename-input-${take.id}`}
                       />
-                      <TouchableOpacity onPress={() => renameTake(take.id, editName)}>
-                        <Ionicons name="checkmark" size={22} color="#10b981" />
+                      <TouchableOpacity onPress={() => renameTake(take.id, editName)} testID={`rename-confirm-${take.id}`}>
+                        <Ionicons name="checkmark" size={22} color="#34D399" />
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setEditingId(null)}>
-                        <Ionicons name="close" size={22} color="#6b7280" />
+                      <TouchableOpacity onPress={() => setEditingId(null)} testID={`rename-cancel-${take.id}`}>
+                        <Ionicons name="close" size={22} color="#6E6A95" />
                       </TouchableOpacity>
                     </View>
                   ) : (
@@ -800,46 +808,46 @@ export default function VoiceStudioScreen() {
                   <TouchableOpacity
                     style={[styles.takeActionBtn, playingId === take.id && styles.takeActionActive]}
                     onPress={() => playTake(take)}
-                    data-testid={`play-take-${take.id}`}
+                    data-testid={`play-take-${take.id}`} testID={`play-take-${take.id}`}
                   >
                     <Ionicons name={playingId === take.id ? 'stop' : 'play'} size={18}
-                      color={playingId === take.id ? '#ef4444' : '#6366f1'} />
+                      color={playingId === take.id ? '#FF5C7A' : '#7C5CFF'} />
                     <Text style={styles.takeActionText}>{playingId === take.id ? 'Stop' : 'Play'}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.takeActionBtn}
                     onPress={() => { setEditingId(take.id); setEditName(take.name); }}
-                    data-testid={`rename-take-${take.id}`}
+                    data-testid={`rename-take-${take.id}`} testID={`rename-take-${take.id}`}
                   >
-                    <Ionicons name="pencil" size={18} color="#f59e0b" />
+                    <Ionicons name="pencil" size={18} color="#FFC37A" />
                     <Text style={styles.takeActionText}>Rename</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.takeActionBtn}
                     onPress={() => openEditModal(take)}
-                    data-testid={`edit-take-${take.id}`}
+                    data-testid={`edit-take-${take.id}`} testID={`edit-take-${take.id}`}
                   >
-                    <Ionicons name="options" size={18} color="#10b981" />
+                    <Ionicons name="options" size={18} color="#34D399" />
                     <Text style={styles.takeActionText}>Edit</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.takeActionBtn}
                     onPress={() => shareFile(take.processedUri || take.uri)}
-                    data-testid={`share-take-${take.id}`}
+                    data-testid={`share-take-${take.id}`} testID={`share-take-${take.id}`}
                   >
-                    <Ionicons name="share-outline" size={18} color="#3b82f6" />
+                    <Ionicons name="share-outline" size={18} color="#8FAAFF" />
                     <Text style={styles.takeActionText}>Share</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.takeActionBtn}
                     onPress={() => removeTake(take)}
-                    data-testid={`delete-take-${take.id}`}
+                    data-testid={`delete-take-${take.id}`} testID={`delete-take-${take.id}`}
                   >
-                    <Ionicons name="trash" size={18} color="#ef4444" />
+                    <Ionicons name="trash" size={18} color="#FF5C7A" />
                     <Text style={styles.takeActionText}>Delete</Text>
                   </TouchableOpacity>
                 </View>
@@ -854,10 +862,10 @@ export default function VoiceStudioScreen() {
         <ScrollView contentContainerStyle={styles.tabContent}>
           {/* Build Reel CTA */}
           <TouchableOpacity
-            style={styles.buildReelBtn}
+            style={[styles.buildReelBtn, takes.length < 2 && styles.buildReelBtnDisabled]}
             onPress={() => setShowReelBuilder(true)}
             disabled={takes.length < 2}
-            data-testid="open-reel-builder-btn"
+            data-testid="open-reel-builder-btn" testID="open-reel-builder-btn"
           >
             <Ionicons name="add-circle" size={24} color="#fff" />
             <Text style={styles.buildReelBtnText}>Build Demo Reel</Text>
@@ -868,8 +876,8 @@ export default function VoiceStudioScreen() {
 
           {/* Existing Reels */}
           {reels.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="albums-outline" size={48} color="#374151" />
+            <View style={styles.emptyState} testID="voice-reels-empty">
+              <View style={styles.emptyIcon}><Ionicons name="albums-outline" size={34} color={C.violetSoft} /></View>
               <Text style={styles.emptyTitle}>No Demo Reels</Text>
               <Text style={styles.emptyDesc}>
                 Combine your best takes into a professional demo reel
@@ -879,7 +887,7 @@ export default function VoiceStudioScreen() {
             reels.map(reel => (
               <View key={reel.id} style={styles.reelCard}>
                 <View style={styles.reelHeader}>
-                  <Ionicons name="albums" size={24} color="#10b981" />
+                  <View style={styles.reelIcon}><Ionicons name="albums" size={20} color={C.cyan} /></View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.reelName}>{reel.name}</Text>
                     <Text style={styles.reelMeta}>
@@ -899,25 +907,25 @@ export default function VoiceStudioScreen() {
                         });
                       } catch { Alert.alert('Error', 'Could not play reel.'); }
                     }}
-                    data-testid={`play-reel-${reel.id}`}
+                    data-testid={`play-reel-${reel.id}`} testID={`play-reel-${reel.id}`}
                   >
-                    <Ionicons name="play" size={18} color="#6366f1" />
+                    <Ionicons name="play" size={18} color="#7C5CFF" />
                     <Text style={styles.reelActionText}>Play</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.reelActionBtn}
                     onPress={() => shareFile(reel.uri)}
-                    data-testid={`share-reel-${reel.id}`}
+                    data-testid={`share-reel-${reel.id}`} testID={`share-reel-${reel.id}`}
                   >
-                    <Ionicons name="share-outline" size={18} color="#3b82f6" />
+                    <Ionicons name="share-outline" size={18} color="#8FAAFF" />
                     <Text style={styles.reelActionText}>Share</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.reelActionBtn}
                     onPress={() => removeReel(reel)}
-                    data-testid={`delete-reel-${reel.id}`}
+                    data-testid={`delete-reel-${reel.id}`} testID={`delete-reel-${reel.id}`}
                   >
-                    <Ionicons name="trash" size={18} color="#ef4444" />
+                    <Ionicons name="trash" size={18} color="#FF5C7A" />
                     <Text style={styles.reelActionText}>Delete</Text>
                   </TouchableOpacity>
                 </View>
@@ -933,8 +941,8 @@ export default function VoiceStudioScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Audio</Text>
-              <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                <Ionicons name="close" size={24} color="#9ca3af" />
+              <TouchableOpacity onPress={() => setShowEditModal(false)} testID="edit-modal-close" style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={24} color="#A19DC6" />
               </TouchableOpacity>
             </View>
 
@@ -955,10 +963,11 @@ export default function VoiceStudioScreen() {
                   ]).map(op => (
                     <TouchableOpacity
                       key={op.key}
+                      testID={`edit-op-${op.key}`}
                       style={[styles.opBtn, editOp === op.key && styles.opBtnActive]}
                       onPress={() => setEditOp(op.key)}
                     >
-                      <Ionicons name={op.icon as any} size={16} color={editOp === op.key ? '#fff' : '#9ca3af'} />
+                      <Ionicons name={op.icon as any} size={16} color={editOp === op.key ? '#fff' : '#A19DC6'} />
                       <Text style={[styles.opBtnText, editOp === op.key && { color: '#fff' }]}>{op.label}</Text>
                     </TouchableOpacity>
                   ))}
@@ -973,7 +982,7 @@ export default function VoiceStudioScreen() {
                         value={trimStart}
                         onChangeText={setTrimStart}
                         keyboardType="decimal-pad"
-                        data-testid="trim-start-input"
+                        data-testid="trim-start-input" testID="trim-start-input"
                       />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
@@ -983,7 +992,7 @@ export default function VoiceStudioScreen() {
                         value={trimEnd}
                         onChangeText={setTrimEnd}
                         keyboardType="decimal-pad"
-                        data-testid="trim-end-input"
+                        data-testid="trim-end-input" testID="trim-end-input"
                       />
                     </View>
                   </View>
@@ -993,7 +1002,7 @@ export default function VoiceStudioScreen() {
                   style={styles.processBtn}
                   onPress={processAudio}
                   disabled={processing}
-                  data-testid="process-audio-btn"
+                  data-testid="process-audio-btn" testID="process-audio-btn"
                 >
                   {processing ? (
                     <ActivityIndicator color="#fff" />
@@ -1020,18 +1029,18 @@ export default function VoiceStudioScreen() {
           <View style={[styles.modalContent, { maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Build Demo Reel</Text>
-              <TouchableOpacity onPress={() => { setShowReelBuilder(false); setSelectedTakes([]); }}>
-                <Ionicons name="close" size={24} color="#9ca3af" />
+              <TouchableOpacity onPress={() => { setShowReelBuilder(false); setSelectedTakes([]); }} testID="reel-builder-close" style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={24} color="#A19DC6" />
               </TouchableOpacity>
             </View>
 
             <TextInput
               style={styles.modalInput}
               placeholder="Reel name (optional)"
-              placeholderTextColor="#6b7280"
+              placeholderTextColor="#6E6A95"
               value={reelName}
               onChangeText={setReelName}
-              data-testid="reel-name-input"
+              data-testid="reel-name-input" testID="reel-name-input"
             />
 
             <Text style={[styles.inputLabel, { marginTop: 16 }]}>
@@ -1047,7 +1056,7 @@ export default function VoiceStudioScreen() {
                     key={take.id}
                     style={[styles.reelTakeItem, isSelected && styles.reelTakeSelected]}
                     onPress={() => toggleTakeForReel(take.id)}
-                    data-testid={`reel-select-${take.id}`}
+                    data-testid={`reel-select-${take.id}`} testID={`reel-select-${take.id}`}
                   >
                     <View style={[styles.checkCircle, isSelected && styles.checkCircleActive]}>
                       {isSelected && <Text style={styles.checkNum}>{orderIdx + 1}</Text>}
@@ -1058,11 +1067,11 @@ export default function VoiceStudioScreen() {
                     </View>
                     {isSelected && (
                       <View style={styles.reorderBtns}>
-                        <TouchableOpacity onPress={() => moveTakeInReel(take.id, 'up')}>
-                          <Ionicons name="chevron-up" size={20} color="#6366f1" />
+                        <TouchableOpacity onPress={() => moveTakeInReel(take.id, 'up')} testID={`reel-move-up-${take.id}`}>
+                          <Ionicons name="chevron-up" size={20} color="#7C5CFF" />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => moveTakeInReel(take.id, 'down')}>
-                          <Ionicons name="chevron-down" size={20} color="#6366f1" />
+                        <TouchableOpacity onPress={() => moveTakeInReel(take.id, 'down')} testID={`reel-move-down-${take.id}`}>
+                          <Ionicons name="chevron-down" size={20} color="#7C5CFF" />
                         </TouchableOpacity>
                       </View>
                     )}
@@ -1075,7 +1084,7 @@ export default function VoiceStudioScreen() {
               style={[styles.processBtn, selectedTakes.length < 2 && { opacity: 0.5 }]}
               onPress={buildDemoReel}
               disabled={selectedTakes.length < 2 || buildingReel}
-              data-testid="build-reel-btn"
+              data-testid="build-reel-btn" testID="build-reel-btn"
             >
               {buildingReel ? (
                 <ActivityIndicator color="#fff" />
@@ -1101,19 +1110,19 @@ export default function VoiceStudioScreen() {
         onRequestClose={() => setShowScriptPicker(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent} data-testid="script-picker-modal">
+          <View style={styles.modalContent} data-testid="script-picker-modal" testID="script-picker-modal">
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Choose a script</Text>
               <TouchableOpacity
                 onPress={() => setShowScriptPicker(false)}
-                data-testid="script-picker-close"
+                data-testid="script-picker-close" testID="script-picker-close"
               >
                 <Ionicons name="close" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
             {scripts.length === 0 ? (
-              <View style={styles.emptyState} data-testid="script-picker-empty">
-                <Ionicons name="document-text-outline" size={40} color="#374151" />
+              <View style={styles.emptyState} data-testid="script-picker-empty" testID="script-picker-empty">
+                <View style={styles.emptyIcon}><Ionicons name="document-text-outline" size={32} color={C.violetSoft} /></View>
                 <Text style={styles.emptyTitle}>No scripts yet</Text>
                 <Text style={styles.emptyDesc}>
                   Import a script from the Library first, then come back to
@@ -1125,7 +1134,7 @@ export default function VoiceStudioScreen() {
                     setShowScriptPicker(false);
                     router.push('/scripts');
                   }}
-                  data-testid="script-picker-goto-library"
+                  data-testid="script-picker-goto-library" testID="script-picker-goto-library"
                 >
                   <Ionicons name="library" size={18} color="#fff" />
                   <Text style={styles.emptyBtnText}>Open Library</Text>
@@ -1145,9 +1154,9 @@ export default function VoiceStudioScreen() {
                       setActiveLineIndex(0);
                       setShowScriptPicker(false);
                     }}
-                    data-testid={`script-picker-item-${item.id}`}
+                    data-testid={`script-picker-item-${item.id}`} testID={`script-picker-item-${item.id}`}
                   >
-                    <Ionicons name="document-text" size={22} color="#6366f1" />
+                    <Ionicons name="document-text" size={22} color="#7C5CFF" />
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={styles.scriptPickerItemTitle} numberOfLines={1}>
                         {item.title}
@@ -1157,7 +1166,7 @@ export default function VoiceStudioScreen() {
                         {item.lines?.length ?? 0} lines
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+                    <Ionicons name="chevron-forward" size={18} color="#6E6A95" />
                   </TouchableOpacity>
                 )}
               />
@@ -1169,243 +1178,140 @@ export default function VoiceStudioScreen() {
   );
 }
 
+const panel = { backgroundColor: C.surface, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: C.line };
+const chipBtn = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.line };
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0f' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a1a2e',
-  },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
+  container: { flex: 1, backgroundColor: C.ink },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 10, paddingBottom: 10 },
+  headerBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
+  headerCenter: { flex: 1, alignItems: 'center', marginHorizontal: 8 },
+  headerTitle: { ...TYPE.title, fontSize: 18 },
+  headerSub: { ...TYPE.caption, fontSize: 11, marginTop: 2 },
 
   // Tab bar
-  tabBar: {
-    flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#1a1a2e',
-    paddingHorizontal: 8,
-  },
-  tab: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 12, gap: 6,
-  },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: '#6366f1' },
-  tabText: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
-  tabTextActive: { color: '#6366f1' },
-  tabContent: { padding: 16, paddingBottom: 40 },
+  tabBar: { flexDirection: 'row', marginHorizontal: 18, marginBottom: 4, padding: 4, gap: 4, ...panel, borderRadius: RADIUS.md },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, gap: 6, borderRadius: 11 },
+  tabActive: { backgroundColor: C.violet },
+  tabText: { fontSize: 13, color: C.muted, fontWeight: '600' },
+  tabTextActive: { color: '#fff', fontWeight: '700' },
+  tabContent: { padding: 18, paddingBottom: 40 },
 
   // Waveform
-  waveformContainer: {
-    alignItems: 'center', backgroundColor: '#1a1a2e', borderRadius: 16,
-    padding: 24, marginBottom: 24, borderWidth: 1, borderColor: '#2a2a3e',
-  },
-  waveformBars: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    height: 80, gap: 3, marginBottom: 16,
-  },
+  waveformContainer: { alignItems: 'center', ...panel, borderRadius: RADIUS.xl, padding: 24, marginBottom: 24, borderColor: tint(C.violet, 0.22) },
+  waveformBars: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 80, gap: 3, marginBottom: 16 },
   waveBar: { width: 4, borderRadius: 2 },
-  recTime: { fontSize: 36, fontWeight: '700', color: '#fff', fontVariant: ['tabular-nums'] },
-  recLabel: { fontSize: 14, color: '#6b7280', marginTop: 4 },
+  recTime: { fontSize: 38, fontWeight: '800', color: C.text, letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
+  recLabel: { ...TYPE.label, marginTop: 6 },
 
   // Controls
-  controlsRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 32, marginBottom: 32,
-  },
-  recordBtn: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)', justifyContent: 'center', alignItems: 'center',
-  },
-  recordBtnInner: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center',
-  },
-  stopBtn: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)', justifyContent: 'center', alignItems: 'center',
-  },
-  stopBtnInner: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center',
-  },
+  controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 32, marginBottom: 28 },
+  recordBtn: { width: 84, height: 84, borderRadius: 42, backgroundColor: tint(C.danger, 0.14), borderWidth: 1, borderColor: tint(C.danger, 0.35), justifyContent: 'center', alignItems: 'center' },
+  recordBtnInner: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.danger, justifyContent: 'center', alignItems: 'center' },
+  stopBtn: { width: 84, height: 84, borderRadius: 42, backgroundColor: tint(C.danger, 0.14), borderWidth: 1, borderColor: tint(C.danger, 0.35), justifyContent: 'center', alignItems: 'center' },
+  stopBtnInner: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.danger, justifyContent: 'center', alignItems: 'center' },
   controlBtn: { alignItems: 'center', gap: 4, minWidth: 60 },
-  controlLabel: { fontSize: 12, color: '#9ca3af' },
+  controlLabel: { fontSize: 12, color: C.muted, fontWeight: '600' },
 
   // Tips
-  tipsCard: {
-    backgroundColor: '#1a1a2e', borderRadius: 14, padding: 16,
-    borderWidth: 1, borderColor: '#2a2a3e',
-  },
-  tipsTitle: { fontSize: 15, fontWeight: '600', color: '#fff', marginBottom: 10 },
-  tipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
-  tipText: { fontSize: 13, color: '#9ca3af' },
+  tipsCard: { ...panel, padding: 16 },
+  tipsTitle: { ...TYPE.label, marginBottom: 8 },
+  tipRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  tipText: { fontSize: 13, color: C.text },
 
   // Empty
-  emptyState: { alignItems: 'center', paddingVertical: 48 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#6b7280', marginTop: 12 },
-  emptyDesc: { fontSize: 14, color: '#4b5563', marginTop: 4, textAlign: 'center' },
-  emptyBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20,
-    backgroundColor: '#6366f1', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10,
-  },
-  emptyBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  emptyState: { alignItems: 'center', paddingVertical: 40 },
+  emptyIcon: { width: 72, height: 72, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: tint(C.violet, 0.12), borderWidth: 1, borderColor: tint(C.violet, 0.3) },
+  emptyTitle: { ...TYPE.title, fontSize: 18, marginTop: 16 },
+  emptyDesc: { fontSize: 14, color: C.muted, marginTop: 6, textAlign: 'center', lineHeight: 20 },
+  emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20, backgroundColor: C.violet, paddingHorizontal: 22, paddingVertical: 13, borderRadius: RADIUS.md },
+  emptyBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 
   // Take card
-  takeCard: {
-    backgroundColor: '#1a1a2e', borderRadius: 14, padding: 14, marginBottom: 12,
-    borderWidth: 1, borderColor: '#2a2a3e',
-  },
-  takeHeader: { marginBottom: 8 },
-  takeName: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  takeMeta: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  takeCard: { ...panel, padding: 14, marginBottom: 12 },
+  takeHeader: { marginBottom: 10 },
+  takeName: { fontSize: 16, fontWeight: '700', color: C.text },
+  takeMeta: { ...TYPE.caption, marginTop: 2 },
   renameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  renameInput: {
-    flex: 1, backgroundColor: '#0a0a0f', borderRadius: 8, paddingHorizontal: 10,
-    paddingVertical: 8, fontSize: 15, color: '#fff', borderWidth: 1, borderColor: '#6366f1',
-  },
-  progressBar: {
-    height: 3, backgroundColor: '#2a2a3e', borderRadius: 2, marginBottom: 8,
-  },
-  progressFill: { height: 3, backgroundColor: '#6366f1', borderRadius: 2 },
-  takeActions: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 6,
-  },
-  takeActionBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
-    backgroundColor: 'rgba(99, 102, 241, 0.08)',
-  },
-  takeActionActive: { backgroundColor: 'rgba(239, 68, 68, 0.1)' },
-  takeActionText: { fontSize: 12, color: '#9ca3af', fontWeight: '500' },
+  renameInput: { flex: 1, backgroundColor: C.ink, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, fontSize: 15, color: C.text, borderWidth: 1, borderColor: C.violet },
+  progressBar: { height: 3, backgroundColor: C.surface2, borderRadius: 2, marginBottom: 10 },
+  progressFill: { height: 3, backgroundColor: C.cyan, borderRadius: 2 },
+  takeActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  takeActionBtn: chipBtn,
+  takeActionActive: { backgroundColor: tint(C.danger, 0.12), borderColor: tint(C.danger, 0.35) },
+  takeActionText: { fontSize: 12, color: C.text, fontWeight: '600' },
 
   // Reel
-  buildReelBtn: {
-    alignItems: 'center', backgroundColor: '#6366f1', borderRadius: 14,
-    padding: 18, marginBottom: 20, gap: 4,
-  },
-  buildReelBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  buildReelSub: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
-  reelCard: {
-    backgroundColor: '#1a1a2e', borderRadius: 14, padding: 14, marginBottom: 12,
-    borderWidth: 1, borderColor: '#2a2a3e',
-  },
-  reelHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  reelName: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  reelMeta: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  buildReelBtn: { alignItems: 'center', backgroundColor: C.violet, borderRadius: RADIUS.lg, padding: 18, marginBottom: 20, gap: 4 },
+  buildReelBtnDisabled: { backgroundColor: tint(C.violet, 0.35) },
+  buildReelBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  buildReelSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)' },
+  reelCard: { ...panel, padding: 14, marginBottom: 12 },
+  reelHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  reelIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: tint(C.cyan, 0.14) },
+  reelName: { fontSize: 16, fontWeight: '700', color: C.text },
+  reelMeta: { ...TYPE.caption, marginTop: 2 },
   reelWatermark: { fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 4, letterSpacing: 0.3 },
   reelActions: { flexDirection: 'row', gap: 8 },
-  reelActionBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
-    backgroundColor: 'rgba(99, 102, 241, 0.08)',
-  },
-  reelActionText: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
+  reelActionBtn: { ...chipBtn, paddingHorizontal: 12, paddingVertical: 8 },
+  reelActionText: { fontSize: 13, color: C.text, fontWeight: '600' },
 
   // Modal
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#1a1a2e', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 24, maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  modalTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
-  modalSubtitle: { fontSize: 14, color: '#9ca3af', marginBottom: 16 },
-  inputLabel: { fontSize: 13, fontWeight: '600', color: '#9ca3af', marginBottom: 6 },
-  modalInput: {
-    backgroundColor: '#0a0a0f', borderRadius: 10, paddingHorizontal: 14,
-    paddingVertical: 12, fontSize: 15, color: '#fff', borderWidth: 1, borderColor: '#2a2a3e',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(5, 4, 14, 0.78)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: C.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: 24, maxHeight: '80%', borderWidth: 1, borderColor: C.line },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  modalCloseBtn: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface2 },
+  modalTitle: { ...TYPE.title },
+  modalSubtitle: { fontSize: 14, color: C.muted, marginBottom: 16 },
+  inputLabel: { ...TYPE.label, fontSize: 10, color: C.muted, marginBottom: 8 },
+  modalInput: { backgroundColor: C.ink, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: C.text, borderWidth: 1, borderColor: C.line },
   opRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  opBtn: {
-    flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10,
-    backgroundColor: '#0a0a0f', borderWidth: 1, borderColor: '#2a2a3e', gap: 4,
-  },
-  opBtnActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
-  opBtnText: { fontSize: 11, color: '#9ca3af', fontWeight: '500' },
+  opBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: RADIUS.md, backgroundColor: C.ink, borderWidth: 1, borderColor: C.line, gap: 4 },
+  opBtnActive: { backgroundColor: C.violet, borderColor: C.violet },
+  opBtnText: { fontSize: 11, color: C.muted, fontWeight: '600' },
   trimRow: { flexDirection: 'row', marginBottom: 16 },
-  processBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#6366f1', paddingVertical: 14, borderRadius: 12, gap: 8, marginTop: 8,
-  },
-  processBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  editNote: { fontSize: 12, color: '#4b5563', textAlign: 'center', marginTop: 12 },
+  processBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: C.violet, paddingVertical: 14, borderRadius: RADIUS.md, gap: 8, marginTop: 8 },
+  processBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  editNote: { fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 12 },
 
   // Reel builder
-  reelTakeItem: {
-    flexDirection: 'row', alignItems: 'center', padding: 12,
-    backgroundColor: '#0a0a0f', borderRadius: 10, marginBottom: 8,
-    borderWidth: 1, borderColor: '#2a2a3e',
-  },
-  reelTakeSelected: { borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.08)' },
-  checkCircle: {
-    width: 28, height: 28, borderRadius: 14, borderWidth: 2,
-    borderColor: '#374151', alignItems: 'center', justifyContent: 'center',
-  },
-  checkCircleActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
-  checkNum: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  reelTakeName: { fontSize: 15, fontWeight: '500', color: '#fff' },
-  reelTakeMeta: { fontSize: 12, color: '#6b7280' },
+  reelTakeItem: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: C.ink, borderRadius: RADIUS.md, marginBottom: 8, borderWidth: 1, borderColor: C.line },
+  reelTakeSelected: { borderColor: C.violet, backgroundColor: tint(C.violet, 0.1) },
+  checkCircle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#3A3666', alignItems: 'center', justifyContent: 'center' },
+  checkCircleActive: { backgroundColor: C.violet, borderColor: C.violet },
+  checkNum: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  reelTakeName: { fontSize: 15, fontWeight: '600', color: C.text },
+  reelTakeMeta: { fontSize: 12, color: C.muted },
   reorderBtns: { gap: 2 },
-  errorBanner: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderBottomWidth: 1, borderBottomColor: 'rgba(245, 158, 11, 0.2)',
-  },
-  errorBannerText: { fontSize: 13, color: '#f59e0b', fontWeight: '500' },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 9, marginHorizontal: 18, marginBottom: 8, borderRadius: RADIUS.md, backgroundColor: tint(C.warning, 0.1), borderWidth: 1, borderColor: tint(C.warning, 0.25) },
+  errorBannerText: { fontSize: 13, color: C.warning, fontWeight: '600' },
 
   // Script material — picker row, character chips, on-screen script.
-  scriptPickerRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14,
-    marginBottom: 12, borderWidth: 1, borderColor: '#2a2a3e',
-  },
-  scriptPickerLabel: { fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.4 },
-  scriptPickerTitle: { fontSize: 15, fontWeight: '600', color: '#fff', marginTop: 2 },
-  scriptPickerBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#6366f1', paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 10,
-  },
-  scriptPickerBtnText: { fontSize: 13, fontWeight: '600', color: '#fff' },
+  scriptPickerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, ...panel, padding: 14, marginBottom: 12 },
+  scriptPickerLabel: { ...TYPE.label, fontSize: 10 },
+  scriptPickerTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginTop: 3 },
+  scriptPickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.violet, paddingHorizontal: 12, paddingVertical: 9, borderRadius: RADIUS.pill },
+  scriptPickerBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
   scriptClearBtn: { paddingLeft: 4 },
   characterChips: { marginBottom: 12 },
-  charChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: '#1a1a2e', borderWidth: 1, borderColor: '#2a2a3e',
-    marginRight: 8,
-  },
-  charChipActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
-  charChipText: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
-  charChipTextActive: { color: '#fff', fontWeight: '700' },
-  scriptPanel: {
-    backgroundColor: '#0f0f1a', borderRadius: 12, marginBottom: 16,
-    borderWidth: 1, borderColor: '#2a2a3e', overflow: 'hidden',
-  },
+  charChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.pill, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, marginRight: 8 },
+  charChipActive: { backgroundColor: tint(C.violet, 0.22), borderColor: C.violet },
+  charChipText: { fontSize: 13, color: C.muted, fontWeight: '600' },
+  charChipTextActive: { color: C.text, fontWeight: '700' },
+  scriptPanel: { backgroundColor: C.ink, borderRadius: RADIUS.lg, marginBottom: 16, borderWidth: 1, borderColor: tint(C.violet, 0.22), overflow: 'hidden' },
   scriptScroll: { maxHeight: 220, padding: 12 },
-  scriptLine: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, marginBottom: 4 },
-  scriptLineActive: { backgroundColor: 'rgba(99, 102, 241, 0.15)', borderLeftWidth: 3, borderLeftColor: '#6366f1' },
-  scriptLineChar: { fontSize: 11, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-  scriptLineCharActive: { color: '#818cf8' },
-  scriptLineText: { fontSize: 14, color: '#d1d5db', lineHeight: 20 },
-  scriptLineTextActive: { color: '#fff', fontWeight: '500' },
-  scriptLineDirection: { fontStyle: 'italic', color: '#6b7280' },
-  scriptNavRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 10, borderTopWidth: 1, borderTopColor: '#2a2a3e', backgroundColor: '#151520',
-  },
-  scriptNavBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 6,
-  },
-  scriptNavText: { fontSize: 13, color: '#fff', fontWeight: '600' },
-  scriptNavCount: { fontSize: 12, color: '#9ca3af' },
-  scriptPickerItem: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14, marginBottom: 8,
-    borderWidth: 1, borderColor: '#2a2a3e',
-  },
-  scriptPickerItemTitle: { fontSize: 15, fontWeight: '600', color: '#fff' },
-  scriptPickerItemMeta: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  scriptLine: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, marginBottom: 4 },
+  scriptLineActive: { backgroundColor: tint(C.violet, 0.15), borderLeftWidth: 3, borderLeftColor: C.violet },
+  scriptLineChar: { fontSize: 11, fontWeight: '800', color: C.dim, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 },
+  scriptLineCharActive: { color: C.violetSoft },
+  scriptLineText: { fontSize: 14, color: '#D6D3F0', lineHeight: 20 },
+  scriptLineTextActive: { color: C.text, fontWeight: '600' },
+  scriptLineDirection: { fontStyle: 'italic', color: C.dim },
+  scriptNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.surface },
+  scriptNavBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6 },
+  scriptNavText: { fontSize: 13, color: C.text, fontWeight: '700' },
+  scriptNavCount: { fontSize: 12, color: C.muted, fontVariant: ['tabular-nums'] },
+  scriptPickerItem: { flexDirection: 'row', alignItems: 'center', ...panel, borderRadius: RADIUS.md, padding: 14, marginBottom: 8 },
+  scriptPickerItemTitle: { fontSize: 15, fontWeight: '700', color: C.text },
+  scriptPickerItemMeta: { ...TYPE.caption, marginTop: 2 },
 });
