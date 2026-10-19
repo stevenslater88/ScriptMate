@@ -35,7 +35,7 @@ export const getBuildInfo = (): BuildInfoRow[] => {
     __DEV__
       ? { key: 'jsBundle', label: 'Environment', value: 'Development (debug bundle)' }
       : { key: 'jsBundle', label: 'Environment', value: 'Release bundle', note: 'Preview and production builds cannot be told apart' },
-    { key: 'platform', label: 'Platform', value: Platform.OS === 'web' ? 'web' : `${Platform.OS} ${val(Platform.Version)}` },
+    { key: 'platform', label: isAndroid ? 'Android API level' : 'Platform', value: Platform.OS === 'web' ? 'web' : `${Platform.OS} ${val(Platform.Version)}` },
   ];
 };
 
