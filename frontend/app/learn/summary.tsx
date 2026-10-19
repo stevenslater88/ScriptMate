@@ -79,7 +79,7 @@ export default function LearnSummaryScreen() {
     return (
       <SafeAreaView style={styles.root} testID="learn-summary-empty">
         <View style={styles.centerBox}>
-          <Ionicons name="documents-outline" size={40} color="#9ca3af" />
+          <Ionicons name="documents-outline" size={40} color="#A19DC6" />
           <Text style={styles.emptyTitle}>No sessions yet</Text>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -109,7 +109,7 @@ export default function LearnSummaryScreen() {
           style={styles.iconButton}
           testID="learn-summary-close"
         >
-          <Ionicons name="close" size={24} color="#e5e7eb" />
+          <Ionicons name="close" size={24} color="#F4F3FF" />
         </TouchableOpacity>
         <Text style={styles.topTitle}>Session summary</Text>
         <View style={styles.iconButton} />
@@ -117,7 +117,7 @@ export default function LearnSummaryScreen() {
 
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.hero}>
-          <Ionicons name="trophy" size={40} color="#22d3ee" />
+          <Ionicons name="trophy" size={40} color="#62E0FF" />
           <Text style={styles.heroTitle}>Great work</Text>
           <Text style={styles.heroSubtitle} numberOfLines={2}>{scriptTitle}</Text>
         </View>
@@ -150,7 +150,7 @@ export default function LearnSummaryScreen() {
           onPress={() => router.replace(`/learn?scriptId=${encodeURIComponent(session.scriptId)}`)}
           testID="learn-summary-again"
         >
-          <Ionicons name="refresh" size={18} color="#0a0a0f" />
+          <Ionicons name="refresh" size={18} color="#0B0A1A" />
           <Text style={styles.primaryButtonText}>Practice again</Text>
         </TouchableOpacity>
       </View>
@@ -184,37 +184,37 @@ function OverallStat({ label, value }: { label: string; value: number }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0a0a0f' },
+  root: { flex: 1, backgroundColor: '#0B0A1A' },
   centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   topBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 8, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#1f2937',
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#1C1938',
   },
-  topTitle: { color: '#e5e7eb', fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
+  topTitle: { color: '#F4F3FF', fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
   iconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   body: { padding: 20, gap: 20, paddingBottom: 40 },
   hero: { alignItems: 'center', gap: 6, paddingVertical: 16 },
-  heroTitle: { color: '#f3f4f6', fontSize: 26, fontWeight: '700' },
-  heroSubtitle: { color: '#9ca3af', fontSize: 14 },
+  heroTitle: { color: '#F4F3FF', fontSize: 26, fontWeight: '700' },
+  heroSubtitle: { color: '#A19DC6', fontSize: 14 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   statCard: {
     width: '48%', padding: 14, borderRadius: 12,
-    backgroundColor: '#111827', borderWidth: 1, borderColor: '#1f2937',
+    backgroundColor: '#14122A', borderWidth: 1, borderColor: '#1C1938',
   },
-  statValue: { color: '#f3f4f6', fontSize: 24, fontWeight: '700' },
-  statLabel: { color: '#9ca3af', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
-  overallCard: { padding: 16, borderRadius: 12, backgroundColor: '#111827', borderWidth: 1, borderColor: '#1f2937', gap: 10 },
-  overallTitle: { color: '#e5e7eb', fontSize: 14, fontWeight: '700' },
+  statValue: { color: '#F4F3FF', fontSize: 24, fontWeight: '700' },
+  statLabel: { color: '#A19DC6', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
+  overallCard: { padding: 16, borderRadius: 12, backgroundColor: '#14122A', borderWidth: 1, borderColor: '#1C1938', gap: 10 },
+  overallTitle: { color: '#F4F3FF', fontSize: 14, fontWeight: '700' },
   overallRow: { flexDirection: 'row', gap: 8 },
   overallStat: { flex: 1, alignItems: 'center' },
-  overallStatValue: { color: '#f3f4f6', fontSize: 20, fontWeight: '700' },
-  overallStatLabel: { color: '#9ca3af', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
-  footer: { padding: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#1f2937' },
+  overallStatValue: { color: '#F4F3FF', fontSize: 20, fontWeight: '700' },
+  overallStatLabel: { color: '#A19DC6', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+  footer: { padding: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#1C1938' },
   primaryButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 14, borderRadius: 12, backgroundColor: '#22d3ee',
+    paddingVertical: 14, borderRadius: 12, backgroundColor: '#7C5CFF',
   },
-  primaryButtonText: { color: '#0a0a0f', fontSize: 16, fontWeight: '700' },
-  emptyTitle: { color: '#e5e7eb', fontSize: 18, fontWeight: '700' },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  emptyTitle: { color: '#F4F3FF', fontSize: 18, fontWeight: '700' },
 });

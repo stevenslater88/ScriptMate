@@ -224,7 +224,7 @@ export default function LearnHubScreen() {
     return (
       <SafeAreaView style={styles.root} testID="learn-hub-missing-script">
         <View style={styles.centerBox}>
-          <Ionicons name="alert-circle" size={40} color="#f59e0b" />
+          <Ionicons name="alert-circle" size={40} color="#FFC37A" />
           <Text style={styles.emptyTitle}>Script not found</Text>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -247,7 +247,7 @@ export default function LearnHubScreen() {
           testID="learn-hub-close"
           accessibilityLabel="Close Learn"
         >
-          <Ionicons name="close" size={24} color="#e5e7eb" />
+          <Ionicons name="close" size={24} color="#F4F3FF" />
         </TouchableOpacity>
         <Text style={styles.topTitle} numberOfLines={1}>Learn</Text>
         <View style={styles.iconButton} />
@@ -306,7 +306,7 @@ export default function LearnHubScreen() {
             <Ionicons
               name="library"
               size={16}
-              color={mode === 'full' ? '#0a0a0f' : '#e5e7eb'}
+              color={mode === 'full' ? '#fff' : '#F4F3FF'}
             />
             <Text
               style={[
@@ -335,7 +335,7 @@ export default function LearnHubScreen() {
             <Ionicons
               name="film"
               size={16}
-              color={mode === 'scene' ? '#0a0a0f' : '#e5e7eb'}
+              color={mode === 'scene' ? '#fff' : '#F4F3FF'}
             />
             <Text
               style={[
@@ -354,7 +354,7 @@ export default function LearnHubScreen() {
             <Ionicons
               name="pulse"
               size={16}
-              color={mode === 'weak' ? '#0a0a0f' : '#e5e7eb'}
+              color={mode === 'weak' ? '#fff' : '#F4F3FF'}
             />
             <Text
               style={[
@@ -404,7 +404,7 @@ export default function LearnHubScreen() {
         */}
         {mode === 'weak' && items.length > 0 && progress.weak === 0 && (
           <View style={styles.emptyStateCard} testID="learn-hub-weak-empty">
-            <Ionicons name="checkmark-circle-outline" size={22} color="#22d3ee" />
+            <Ionicons name="checkmark-circle-outline" size={22} color="#62E0FF" />
             <Text style={styles.emptyStateTitle}>No weak lines yet</Text>
             <Text style={styles.emptyStateBody}>
               Lines become weak after repeated missed attempts. Practice
@@ -414,7 +414,7 @@ export default function LearnHubScreen() {
         )}
         {mode === 'scene' && availableScenes.length === 0 && (
           <View style={styles.emptyStateCard} testID="learn-hub-scene-empty">
-            <Ionicons name="film-outline" size={22} color="#a78bfa" />
+            <Ionicons name="film-outline" size={22} color="#A993FF" />
             <Text style={styles.emptyStateTitle}>No scenes to practice</Text>
             <Text style={styles.emptyStateBody}>
               This character doesn't have any lines in a recognised
@@ -439,7 +439,7 @@ export default function LearnHubScreen() {
 
         {!isModeEmpty && (
           <View style={styles.selectionHint} testID="learn-hub-selection-hint">
-            <Ionicons name="information-circle-outline" size={16} color="#9ca3af" />
+            <Ionicons name="information-circle-outline" size={16} color="#A19DC6" />
             <Text style={styles.selectionHintText}>
               {filteredItems.length} line
               {filteredItems.length === 1 ? '' : 's'} in this session
@@ -455,7 +455,7 @@ export default function LearnHubScreen() {
             testID="learn-hub-resume-banner"
           >
             <View style={styles.resumeHeader}>
-              <Ionicons name="bookmark" size={16} color="#22d3ee" />
+              <Ionicons name="bookmark" size={16} color="#62E0FF" />
               <Text style={styles.resumeTitle}>Resume your session?</Text>
             </View>
             <Text style={styles.resumeSubtitle} testID="learn-hub-resume-subtitle">
@@ -470,7 +470,7 @@ export default function LearnHubScreen() {
                 onPress={handleStartAgain}
                 testID="learn-hub-start-again"
               >
-                <Ionicons name="refresh" size={18} color="#e5e7eb" />
+                <Ionicons name="refresh" size={18} color="#F4F3FF" />
                 <Text style={styles.resumeStartAgainText}>Start again</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -478,7 +478,7 @@ export default function LearnHubScreen() {
                 onPress={handleResume}
                 testID="learn-hub-resume"
               >
-                <Ionicons name="play" size={18} color="#0a0a0f" />
+                <Ionicons name="play" size={18} color="#fff" />
                 <Text style={styles.primaryButtonText}>Resume</Text>
               </TouchableOpacity>
             </View>
@@ -489,7 +489,7 @@ export default function LearnHubScreen() {
             onPress={() => setMode('full')}
             testID="learn-hub-back-to-full"
           >
-            <Ionicons name="library" size={20} color="#0a0a0f" />
+            <Ionicons name="library" size={20} color="#0B0A1A" />
             <Text style={styles.primaryButtonText}>Back to Full script</Text>
           </TouchableOpacity>
         ) : (
@@ -502,7 +502,7 @@ export default function LearnHubScreen() {
             disabled={filteredItems.length === 0 || !activeSessionLoaded}
             testID="learn-hub-start"
           >
-            <Ionicons name="play" size={20} color="#0a0a0f" />
+            <Ionicons name="play" size={20} color="#fff" />
             <Text style={styles.primaryButtonText}>Start learning</Text>
           </TouchableOpacity>
         )}
@@ -521,7 +521,7 @@ function ProgressStat({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0a0a0f' },
+  root: { flex: 1, backgroundColor: '#0B0A1A' },
   centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   topBar: {
     flexDirection: 'row',
@@ -530,28 +530,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#1f2937',
+    borderBottomColor: '#1C1938',
   },
-  topTitle: { color: '#e5e7eb', fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
+  topTitle: { color: '#F4F3FF', fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
   iconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   body: { padding: 20, gap: 18, paddingBottom: 40 },
-  scriptTitle: { color: '#f3f4f6', fontSize: 22, fontWeight: '700' },
-  sectionLabel: { color: '#9ca3af', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6 },
+  scriptTitle: { color: '#F4F3FF', fontSize: 22, fontWeight: '700' },
+  sectionLabel: { color: '#A19DC6', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#111827',
+    backgroundColor: '#14122A',
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: '#1C1938',
   },
-  chipActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
-  chipText: { color: '#e5e7eb', fontSize: 15, fontWeight: '600' },
-  chipTextActive: { color: '#0a0a0f' },
-  chipSub: { color: '#9ca3af', fontSize: 11, marginTop: 2 },
-  chipSubActive: { color: '#0a0a0f' },
-  hint: { color: '#9ca3af', fontSize: 13 },
+  chipActive: { backgroundColor: '#7C5CFF', borderColor: '#7C5CFF' },
+  chipText: { color: '#F4F3FF', fontSize: 15, fontWeight: '600' },
+  chipTextActive: { color: '#0B0A1A' },
+  chipSub: { color: '#A19DC6', fontSize: 11, marginTop: 2 },
+  chipSubActive: { color: '#0B0A1A' },
+  hint: { color: '#A19DC6', fontSize: 13 },
   modeChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -559,60 +559,60 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#111827',
+    backgroundColor: '#14122A',
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: '#1C1938',
   },
-  modeChipActive: { backgroundColor: '#22d3ee', borderColor: '#22d3ee' },
-  modeChipText: { color: '#e5e7eb', fontSize: 14, fontWeight: '600' },
-  modeChipTextActive: { color: '#0a0a0f' },
+  modeChipActive: { backgroundColor: '#7C5CFF', borderColor: '#7C5CFF' },
+  modeChipText: { color: '#F4F3FF', fontSize: 14, fontWeight: '600' },
+  modeChipTextActive: { color: '#fff' },
   scenePickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: -6 },
   sceneChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: '#111827',
+    backgroundColor: '#14122A',
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: '#1C1938',
   },
-  sceneChipActive: { backgroundColor: '#a78bfa', borderColor: '#a78bfa' },
-  sceneChipText: { color: '#e5e7eb', fontSize: 13, fontWeight: '600' },
-  sceneChipTextActive: { color: '#0a0a0f' },
+  sceneChipActive: { backgroundColor: '#A993FF', borderColor: '#A993FF' },
+  sceneChipText: { color: '#F4F3FF', fontSize: 13, fontWeight: '600' },
+  sceneChipTextActive: { color: '#0B0A1A' },
   progressCard: {
     padding: 16,
     borderRadius: 14,
-    backgroundColor: '#111827',
+    backgroundColor: '#14122A',
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: '#1C1938',
     gap: 10,
   },
-  progressTitle: { color: '#e5e7eb', fontSize: 14, fontWeight: '700' },
+  progressTitle: { color: '#F4F3FF', fontSize: 14, fontWeight: '700' },
   progressRow: { flexDirection: 'row', gap: 12 },
   progressStat: { flex: 1, alignItems: 'center' },
-  progressStatValue: { color: '#f3f4f6', fontSize: 22, fontWeight: '700' },
-  progressStatLabel: { color: '#9ca3af', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+  progressStatValue: { color: '#F4F3FF', fontSize: 22, fontWeight: '700' },
+  progressStatLabel: { color: '#A19DC6', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
   selectionHint: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-  selectionHintText: { color: '#9ca3af', fontSize: 13 },
+  selectionHintText: { color: '#A19DC6', fontSize: 13 },
   emptyStateCard: {
     padding: 16,
     borderRadius: 14,
-    backgroundColor: '#111827',
+    backgroundColor: '#14122A',
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: '#1C1938',
     gap: 8,
     alignItems: 'flex-start',
   },
   emptyStateTitle: {
-    color: '#f3f4f6',
+    color: '#F4F3FF',
     fontSize: 16,
     fontWeight: '700',
   },
   emptyStateBody: {
-    color: '#9ca3af',
+    color: '#A19DC6',
     fontSize: 13,
     lineHeight: 18,
   },
-  footer: { padding: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#1f2937' },
+  footer: { padding: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#1C1938' },
   primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -620,20 +620,20 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#22d3ee',
+    backgroundColor: '#7C5CFF',
   },
   primaryButtonDisabled: { opacity: 0.4 },
-  primaryButtonText: { color: '#0a0a0f', fontSize: 16, fontWeight: '700' },
-  emptyTitle: { color: '#e5e7eb', fontSize: 18, fontWeight: '700' },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  emptyTitle: { color: '#F4F3FF', fontSize: 18, fontWeight: '700' },
   // Resume UX (2026-02) — offered when a valid in-flight session exists
   // for the same script + character. Otherwise the plain Start Learning
   // button is rendered.
   resumeBanner: {
     padding: 14,
     borderRadius: 12,
-    backgroundColor: '#111827',
+    backgroundColor: '#14122A',
     borderWidth: 1,
-    borderColor: '#22d3ee',
+    borderColor: '#62E0FF',
     gap: 10,
   },
   resumeHeader: {
@@ -642,12 +642,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   resumeTitle: {
-    color: '#e5e7eb',
+    color: '#F4F3FF',
     fontSize: 15,
     fontWeight: '700',
   },
   resumeSubtitle: {
-    color: '#9ca3af',
+    color: '#A19DC6',
     fontSize: 13,
     lineHeight: 18,
   },
@@ -662,10 +662,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#2A2650',
   },
   resumeStartAgainText: {
-    color: '#e5e7eb',
+    color: '#F4F3FF',
     fontSize: 15,
     fontWeight: '700',
   },

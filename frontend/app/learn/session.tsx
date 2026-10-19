@@ -206,7 +206,7 @@ export default function LearnSessionScreen() {
     return (
       <SafeAreaView style={styles.root} testID="learn-session-loading">
         <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color="#22d3ee" />
+          <ActivityIndicator size="large" color="#62E0FF" />
         </View>
       </SafeAreaView>
     );
@@ -216,7 +216,7 @@ export default function LearnSessionScreen() {
     return (
       <SafeAreaView style={styles.root} testID="learn-session-none">
         <View style={styles.centerBox}>
-          <Ionicons name="close-circle" size={40} color="#ef4444" />
+          <Ionicons name="close-circle" size={40} color="#FF5C7A" />
           <Text style={styles.emptyTitle}>No active session</Text>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -234,7 +234,7 @@ export default function LearnSessionScreen() {
     return (
       <SafeAreaView style={styles.root} testID="learn-session-complete">
         <View style={styles.centerBox}>
-          <Ionicons name="checkmark-circle" size={64} color="#10b981" />
+          <Ionicons name="checkmark-circle" size={64} color="#34D399" />
           <Text style={styles.emptyTitle}>Session complete</Text>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -258,7 +258,7 @@ export default function LearnSessionScreen() {
           onPress={handleQuit}
           testID="learn-session-quit"
         >
-          <Ionicons name="close" size={22} color="#e5e7eb" />
+          <Ionicons name="close" size={22} color="#F4F3FF" />
         </TouchableOpacity>
         <Text style={styles.progressText} testID="learn-session-progress">
           Line {session.currentIndex + 1} of {items.length}
@@ -269,22 +269,44 @@ export default function LearnSessionScreen() {
           testID="learn-session-restart"
           accessibilityLabel="Restart session"
         >
-          <Ionicons name="refresh" size={22} color="#e5e7eb" />
+          <Ionicons name="refresh" size={22} color="#F4F3FF" />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.progressTrack}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              width: `${Math.round(
-                ((session.currentIndex + (revealed ? 1 : 0)) / items.length) * 100,
-              )}%`,
-            },
-          ]}
-        />
-      </View>
+      {items.length <= 40 ? (
+        // Segmented progress: earlier cards coloured by their last self-assessment.
+        <View style={styles.segmentRow} testID="learn-session-segments">
+          {items.map((it, i) => (
+            <View
+              key={it.record.id ?? i}
+              style={[
+                styles.segment,
+                i === session.currentIndex
+                  ? styles.segmentCurrent
+                  : i < session.currentIndex
+                    ? segmentStyle(it.record.lastResult)
+                    : null,
+              ]}
+            />
+          ))}
+        </View>
+      ) : (
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: `${Math.round(
+                  ((session.currentIndex + (revealed ? 1 : 0)) / items.length) * 100,
+                )}%`,
+              },
+            ]}
+          />
+        </View>
+      )}
+      <Text style={styles.sessionTally} testID="learn-session-tally">
+        {session.successes} got it · {session.misses} missed this session
+      </Text>
 
       <ScrollView contentContainerStyle={styles.body}>
         {/* Cue */}
@@ -320,7 +342,7 @@ export default function LearnSessionScreen() {
             // effect is preserved: masked words are rendered as a run of
             // underscores; at difficulty 4 the first letter is kept as a
             // hint (previously invisible because color+bg were both
-            // #0a0a0f — fixed by rendering the hint character
+            // #0B0A1A — fixed by rendering the hint character
             // in-line inside the same Text).
             <Text
               style={styles.lineText}
@@ -349,7 +371,7 @@ export default function LearnSessionScreen() {
           </View>
           {currentItem.record.isWeak ? (
             <View style={[styles.masteryChip, styles.weakChip]} testID="learn-session-weak">
-              <Ionicons name="pulse" size={12} color="#0a0a0f" />
+              <Ionicons name="pulse" size={12} color="#0B0A1A" />
               <Text style={styles.masteryChipText}>Weak</Text>
             </View>
           ) : null}
@@ -390,7 +412,7 @@ export default function LearnSessionScreen() {
             onPress={() => setRevealed(true)}
             testID="learn-session-reveal"
           >
-            <Ionicons name="eye" size={22} color="#0a0a0f" />
+            <Ionicons name="eye" size={22} color="#fff" />
             <Text style={styles.revealButtonText}>Reveal line</Text>
           </TouchableOpacity>
         ) : (
@@ -400,24 +422,24 @@ export default function LearnSessionScreen() {
               onPress={() => handleAssessment('missed')}
               testID="learn-session-assess-missed"
             >
-              <Ionicons name="close" size={18} color="#fff" />
-              <Text style={styles.assessButtonText}>Missed</Text>
+              <Ionicons name="close" size={18} color="#FF8CA2" />
+              <Text style={[styles.assessButtonText, { color: '#FF8CA2' }]}>Missed</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.assessButton, styles.assessAlmost]}
               onPress={() => handleAssessment('almost')}
               testID="learn-session-assess-almost"
             >
-              <Ionicons name="remove" size={18} color="#0a0a0f" />
-              <Text style={[styles.assessButtonText, { color: '#0a0a0f' }]}>Almost</Text>
+              <Ionicons name="remove" size={18} color="#FFC37A" />
+              <Text style={[styles.assessButtonText, { color: '#FFC37A' }]}>Almost</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.assessButton, styles.assessGot]}
               onPress={() => handleAssessment('got_it')}
               testID="learn-session-assess-got"
             >
-              <Ionicons name="checkmark" size={18} color="#0a0a0f" />
-              <Text style={[styles.assessButtonText, { color: '#0a0a0f' }]}>Got it</Text>
+              <Ionicons name="checkmark" size={18} color="#34D399" />
+              <Text style={[styles.assessButtonText, { color: '#34D399' }]}>Got it</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -431,12 +453,12 @@ export default function LearnSessionScreen() {
             <Ionicons
               name="chevron-back"
               size={18}
-              color={session.currentIndex === 0 ? '#4b5563' : '#e5e7eb'}
+              color={session.currentIndex === 0 ? '#6E6A95' : '#F4F3FF'}
             />
             <Text
               style={[
                 styles.navButtonText,
-                session.currentIndex === 0 && { color: '#4b5563' },
+                session.currentIndex === 0 && { color: '#6E6A95' },
               ]}
             >
               Previous
@@ -450,7 +472,7 @@ export default function LearnSessionScreen() {
             <Ionicons
               name={session.state === 'paused' ? 'play' : 'pause'}
               size={16}
-              color="#e5e7eb"
+              color="#F4F3FF"
             />
             <Text style={styles.navButtonText}>
               {session.state === 'paused' ? 'Resume' : 'Pause'}
@@ -465,7 +487,7 @@ export default function LearnSessionScreen() {
             <Text
               style={[
                 styles.navButtonText,
-                session.currentIndex >= items.length - 1 && { color: '#4b5563' },
+                session.currentIndex >= items.length - 1 && { color: '#6E6A95' },
               ]}
             >
               Next
@@ -474,7 +496,7 @@ export default function LearnSessionScreen() {
               name="chevron-forward"
               size={18}
               color={
-                session.currentIndex >= items.length - 1 ? '#4b5563' : '#e5e7eb'
+                session.currentIndex >= items.length - 1 ? '#6E6A95' : '#F4F3FF'
               }
             />
           </TouchableOpacity>
@@ -540,17 +562,24 @@ function masteryLabel(it: LearnItem): string {
   return m.charAt(0).toUpperCase() + m.slice(1);
 }
 
+function segmentStyle(r: string | null | undefined) {
+  if (r === 'got_it') return { backgroundColor: '#34D399' };
+  if (r === 'almost') return { backgroundColor: '#FFC37A' };
+  if (r === 'missed') return { backgroundColor: '#FF5C7A' };
+  return { backgroundColor: '#3A3566' };
+}
+
 function masteryChipStyle(it: LearnItem) {
   const m = it.record.masteryLevel;
-  if (m === 'mastered') return { backgroundColor: '#10b981' };
-  if (m === 'strong') return { backgroundColor: '#22d3ee' };
-  if (m === 'developing') return { backgroundColor: '#a78bfa' };
-  if (m === 'learning') return { backgroundColor: '#f59e0b' };
-  return { backgroundColor: '#4b5563' };
+  if (m === 'mastered') return { backgroundColor: '#34D399' };
+  if (m === 'strong') return { backgroundColor: '#62E0FF' };
+  if (m === 'developing') return { backgroundColor: '#A993FF' };
+  if (m === 'learning') return { backgroundColor: '#FFC37A' };
+  return { backgroundColor: '#6E6A95' };
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0a0a0f' },
+  root: { flex: 1, backgroundColor: '#0B0A1A' },
   centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   topBar: {
     flexDirection: 'row',
@@ -559,31 +588,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 10,
   },
-  progressText: { color: '#e5e7eb', fontSize: 14, fontWeight: '600' },
-  iconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  progressTrack: { height: 3, backgroundColor: '#1f2937' },
-  progressFill: { height: 3, backgroundColor: '#22d3ee' },
+  progressText: { color: '#F4F3FF', fontSize: 14, fontWeight: '700' },
+  iconButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#14122A', borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
+  segmentRow: { flexDirection: 'row', gap: 3, paddingHorizontal: 16, marginTop: 4 },
+  segment: { flex: 1, height: 5, borderRadius: 3, backgroundColor: '#1C1938' },
+  segmentCurrent: { backgroundColor: '#7C5CFF' },
+  sessionTally: { color: '#A19DC6', fontSize: 11.5, fontWeight: '600', paddingHorizontal: 16, marginTop: 8 },
+  progressTrack: { height: 3, backgroundColor: '#1C1938' },
+  progressFill: { height: 3, backgroundColor: '#62E0FF' },
   body: { padding: 20, gap: 16, paddingBottom: 40 },
-  cueCard: {
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#111827',
-    borderLeftWidth: 3,
-    borderLeftColor: '#a78bfa',
-  },
-  cueLabel: { color: '#a78bfa', fontSize: 12, fontWeight: '700', letterSpacing: 0.6 },
-  cueText: { color: '#e5e7eb', fontSize: 16, marginTop: 6, lineHeight: 22 },
-  cueEmpty: { color: '#9ca3af', fontSize: 14, fontStyle: 'italic' },
-  lineCard: {
-    padding: 18,
-    borderRadius: 14,
-    backgroundColor: '#1f2937',
-    borderWidth: 1,
-    borderColor: '#374151',
-  },
-  lineCharacter: { color: '#22d3ee', fontSize: 12, fontWeight: '700', letterSpacing: 0.6 },
-  lineText: { color: '#f3f4f6', fontSize: 22, lineHeight: 32, marginTop: 8, fontWeight: '500' },
-  cueWordsHint: { color: '#9ca3af', fontSize: 12, marginTop: 10, fontStyle: 'italic' },
+  cueCard: { backgroundColor: '#121A33', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: 'rgba(98,224,255,0.25)' },
+  cueLabel: { color: '#62E0FF', fontSize: 12, fontWeight: '800', letterSpacing: 0.8 },
+  cueText: { color: '#D6D3F2', fontSize: 16, marginTop: 6, lineHeight: 24 },
+  cueEmpty: { color: '#A19DC6', fontSize: 14, fontStyle: 'italic' },
+  lineCard: { backgroundColor: '#1A1740', borderRadius: 22, padding: 20, borderWidth: 1, borderColor: 'rgba(124,92,255,0.45)', minHeight: 160 },
+  lineCharacter: { color: '#A993FF', fontSize: 12, fontWeight: '800', letterSpacing: 0.8 },
+  lineText: { color: '#F4F3FF', fontSize: 22, lineHeight: 33, marginTop: 10, fontWeight: '600' },
+  cueWordsHint: { color: '#A19DC6', fontSize: 12, marginTop: 10, fontStyle: 'italic' },
   metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   masteryChip: {
     flexDirection: 'row',
@@ -593,52 +614,28 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
   },
-  weakChip: { backgroundColor: '#f59e0b' },
-  masteryChipText: { color: '#0a0a0f', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-  difficultyLabel: { color: '#9ca3af', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6 },
+  weakChip: { backgroundColor: '#FFC37A' },
+  masteryChipText: { color: '#0B0A1A', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  difficultyLabel: { color: '#A19DC6', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6 },
   difficultyRow: { flexDirection: 'row', gap: 8 },
-  difficultyPill: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    backgroundColor: '#111827',
-    alignItems: 'center',
-  },
-  difficultyPillActive: { backgroundColor: '#22d3ee', borderColor: '#22d3ee' },
-  difficultyPillText: { color: '#e5e7eb', fontSize: 15, fontWeight: '700' },
-  difficultyPillTextActive: { color: '#0a0a0f' },
-  difficultyHint: { color: '#9ca3af', fontSize: 12, fontStyle: 'italic' },
+  difficultyPill: { flex: 1, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#14122A', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  difficultyPillActive: { backgroundColor: '#7C5CFF', borderColor: '#7C5CFF' },
+  difficultyPillText: { color: '#F4F3FF', fontSize: 15, fontWeight: '700' },
+  difficultyPillTextActive: { color: '#fff' },
+  difficultyHint: { color: '#A19DC6', fontSize: 12, fontStyle: 'italic' },
   footer: {
     padding: 14,
     gap: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#1f2937',
+    borderTopColor: '#1C1938',
   },
-  revealButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#22d3ee',
-  },
-  revealButtonText: { color: '#0a0a0f', fontSize: 16, fontWeight: '700' },
+  revealButton: { height: 54, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#7C5CFF' },
+  revealButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   assessmentRow: { flexDirection: 'row', gap: 8 },
-  assessButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  assessMissed: { backgroundColor: '#ef4444' },
-  assessAlmost: { backgroundColor: '#f59e0b' },
-  assessGot: { backgroundColor: '#10b981' },
+  assessButton: { flex: 1, height: 54, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1 },
+  assessMissed: { backgroundColor: 'rgba(255,92,122,0.12)', borderColor: 'rgba(255,92,122,0.45)' },
+  assessAlmost: { backgroundColor: 'rgba(255,195,122,0.12)', borderColor: 'rgba(255,195,122,0.45)' },
+  assessGot: { backgroundColor: 'rgba(52,211,153,0.14)', borderColor: 'rgba(52,211,153,0.5)' },
   assessButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   navRow: { flexDirection: 'row', gap: 8, justifyContent: 'space-between' },
   navButton: {
@@ -649,11 +646,11 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#111827',
+    backgroundColor: '#14122A',
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: '#1C1938',
   },
-  navButtonText: { color: '#e5e7eb', fontSize: 13, fontWeight: '600' },
+  navButtonText: { color: '#F4F3FF', fontSize: 13, fontWeight: '600' },
   primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -662,8 +659,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 12,
-    backgroundColor: '#22d3ee',
+    backgroundColor: '#7C5CFF',
   },
-  primaryButtonText: { color: '#0a0a0f', fontSize: 16, fontWeight: '700' },
-  emptyTitle: { color: '#e5e7eb', fontSize: 18, fontWeight: '700' },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  emptyTitle: { color: '#F4F3FF', fontSize: 18, fontWeight: '700' },
 });
