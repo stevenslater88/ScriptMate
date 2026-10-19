@@ -24,6 +24,9 @@ import { useScriptStore } from '../store/scriptStore';
 import { DebugLog } from '../services/debugLogService';
 import { API_BASE_URL } from '../services/apiConfig';
 import { getAuthHeader } from '../services/authClient';
+import { LinearGradient } from 'expo-linear-gradient';
+import { C, GRADIENT, RADIUS, TYPE, tint } from '../constants/cinematicTheme';
+import { GradientButton, IconButton, Pill, ScreenGlow } from '../components/cinematic';
 
 const UPLOAD_TIMEOUT = 30000; // 30s for file uploads
 const FILE_OP_TIMEOUT = 15000; // 15s for file system operations
@@ -65,6 +68,9 @@ export default function UploadScreen() {
   const [scriptText, setScriptText] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadMethod, setUploadMethod] = useState<'paste' | 'file'>('paste');
+  // Inline outcome of "Parse with AI" (mirrors the native alerts, which are no-ops on web).
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [savedScript, setSavedScript] = useState<{ id: string; title: string } | null>(null);
   const { createScript } = useScriptStore();
 
   // FORENSIC: Track screen view
@@ -482,6 +488,8 @@ export default function UploadScreen() {
     }
 
     console.log(`[Upload] handleSubmit: title="${title.trim().substring(0, 30)}", textLength=${scriptText.trim().length}`);
+    setSubmitError(null);
+    setSavedScript(null);
     setLoading(true);
     try {
       console.log('[Upload] Calling createScript...');
@@ -489,6 +497,7 @@ export default function UploadScreen() {
       console.log(`[Upload] createScript returned: ${script ? `id=${script.id}` : 'null'}`);
       if (script) {
         DebugLog.functionSuccess('handleSubmit', { scriptId: script.id });
+        setSavedScript({ id: script.id, title: script.title });
         DebugLog.alertShown('Success', 'Script created and parsed successfully!');
         Alert.alert('Success', 'Script created and parsed successfully!', [
           {
@@ -505,6 +514,7 @@ export default function UploadScreen() {
         console.error(`[Upload] createScript returned null, store error: ${storeError}`);
         DebugLog.functionError('handleSubmit', new Error(storeError || 'createScript returned null'));
         DebugLog.alertShown('Save Failed', storeError || 'Could not save script');
+        setSubmitError(storeError || 'Could not save script. Please check your internet connection and try again.');
         Alert.alert(
           'Save Failed',
           storeError || 'Could not save script. Please check your internet connection and try again.'
@@ -527,6 +537,7 @@ export default function UploadScreen() {
         msg = `Upload failed: ${errMsg}`;
       }
       DebugLog.alertShown('Error', msg);
+      setSubmitError(msg);
       Alert.alert('Error', msg);
     } finally {
       setLoading(false);
@@ -558,19 +569,31 @@ Sometimes love isn't enough, Sarah.
 SARAH
 Then I guess this is goodbye.`;
 
+  const methodTab = (key: 'paste' | 'file', icon: any, label: string) => {
+    const active = uploadMethod === key;
+    return (
+      <TouchableOpacity
+        style={[styles.methodButton, active && styles.methodButtonActive]}
+        onPress={() => setUploadMethod(key)}
+        testID={`upload-method-${key}`}
+      >
+        <Ionicons name={icon} size={18} color={active ? '#fff' : C.muted} />
+        <Text style={[styles.methodButtonText, active && styles.methodButtonTextActive]}>{label}</Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenGlow />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={28} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Script</Text>
-          <View style={styles.placeholder} />
+          <IconButton icon="chevron-back" onPress={() => router.back()} testID="upload-back-btn" />
+          <Pill label="Script import" icon="document-text" />
         </View>
 
         <ScrollView
@@ -578,50 +601,23 @@ Then I guess this is goodbye.`;
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          <Text style={styles.headerTitle}>Add Script</Text>
+          <Text style={styles.headerSub}>Paste text or import a file. We'll detect the characters and dialogue for you.</Text>
+
+          {/* What happens next */}
+          <View style={styles.steps} testID="upload-steps">
+            {['Add your script', 'Characters detected', 'Pick your role & rehearse'].map((t, i) => (
+              <View key={t} style={styles.step}>
+                <View style={[styles.stepDot, i === 0 && styles.stepDotActive]}><Text style={styles.stepN}>{i + 1}</Text></View>
+                <Text style={[styles.stepTx, i === 0 && styles.stepTxActive]} numberOfLines={2}>{t}</Text>
+              </View>
+            ))}
+          </View>
+
           {/* Method Toggle */}
           <View style={styles.methodToggle}>
-            <TouchableOpacity
-              style={[
-                styles.methodButton,
-                uploadMethod === 'paste' && styles.methodButtonActive,
-              ]}
-              onPress={() => setUploadMethod('paste')}
-            >
-              <Ionicons
-                name="create-outline"
-                size={20}
-                color={uploadMethod === 'paste' ? '#fff' : '#6b7280'}
-              />
-              <Text
-                style={[
-                  styles.methodButtonText,
-                  uploadMethod === 'paste' && styles.methodButtonTextActive,
-                ]}
-              >
-                Paste Text
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.methodButton,
-                uploadMethod === 'file' && styles.methodButtonActive,
-              ]}
-              onPress={() => setUploadMethod('file')}
-            >
-              <Ionicons
-                name="document-outline"
-                size={20}
-                color={uploadMethod === 'file' ? '#fff' : '#6b7280'}
-              />
-              <Text
-                style={[
-                  styles.methodButtonText,
-                  uploadMethod === 'file' && styles.methodButtonTextActive,
-                ]}
-              >
-                Upload File
-              </Text>
-            </TouchableOpacity>
+            {methodTab('paste', 'create-outline', 'Paste Text')}
+            {methodTab('file', 'document-outline', 'Upload File')}
           </View>
 
           {/* Title Input */}
@@ -632,7 +628,8 @@ Then I guess this is goodbye.`;
               value={title}
               onChangeText={setTitle}
               placeholder="Enter script title..."
-              placeholderTextColor="#4a4a5e"
+              placeholderTextColor={C.dim}
+              testID="upload-title-input"
             />
           </View>
 
@@ -645,6 +642,7 @@ Then I guess this is goodbye.`;
                   <TouchableOpacity
                     onPress={() => setScriptText(sampleScript)}
                     style={styles.sampleButton}
+                    testID="upload-use-sample-btn"
                   >
                     <Text style={styles.sampleButtonText}>Use Sample</Text>
                   </TouchableOpacity>
@@ -653,16 +651,20 @@ Then I guess this is goodbye.`;
                   style={styles.scriptInput}
                   value={scriptText}
                   onChangeText={setScriptText}
-                  placeholder="Paste your script here...\n\nFormat:\nCHARACTER NAME\nDialogue text\n\n(Stage directions in parentheses)"
-                  placeholderTextColor="#4a4a5e"
+                  placeholder={'Paste your script here...\n\nFormat:\nCHARACTER NAME\nDialogue text\n\n(Stage directions in parentheses)'}
+                  placeholderTextColor={C.dim}
                   multiline
                   textAlignVertical="top"
+                  testID="upload-script-input"
                 />
               </View>
 
               {/* Format Guide */}
               <View style={styles.formatGuide}>
-                <Text style={styles.formatTitle}>Script Format Tips</Text>
+                <View style={styles.formatHead}>
+                  <Ionicons name="information-circle" size={16} color={C.violetSoft} />
+                  <Text style={styles.formatTitle}>Script Format Tips</Text>
+                </View>
                 <Text style={styles.formatText}>
                   • Character names in ALL CAPS on their own line{"\n"}
                   • Dialogue on the following lines{"\n"}
@@ -670,22 +672,55 @@ Then I guess this is goodbye.`;
                 </Text>
               </View>
 
+              {/* Outcome */}
+              {submitError ? (
+                <View style={styles.errorBox} testID="upload-error-banner">
+                  <Ionicons name="alert-circle" size={20} color={C.danger} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.errorTitle}>Couldn't save this script</Text>
+                    <Text style={styles.errorText}>{submitError}</Text>
+                    <Text style={styles.errorHint}>Your text is still here. Check your connection and try again, or use Smart Parse V2 to review it first.</Text>
+                  </View>
+                </View>
+              ) : null}
+              {savedScript ? (
+                <View style={styles.successBox} testID="upload-success-banner">
+                  <View style={styles.successHead}>
+                    <Ionicons name="checkmark-circle" size={20} color={C.success} />
+                    <Text style={styles.successTitle}>Script saved</Text>
+                  </View>
+                  <Text style={styles.successText}>Next: open "{savedScript.title}", choose your character and start rehearsing.</Text>
+                  <GradientButton
+                    label="Open script"
+                    icon="arrow-forward"
+                    onPress={() => router.replace(`/script/${savedScript.id}`)}
+                    testID="upload-open-saved-btn"
+                    style={{ marginTop: 12 }}
+                  />
+                </View>
+              ) : null}
+
               {/* Submit Buttons */}
               <View style={styles.parseOptions}>
                 <TouchableOpacity
-                  style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                  style={[styles.submitButtonWrap, loading && styles.submitButtonDisabled]}
                   onPress={handleSubmit}
                   disabled={loading}
                   testID="parse-ai-btn"
                 >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <Ionicons name="sparkles" size={20} color="#fff" />
-                      <Text style={styles.submitButtonText}>Parse with AI</Text>
-                    </>
-                  )}
+                  <LinearGradient colors={GRADIENT.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.submitButton}>
+                    {loading ? (
+                      <>
+                        <ActivityIndicator color="#fff" />
+                        <Text style={styles.submitButtonText}>Saving & parsing…</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="sparkles" size={19} color="#fff" />
+                        <Text style={styles.submitButtonText}>{submitError ? 'Try again' : 'Parse with AI'}</Text>
+                      </>
+                    )}
+                  </LinearGradient>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.smartParseButton, (!title.trim() || !scriptText.trim()) && styles.submitButtonDisabled]}
@@ -720,8 +755,8 @@ Then I guess this is goodbye.`;
                   disabled={!title.trim() || !scriptText.trim()}
                   testID="parse-smart-btn"
                 >
-                  <Ionicons name="flash" size={20} color="#fff" />
-                  <Text style={styles.submitButtonText}>Smart Parse V2</Text>
+                  <Ionicons name="flash" size={19} color={C.cyan} />
+                  <Text style={styles.smartParseText}>Smart Parse V2 · review first</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -732,14 +767,19 @@ Then I guess this is goodbye.`;
                 style={styles.uploadArea}
                 onPress={handleFilePick}
                 disabled={loading}
+                testID="upload-file-area"
               >
                 {loading ? (
-                  <ActivityIndicator size="large" color="#6366f1" />
+                  <>
+                    <ActivityIndicator size="large" color={C.violetSoft} />
+                    <Text style={styles.uploadTitle}>Reading your file…</Text>
+                    <Text style={styles.uploadSubtitle}>Extracting text and detecting characters</Text>
+                  </>
                 ) : (
                   <>
-                    <View style={styles.uploadIcon}>
-                      <Ionicons name="cloud-upload" size={48} color="#6366f1" />
-                    </View>
+                    <LinearGradient colors={GRADIENT.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.uploadIcon}>
+                      <Ionicons name="cloud-upload" size={30} color="#fff" />
+                    </LinearGradient>
                     <Text style={styles.uploadTitle}>Tap to Upload</Text>
                     <Text style={styles.uploadSubtitle}>
                       Supports PDF, Word (.docx), and text files
@@ -747,6 +787,7 @@ Then I guess this is goodbye.`;
                   </>
                 )}
               </TouchableOpacity>
+              <Text style={styles.fileHint}>After the file is read you'll review the detected lines before saving.</Text>
             </>
           )}
         </ScrollView>
@@ -756,192 +797,54 @@ Then I guess this is goodbye.`;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0a0f',
-  },
-  flex: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  placeholder: {
-    width: 36,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  methodToggle: {
-    flexDirection: 'row',
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 24,
-  },
-  methodButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-    gap: 8,
-  },
-  methodButtonActive: {
-    backgroundColor: '#6366f1',
-  },
-  methodButtonText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#6b7280',
-  },
-  methodButtonTextActive: {
-    color: '#fff',
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#9ca3af',
-    marginBottom: 8,
-  },
-  sampleButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-    borderRadius: 6,
-  },
-  sampleButtonText: {
-    color: '#6366f1',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  titleInput: {
-    backgroundColor: '#1a1a2e',
-    borderWidth: 1,
-    borderColor: '#2a2a3e',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#fff',
-  },
-  scriptInput: {
-    backgroundColor: '#1a1a2e',
-    borderWidth: 1,
-    borderColor: '#2a2a3e',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: '#fff',
-    minHeight: 240,
-    maxHeight: 400,
-  },
-  formatGuide: {
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)',
-  },
-  formatTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6366f1',
-    marginBottom: 8,
-  },
-  formatText: {
-    fontSize: 13,
-    color: '#9ca3af',
-    lineHeight: 20,
-  },
-  submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#6366f1',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 10,
-    flex: 1,
-  },
-  smartParseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#7c3aed',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 10,
-    flex: 1,
-  },
-  parseOptions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  uploadArea: {
-    backgroundColor: '#1a1a2e',
-    borderWidth: 2,
-    borderColor: '#2a2a3e',
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    paddingVertical: 60,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  uploadIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  uploadTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  uploadSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
+  container: { flex: 1, backgroundColor: C.ink },
+  flex: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 10, paddingBottom: 6 },
+  headerTitle: { ...TYPE.display, fontSize: 26, marginTop: 6 },
+  headerSub: { ...TYPE.caption, fontSize: 13, lineHeight: 19, marginTop: 4 },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 18, paddingBottom: 40 },
+  steps: { flexDirection: 'row', gap: 8, marginTop: 16, marginBottom: 16 },
+  step: { flex: 1, backgroundColor: C.surface, borderRadius: RADIUS.md, borderWidth: 1, borderColor: C.line, padding: 10, gap: 6 },
+  stepDot: { width: 22, height: 22, borderRadius: 11, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' },
+  stepDotActive: { backgroundColor: C.violet },
+  stepN: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  stepTx: { fontSize: 11.5, fontWeight: '600', color: C.muted, lineHeight: 15 },
+  stepTxActive: { color: C.text },
+  methodToggle: { flexDirection: 'row', backgroundColor: C.surface, borderRadius: RADIUS.md, padding: 4, marginBottom: 18, borderWidth: 1, borderColor: C.line },
+  methodButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 42, borderRadius: 11, gap: 7 },
+  methodButtonActive: { backgroundColor: tint(C.violet, 0.28), borderWidth: 1, borderColor: tint(C.violet, 0.55) },
+  methodButtonText: { fontSize: 14, fontWeight: '600', color: C.muted },
+  methodButtonTextActive: { color: '#fff' },
+  inputGroup: { marginBottom: 16 },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  label: { ...TYPE.label, marginBottom: 8 },
+  sampleButton: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: tint(C.violet, 0.14), marginBottom: 8 },
+  sampleButtonText: { color: C.violetSoft, fontSize: 12, fontWeight: '700' },
+  titleInput: { backgroundColor: C.surface2, borderRadius: RADIUS.md, paddingHorizontal: 14, height: 48, fontSize: 15, color: C.text, borderWidth: 1, borderColor: C.line },
+  scriptInput: { backgroundColor: C.surface2, borderRadius: RADIUS.md, padding: 14, fontSize: 13.5, lineHeight: 20, color: C.text, minHeight: 220, borderWidth: 1, borderColor: C.line, fontFamily: 'monospace' },
+  formatGuide: { backgroundColor: tint(C.violet, 0.07), borderRadius: RADIUS.md, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: tint(C.violet, 0.2) },
+  formatHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  formatTitle: { fontSize: 13, fontWeight: '700', color: C.text },
+  formatText: { fontSize: 12.5, color: C.muted, lineHeight: 20 },
+  errorBox: { flexDirection: 'row', gap: 10, backgroundColor: tint(C.danger, 0.08), borderRadius: RADIUS.md, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: tint(C.danger, 0.3) },
+  errorTitle: { fontSize: 14, fontWeight: '700', color: '#FF8CA2' },
+  errorText: { fontSize: 12.5, color: C.text, marginTop: 3, lineHeight: 18 },
+  errorHint: { fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 17 },
+  successBox: { backgroundColor: tint(C.success, 0.08), borderRadius: RADIUS.md, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: tint(C.success, 0.3) },
+  successHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  successTitle: { fontSize: 14, fontWeight: '700', color: C.success },
+  successText: { fontSize: 12.5, color: C.text, marginTop: 4, lineHeight: 18 },
+  parseOptions: { gap: 10 },
+  submitButtonWrap: { borderRadius: RADIUS.md, overflow: 'hidden' },
+  submitButton: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  submitButtonDisabled: { opacity: 0.5 },
+  submitButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  smartParseButton: { height: 50, borderRadius: RADIUS.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.surface2, borderWidth: 1, borderColor: tint(C.cyan, 0.3) },
+  smartParseText: { color: C.text, fontSize: 14, fontWeight: '700' },
+  uploadArea: { borderRadius: RADIUS.xl, borderWidth: 1.5, borderStyle: 'dashed', borderColor: tint(C.violetSoft, 0.45), backgroundColor: tint(C.violet, 0.06), paddingVertical: 34, paddingHorizontal: 16, alignItems: 'center' },
+  uploadIcon: { width: 60, height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  uploadTitle: { fontSize: 17, fontWeight: '700', color: C.text, marginTop: 4 },
+  uploadSubtitle: { fontSize: 12.5, color: C.muted, marginTop: 5, textAlign: 'center' },
+  fileHint: { ...TYPE.caption, textAlign: 'center', marginTop: 12 },
 });

@@ -251,3 +251,4 @@ bundle id decision, RC transfer-behaviour dashboard check.
 - 2026-06 voice-assignment reliability fix (commit see git log): per-line provider verdict, probe retry, await assignment load, stale-load guard, voiceId from voiceKey. Tests: test_voice_assignment_reliability_jun2026.py (11 pass).
 - 2026-06 Redesign stage 1 (branch redesign/cinematic-ui from 9b30150): constants/cinematicTheme.ts tokens, components/cinematic.tsx, Home restyled (no nav/logic change). Awaiting user approval before other screens.
 - 2026-06 Redesign stage 2: Script Library restyled (delete button kept, testIDs kept). QA preview data: device qa-redesign-device-001, scripts d97e32e9 & 9ce045b8 (preview DB only).
+- 2026-06 Redesign stage 3: upload.tsx restyled; added inline error/success banners (Open script). File import untestable on web (expo-file-system). Test script 7721d6a3 in preview DB.
