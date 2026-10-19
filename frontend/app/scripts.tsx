@@ -13,6 +13,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useScriptStore } from '../store/scriptStore';
+import { C, RADIUS, TYPE, tint } from '../constants/cinematicTheme';
+import { GradientButton, IconButton, Pill, ScreenGlow } from '../components/cinematic';
+
+const ACCENTS = [C.violet, C.blue, C.cyan];
+
+// First spoken line, shown as a short screenplay-style preview on the card.
+const firstLine = (script: any): string => {
+  const l = (script.lines || []).find((x: any) => x && x.character && !x.is_stage_direction);
+  return l ? `${l.character}: ${l.text}` : '';
+};
 
 // 2026-02 V1 RELEASE: when the library is launched from Recall (no scriptId),
 // selecting a script must return to Recall configuration — not open Rehearsal.
@@ -71,23 +81,11 @@ export default function ScriptsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenGlow />
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <Ionicons name="chevron-back" size={28} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} testID="scripts-header-title">
-          {isReturnToRecall ? 'Pick a Script to Recall' : 'My Scripts'}
-        </Text>
-        <TouchableOpacity
-          onPress={() => router.push('/upload')}
-          style={styles.addButton}
-        >
-          <Ionicons name="add" size={28} color="#6366f1" />
-        </TouchableOpacity>
+        <IconButton icon="chevron-back" onPress={() => router.back()} testID="scripts-back-btn" />
+        <IconButton icon="add" primary onPress={() => router.push('/upload')} testID="scripts-add-btn" />
       </View>
 
       <ScrollView
@@ -97,32 +95,41 @@ export default function ScriptsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#6366f1"
+            tintColor={C.violet}
           />
         }
       >
+        <Text style={styles.headerTitle} testID="scripts-header-title">
+          {isReturnToRecall ? 'Pick a Script to Recall' : 'My Scripts'}
+        </Text>
+        {scripts.length > 0 && (
+          <Text style={styles.headerSub}>{scripts.length} {scripts.length === 1 ? 'script' : 'scripts'}</Text>
+        )}
+
         {loading && scripts.length === 0 ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6366f1" />
+            <ActivityIndicator size="large" color={C.violet} />
             <Text style={styles.loadingText}>Loading scripts...</Text>
           </View>
         ) : scripts.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="document-text-outline" size={64} color="#3a3a4e" />
+            <View style={styles.emptyIcon}>
+              <Ionicons name="document-text-outline" size={40} color={C.violetSoft} />
+            </View>
             <Text style={styles.emptyTitle}>No Scripts Yet</Text>
             <Text style={styles.emptySubtitle}>
               Upload your first script to start rehearsing
             </Text>
-            <TouchableOpacity
-              style={styles.emptyButton}
+            <GradientButton
+              label="Add Script"
+              icon="add-circle"
               onPress={() => router.push('/upload')}
-            >
-              <Ionicons name="add-circle" size={20} color="#fff" />
-              <Text style={styles.emptyButtonText}>Add Script</Text>
-            </TouchableOpacity>
+              testID="scripts-empty-add-btn"
+              style={styles.emptyButton}
+            />
           </View>
         ) : (
-          scripts.map((script) => (
+          scripts.map((script, i) => (
             <TouchableOpacity
               key={script.id}
               style={styles.scriptCard}
@@ -130,33 +137,32 @@ export default function ScriptsScreen() {
               activeOpacity={0.8}
               testID={isReturnToRecall ? `recall-pick-script-${script.id}` : `open-script-${script.id}`}
             >
-              <View style={styles.scriptIcon}>
-                <Ionicons name="document-text" size={28} color="#6366f1" />
-              </View>
+              <View style={[styles.accent, { backgroundColor: ACCENTS[i % ACCENTS.length] }]} />
               <View style={styles.scriptInfo}>
-                <Text style={styles.scriptTitle} numberOfLines={1}>
-                  {script.title}
-                </Text>
+                <View style={styles.titleRow}>
+                  <Text style={styles.scriptTitle} numberOfLines={1}>
+                    {script.title}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDelete(script.id, script.title)}
+                    accessibilityLabel={`Delete ${script.title}`}
+                    testID={`delete-script-${script.id}`}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={C.danger} />
+                  </TouchableOpacity>
+                </View>
+                {firstLine(script) ? (
+                  <Text style={styles.preview} numberOfLines={2}>{firstLine(script)}</Text>
+                ) : null}
                 <View style={styles.scriptMeta}>
-                  <Text style={styles.scriptMetaText}>
-                    {script.characters?.length || 0} characters
-                  </Text>
-                  <Text style={styles.scriptMetaDot}>•</Text>
-                  <Text style={styles.scriptMetaText}>
-                    {script.lines?.length || 0} lines
-                  </Text>
-                  <Text style={styles.scriptMetaDot}>•</Text>
+                  <Pill label={`${script.characters?.length || 0} characters`} icon="people" color="#CFCBF2" />
+                  <Pill label={`${script.lines?.length || 0} lines`} icon="chatbubbles" color="#CFCBF2" />
                   <Text style={styles.scriptMetaText}>
                     {formatDate(script.created_at)}
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => handleDelete(script.id, script.title)}
-              >
-                <Ionicons name="trash-outline" size={20} color="#ef4444" />
-              </TouchableOpacity>
             </TouchableOpacity>
           ))
         )}
@@ -166,117 +172,26 @@ export default function ScriptsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0a0f',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  addButton: {
-    padding: 4,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    paddingTop: 60,
-  },
-  loadingText: {
-    color: '#6b7280',
-    marginTop: 16,
-    fontSize: 16,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingTop: 80,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#fff',
-    marginTop: 16,
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    color: '#6b7280',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  emptyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#6366f1',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 24,
-    gap: 8,
-  },
-  emptyButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  scriptCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#2a2a3e',
-  },
-  scriptIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scriptInfo: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  scriptTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  scriptMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  scriptMetaText: {
-    fontSize: 13,
-    color: '#6b7280',
-  },
-  scriptMetaDot: {
-    color: '#3a3a4e',
-    marginHorizontal: 6,
-  },
-  deleteButton: {
-    padding: 8,
-  },
+  container: { flex: 1, backgroundColor: C.ink },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 10, paddingBottom: 6 },
+  headerTitle: { ...TYPE.display, fontSize: 26, marginTop: 8 },
+  headerSub: { ...TYPE.caption, marginTop: 3 },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 18, paddingBottom: 40 },
+  loadingContainer: { alignItems: 'center', paddingTop: 60 },
+  loadingText: { color: C.muted, marginTop: 16, fontSize: 15 },
+  emptyContainer: { alignItems: 'center', paddingTop: 70 },
+  emptyIcon: { width: 80, height: 80, borderRadius: 24, backgroundColor: tint(C.violet, 0.12), borderWidth: 1, borderColor: tint(C.violet, 0.3), alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { ...TYPE.title, marginTop: 18 },
+  emptySubtitle: { fontSize: 14, color: C.muted, marginTop: 8, textAlign: 'center' },
+  emptyButton: { marginTop: 24, alignSelf: 'stretch' },
+  scriptCard: { flexDirection: 'row', backgroundColor: C.surface, borderRadius: RADIUS.lg, padding: 14, paddingLeft: 12, marginTop: 12, borderWidth: 1, borderColor: C.line, overflow: 'hidden' },
+  accent: { width: 3, borderRadius: 3, marginRight: 12 },
+  scriptInfo: { flex: 1 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  scriptTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: C.text },
+  preview: { fontFamily: 'monospace', fontSize: 11.5, lineHeight: 17, color: '#8F8AB8', marginTop: 6 },
+  scriptMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 11 },
+  scriptMetaText: { fontSize: 11.5, color: C.muted, marginLeft: 'auto' },
+  deleteButton: { width: 36, height: 36, borderRadius: 10, marginLeft: 8, backgroundColor: tint(C.danger, 0.1), alignItems: 'center', justifyContent: 'center' },
 });
