@@ -30,7 +30,7 @@ const VOICE_OPTIONS = [
 ];
 
 const READER_STYLES = [
-  { id: 'neutral', name: 'Neutral', icon: 'person', color: '#6366f1', speed: 1.0, description: 'Calm, even delivery' },
+  { id: 'neutral', name: 'Neutral', icon: 'person', color: '#7C5CFF', speed: 1.0, description: 'Calm, even delivery' },
   { id: 'emotional', name: 'Emotional', icon: 'heart', color: '#ec4899', speed: 0.9, description: 'Expressive, feeling-driven' },
   { id: 'aggressive', name: 'Intense', icon: 'flame', color: '#ef4444', speed: 1.1, description: 'High energy, forceful' },
 ];
@@ -255,7 +255,7 @@ export default function ScriptDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366f1" />
+          <ActivityIndicator size="large" color="#7C5CFF" />
           <Text style={styles.loadingText}>Loading script...</Text>
         </View>
       </SafeAreaView>
@@ -287,7 +287,7 @@ export default function ScriptDetailScreen() {
           {currentScript?.title || 'Untitled'}
         </Text>
         <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.settingsButton}>
-          <Ionicons name="settings-outline" size={24} color="#6366f1" />
+          <Ionicons name="settings-outline" size={24} color="#7C5CFF" />
         </TouchableOpacity>
       </View>
 
@@ -296,19 +296,19 @@ export default function ScriptDetailScreen() {
         <View style={styles.infoCard}>
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
-              <Ionicons name="people" size={24} color="#6366f1" />
+              <Ionicons name="people" size={24} color="#7C5CFF" />
               <Text style={styles.infoValue}>{(currentScript?.characters || []).length}</Text>
               <Text style={styles.infoLabel}>Characters</Text>
             </View>
             <View style={styles.infoSeparator} />
             <View style={styles.infoItem}>
-              <Ionicons name="chatbubble" size={24} color="#10b981" />
+              <Ionicons name="chatbubble" size={24} color="#34D399" />
               <Text style={styles.infoValue}>{(currentScript?.lines || []).filter((l) => !l.is_stage_direction).length}</Text>
               <Text style={styles.infoLabel}>Lines</Text>
             </View>
             <View style={styles.infoSeparator} />
             <View style={styles.infoItem}>
-              <Ionicons name="text" size={24} color="#f59e0b" />
+              <Ionicons name="text" size={24} color="#FFB18A" />
               <Text style={styles.infoValue}>{(currentScript?.lines || []).filter((l) => l.is_stage_direction).length}</Text>
               <Text style={styles.infoLabel}>Directions</Text>
             </View>
@@ -333,7 +333,7 @@ export default function ScriptDetailScreen() {
                   <Ionicons
                     name="person"
                     size={24}
-                    color={selectedCharacter === character.name ? '#fff' : '#6366f1'}
+                    color={selectedCharacter === character.name ? '#fff' : '#7C5CFF'}
                   />
                 </View>
                 <View style={styles.characterInfo}>
@@ -392,10 +392,10 @@ export default function ScriptDetailScreen() {
                     <Ionicons
                       name={mode.icon as any}
                       size={24}
-                      color={isLocked ? '#4a4a5e' : selectedMode === mode.id ? '#fff' : '#6366f1'}
+                      color={isLocked ? '#6E6A95' : selectedMode === mode.id ? '#fff' : '#7C5CFF'}
                     />
                     {isLocked && (
-                      <Ionicons name="lock-closed" size={12} color="#f59e0b" style={{ position: 'absolute', top: -2, right: -2 }} />
+                      <Ionicons name="lock-closed" size={12} color="#FFB18A" style={{ position: 'absolute', top: -2, right: -2 }} />
                     )}
                   </View>
                   <View style={styles.modeInfo}>
@@ -413,11 +413,11 @@ export default function ScriptDetailScreen() {
                     </Text>
                   </View>
                   {isLocked ? (
-                    <Ionicons name="lock-closed" size={16} color="#f59e0b" />
+                    <Ionicons name="lock-closed" size={16} color="#FFB18A" />
                   ) : mode.navigable ? (
-                    <Ionicons name="chevron-forward" size={20} color="#6366f1" />
+                    <Ionicons name="chevron-forward" size={20} color="#7C5CFF" />
                   ) : selectedMode === mode.id ? (
-                    <Ionicons name="checkmark-circle" size={20} color="#6366f1" />
+                    <Ionicons name="checkmark-circle" size={20} color="#7C5CFF" />
                   ) : null}
                 </TouchableOpacity>
               );
@@ -443,7 +443,7 @@ export default function ScriptDetailScreen() {
                 <Ionicons
                   name={style.icon as any}
                   size={24}
-                  color={selectedReaderStyle === style.id ? style.color : '#6b7280'}
+                  color={selectedReaderStyle === style.id ? style.color : '#A19DC6'}
                 />
                 <Text style={[
                   styles.readerStyleName,
@@ -472,9 +472,9 @@ export default function ScriptDetailScreen() {
               step={0.1}
               value={voiceSpeed}
               onValueChange={setVoiceSpeed}
-              minimumTrackTintColor="#6366f1"
-              maximumTrackTintColor="#2a2a3e"
-              thumbTintColor="#6366f1"
+              minimumTrackTintColor="#7C5CFF"
+              maximumTrackTintColor="#2A2650"
+              thumbTintColor="#7C5CFF"
             />
             <Text style={styles.pacingLabel}>Fast</Text>
             <Text style={styles.pacingValue}>{voiceSpeed.toFixed(1)}x</Text>
@@ -505,9 +505,9 @@ export default function ScriptDetailScreen() {
               style={styles.directorNotesButton}
               onPress={() => router.push(`/script/notes/${id}`)}
             >
-              <Ionicons name="pencil" size={16} color="#f59e0b" />
+              <Ionicons name="pencil" size={16} color="#FFB18A" />
               <Text style={styles.directorNotesText}>Director Notes</Text>
-              {!isPremium && <Ionicons name="lock-closed" size={12} color="#f59e0b" />}
+              {!isPremium && <Ionicons name="lock-closed" size={12} color="#FFB18A" />}
             </TouchableOpacity>
           </View>
           <View style={styles.previewContainer}>
@@ -554,7 +554,7 @@ export default function ScriptDetailScreen() {
           onPress={() => router.push(`/learn?scriptId=${id}`)}
           testID="script-learn-btn"
         >
-          <Ionicons name="school" size={18} color="#22d3ee" />
+          <Ionicons name="school" size={18} color="#62E0FF" />
           <Text style={styles.learnButtonText}>Learn Lines</Text>
         </TouchableOpacity>
 
@@ -563,7 +563,7 @@ export default function ScriptDetailScreen() {
           style={styles.practiceButton}
           onPress={() => router.push(`/recall?scriptId=${id}&sceneIndex=0`)}
         >
-          <Ionicons name="flash" size={18} color="#10b981" />
+          <Ionicons name="flash" size={18} color="#34D399" />
           <Text style={styles.practiceButtonText}>Practice Mode</Text>
         </TouchableOpacity>
         
@@ -573,7 +573,7 @@ export default function ScriptDetailScreen() {
             onPress={() => router.push(`/scene-partner?scriptId=${id}`)}
             data-testid="scene-partner-btn"
           >
-            <Ionicons name="people" size={20} color="#f59e0b" />
+            <Ionicons name="people" size={20} color="#FFB18A" />
             <Text style={styles.scenePartnerButtonText}>Scene Partner</Text>
           </TouchableOpacity>
 
@@ -633,9 +633,9 @@ export default function ScriptDetailScreen() {
                     step={0.1}
                     value={voiceSpeed}
                     onValueChange={setVoiceSpeed}
-                    minimumTrackTintColor="#6366f1"
-                    maximumTrackTintColor="#2a2a3e"
-                    thumbTintColor="#6366f1"
+                    minimumTrackTintColor="#7C5CFF"
+                    maximumTrackTintColor="#2A2650"
+                    thumbTintColor="#7C5CFF"
                   />
                   <Text style={styles.speedLabel}>2.0x</Text>
                 </View>
@@ -691,10 +691,10 @@ export default function ScriptDetailScreen() {
                       </Text>
                     </View>
                     {selectedVoice === voice.id && !isLocked && (
-                      <Ionicons name="checkmark-circle" size={24} color="#6366f1" />
+                      <Ionicons name="checkmark-circle" size={24} color="#7C5CFF" />
                     )}
                     {isLocked && (
-                      <Ionicons name="lock-closed" size={16} color="#f59e0b" />
+                      <Ionicons name="lock-closed" size={16} color="#FFB18A" />
                     )}
                   </TouchableOpacity>
                 );
@@ -727,7 +727,7 @@ export default function ScriptDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#0B0A1A',
   },
   loadingContainer: {
     flex: 1,
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingText: {
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 16,
     fontSize: 16,
   },
@@ -751,7 +751,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   backButtonLarge: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 10,
@@ -769,7 +769,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
+    borderBottomColor: '#14122A',
   },
   backButton: {
     padding: 4,
@@ -793,12 +793,12 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   infoCard: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
   },
   infoRow: {
     flexDirection: 'row',
@@ -811,7 +811,7 @@ const styles = StyleSheet.create({
   infoSeparator: {
     width: 1,
     height: 40,
-    backgroundColor: '#2a2a3e',
+    backgroundColor: '#2A2650',
   },
   infoValue: {
     fontSize: 24,
@@ -821,7 +821,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 13,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 4,
   },
   section: {
@@ -840,27 +840,27 @@ const styles = StyleSheet.create({
   },
   sectionSubtitle: {
     fontSize: 13,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 2,
     marginBottom: 4,
   },
   directorNotesButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: 'rgba(255, 177, 138, 0.15)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     gap: 6,
   },
   directorNotesText: {
-    color: '#f59e0b',
+    color: '#FFB18A',
     fontSize: 13,
     fontWeight: '600',
   },
   sectionSubtitle: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginBottom: 16,
   },
   characterList: {
@@ -869,21 +869,21 @@ const styles = StyleSheet.create({
   characterCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
   },
   characterCardSelected: {
-    backgroundColor: '#6366f1',
-    borderColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
+    borderColor: '#7C5CFF',
   },
   characterIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: 'rgba(124, 92, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -901,7 +901,7 @@ const styles = StyleSheet.create({
   },
   characterLines: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 2,
   },
   modeList: {
@@ -910,25 +910,25 @@ const styles = StyleSheet.create({
   modeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
   },
   modeCardSelected: {
-    borderColor: '#6366f1',
+    borderColor: '#7C5CFF',
   },
   modeIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    backgroundColor: 'rgba(124, 92, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modeIconContainerSelected: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
   },
   modeInfo: {
     flex: 1,
@@ -940,21 +940,21 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   modeNameSelected: {
-    color: '#6366f1',
+    color: '#7C5CFF',
   },
   modeCardLocked: {
     opacity: 0.6,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
   },
   modeIconContainerLocked: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
   },
   modeNameLocked: {
-    color: '#4a4a5e',
+    color: '#6E6A95',
   },
   modeDescription: {
     fontSize: 13,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 2,
   },
   // Reader Style
@@ -965,22 +965,22 @@ const styles = StyleSheet.create({
   },
   readerStyleCard: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderRadius: 12,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
   },
   readerStyleName: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#9ca3af',
+    color: '#C9C5EA',
     marginTop: 6,
   },
   readerStyleDesc: {
     fontSize: 11,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 2,
     textAlign: 'center',
   },
@@ -988,59 +988,59 @@ const styles = StyleSheet.create({
   pacingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
     gap: 8,
   },
   pacingLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#A19DC6',
   },
   pacingValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6366f1',
+    color: '#7C5CFF',
     minWidth: 36,
     textAlign: 'right',
   },
   previewContainer: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
   },
   previewLine: {
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2a3e',
+    borderBottomColor: '#2A2650',
   },
   previewDirection: {
     opacity: 0.7,
   },
   previewUserLine: {
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    backgroundColor: 'rgba(124, 92, 255, 0.1)',
     marginHorizontal: -16,
     paddingHorizontal: 16,
     borderLeftWidth: 3,
-    borderLeftColor: '#6366f1',
+    borderLeftColor: '#7C5CFF',
   },
   previewDirectionText: {
     fontSize: 14,
-    color: '#9ca3af',
+    color: '#C9C5EA',
     fontStyle: 'italic',
   },
   previewCharacter: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#6b7280',
+    color: '#A19DC6',
     marginBottom: 4,
   },
   previewUserCharacter: {
-    color: '#6366f1',
+    color: '#7C5CFF',
   },
   previewText: {
     fontSize: 15,
@@ -1049,7 +1049,7 @@ const styles = StyleSheet.create({
   },
   previewMore: {
     textAlign: 'center',
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 16,
     fontSize: 14,
   },
@@ -1059,24 +1059,24 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 16,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#0B0A1A',
     borderTopWidth: 1,
-    borderTopColor: '#1a1a2e',
+    borderTopColor: '#14122A',
   },
   practiceButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    backgroundColor: 'rgba(52, 211, 153, 0.1)',
     paddingVertical: 10,
     borderRadius: 10,
     marginBottom: 12,
     gap: 6,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: 'rgba(52, 211, 153, 0.3)',
   },
   practiceButtonText: {
-    color: '#10b981',
+    color: '#34D399',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1085,16 +1085,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(34, 211, 238, 0.10)',
+    backgroundColor: 'rgba(98, 224, 255, 0.10)',
     paddingVertical: 10,
     borderRadius: 10,
     marginBottom: 8,
     gap: 6,
     borderWidth: 1,
-    borderColor: 'rgba(34, 211, 238, 0.35)',
+    borderColor: 'rgba(98, 224, 255, 0.35)',
   },
   learnButtonText: {
-    color: '#22d3ee',
+    color: '#62E0FF',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1107,7 +1107,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10b981',
+    backgroundColor: '#34D399',
     paddingVertical: 16,
     borderRadius: 12,
     gap: 8,
@@ -1122,15 +1122,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     paddingVertical: 16,
     borderRadius: 12,
     gap: 8,
     borderWidth: 1,
-    borderColor: '#f59e0b',
+    borderColor: '#FFB18A',
   },
   scenePartnerButtonText: {
-    color: '#f59e0b',
+    color: '#FFB18A',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1139,7 +1139,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     paddingVertical: 16,
     borderRadius: 12,
     gap: 8,
@@ -1158,7 +1158,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
@@ -1181,7 +1181,7 @@ const styles = StyleSheet.create({
   modalSectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6b7280',
+    color: '#A19DC6',
     marginBottom: 12,
     marginTop: 8,
   },
@@ -1195,13 +1195,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   speedBadge: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: 'rgba(124, 92, 255, 0.2)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
   },
   speedValue: {
-    color: '#6366f1',
+    color: '#7C5CFF',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1215,7 +1215,7 @@ const styles = StyleSheet.create({
     height: 40,
   },
   speedLabel: {
-    color: '#6b7280',
+    color: '#A19DC6',
     fontSize: 12,
     width: 32,
     textAlign: 'center',
@@ -1230,35 +1230,35 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#0B0A1A',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
   },
   speedPresetButtonActive: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-    borderColor: '#6366f1',
+    backgroundColor: 'rgba(124, 92, 255, 0.2)',
+    borderColor: '#7C5CFF',
   },
   speedPresetText: {
-    color: '#6b7280',
+    color: '#A19DC6',
     fontSize: 14,
     fontWeight: '600',
   },
   speedPresetTextActive: {
-    color: '#6366f1',
+    color: '#7C5CFF',
   },
   voiceOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#0B0A1A',
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: '#2A2650',
   },
   voiceOptionSelected: {
-    borderColor: '#6366f1',
+    borderColor: '#7C5CFF',
   },
   voiceInfo: {
     flex: 1,
@@ -1270,11 +1270,11 @@ const styles = StyleSheet.create({
   },
   voiceDescription: {
     fontSize: 13,
-    color: '#6b7280',
+    color: '#A19DC6',
     marginTop: 2,
   },
   modalDoneButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',

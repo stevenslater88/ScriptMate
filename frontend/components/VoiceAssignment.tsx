@@ -339,29 +339,70 @@ export default function VoiceAssignment({
   // Filter out user's character - they don't need a voice
   const otherCharacters = characters.filter(c => c.name !== userCharacter);
 
+  const initials = (name: string) =>
+    name.replace(/[^A-Za-z ]/g, ' ').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+
+  const header = (
+    <View style={styles.header}>
+      <View style={styles.headerIcon}><Ionicons name="mic" size={16} color="#A993FF" /></View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.title}>Multi-Voice</Text>
+        <Text style={styles.subtitle}>Assign different AI voices to each character</Text>
+      </View>
+      {!isPremium && <Ionicons name="lock-closed" size={15} color="#A993FF" />}
+    </View>
+  );
+
+  const renderVoice = (voice: PresetVoice) => {
+    const selected = assignments[selectedCharacter || ''] === voice.key;
+    const previewing = previewingVoice === voice.key;
+    return (
+      <TouchableOpacity
+        key={voice.key}
+        testID={`voice-option-${voice.key}`}
+        style={[styles.voiceOption, selected && styles.voiceOptionSelected]}
+        onPress={() => handleSelectVoice(voice.key)}
+      >
+        <View style={[styles.voiceBadge, voice.gender === 'Female' ? styles.badgeF : styles.badgeM]}>
+          <Ionicons name={voice.gender === 'Female' ? 'female' : 'male'} size={14} color={voice.gender === 'Female' ? '#62E0FF' : '#8FAAFF'} />
+        </View>
+        <View style={styles.voiceInfo}>
+          <Text style={styles.voiceName}>{voice.name}</Text>
+          <Text style={styles.voiceDetails} numberOfLines={1}>
+            {voice.accent} • {voice.description}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.previewButton, previewing && styles.previewButtonActive]}
+          onPress={() => handlePreviewVoice(voice)}
+          testID={`voice-preview-${voice.key}`}
+          accessibilityLabel={`Preview ${voice.name}`}
+        >
+          {previewing ? (
+            <ActivityIndicator size="small" color="#A993FF" />
+          ) : (
+            <Ionicons name="play" size={16} color="#A993FF" />
+          )}
+        </TouchableOpacity>
+        {selected && (
+          <Ionicons name="checkmark-circle" size={22} color="#A993FF" style={{ marginLeft: 8 }} />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Ionicons name="mic" size={20} color="#8b5cf6" />
-          <Text style={styles.title}>Multi-Voice</Text>
-          {!isPremium && <Ionicons name="lock-closed" size={14} color="#8b5cf6" />}
-        </View>
-        <ActivityIndicator size="small" color="#8b5cf6" />
+        {header}
+        <ActivityIndicator size="small" color="#A993FF" />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Ionicons name="mic" size={20} color="#8b5cf6" />
-        <Text style={styles.title}>Multi-Voice</Text>
-        {!isPremium && <Ionicons name="lock-closed" size={14} color="#8b5cf6" />}
-      </View>
-      <Text style={styles.subtitle}>
-        Assign different AI voices to each character
-      </Text>
+      {header}
 
       <View style={styles.characterList}>
         {otherCharacters.map((character) => {
@@ -373,22 +414,27 @@ export default function VoiceAssignment({
               key={character.id}
               style={styles.characterRow}
               onPress={() => openPicker(character.name)}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
+              testID={`character-voice-row-${character.name}`}
             >
-              <View style={styles.characterInfo}>
-                <Text style={styles.characterName}>{character.name}</Text>
-                <Text style={styles.characterLines}>{character.line_count} lines</Text>
+              <View style={styles.charTop}>
+                <View style={styles.avatar}><Text style={styles.avatarTx}>{initials(character.name)}</Text></View>
+                <View style={styles.characterInfo}>
+                  <Text style={styles.characterName} numberOfLines={1}>{character.name}</Text>
+                  <Text style={styles.characterLines}>{character.line_count} lines</Text>
+                </View>
               </View>
-              <View style={styles.voiceSelector}>
+              <View style={[styles.voiceSelector, !assignedVoice && styles.voiceSelectorEmpty]}>
                 {assignedVoice ? (
                   <View style={styles.selectedVoice}>
+                    <Ionicons name={assignedVoice.gender === 'Female' ? 'female' : 'male'} size={14} color={assignedVoice.gender === 'Female' ? '#62E0FF' : '#8FAAFF'} />
                     <Text style={styles.selectedVoiceName}>{assignedVoice.name}</Text>
-                    <Text style={styles.selectedVoiceAccent}>{assignedVoice.accent}</Text>
+                    <Text style={styles.selectedVoiceAccent} numberOfLines={1}>{assignedVoice.accent}</Text>
                   </View>
                 ) : (
                   <Text style={styles.selectVoiceText}>Select voice</Text>
                 )}
-                <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+                <Ionicons name="chevron-down" size={16} color="#6E6A95" />
               </View>
             </TouchableOpacity>
           );
@@ -398,84 +444,28 @@ export default function VoiceAssignment({
       {/* Voice Picker Modal */}
       <Modal visible={showPicker} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalContent} testID="voice-picker-modal">
+            <View style={styles.modalGrab} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Voice for {selectedCharacter}
-              </Text>
-              <TouchableOpacity onPress={() => setShowPicker(false)}>
-                <Ionicons name="close" size={28} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalEyebrow}>VOICE FOR</Text>
+                <Text style={styles.modalTitle} numberOfLines={1}>{selectedCharacter}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowPicker(false)} style={styles.closeBtn} testID="voice-picker-close">
+                <Ionicons name="close" size={22} color="#fff" />
               </TouchableOpacity>
             </View>
+            <Text style={styles.modalHint}>Tap ▶ to preview a voice, then tap the voice to assign it.</Text>
 
             <ScrollView style={styles.voiceList}>
               {/* Female Voices */}
               <Text style={styles.genderHeader}>Female Voices</Text>
-              {voicesByGender.female.filter(v => isVoiceAvailable(v.key)).map((voice) => (
-                <TouchableOpacity
-                  key={voice.key}
-                  testID={`voice-option-${voice.key}`}
-                  style={[
-                    styles.voiceOption,
-                    assignments[selectedCharacter || ''] === voice.key && styles.voiceOptionSelected,
-                  ]}
-                  onPress={() => handleSelectVoice(voice.key)}
-                >
-                  <View style={styles.voiceInfo}>
-                    <Text style={styles.voiceName}>{voice.name}</Text>
-                    <Text style={styles.voiceDetails}>
-                      {voice.accent} • {voice.description}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.previewButton}
-                    onPress={() => handlePreviewVoice(voice)}
-                  >
-                    {previewingVoice === voice.key ? (
-                      <ActivityIndicator size="small" color="#8b5cf6" />
-                    ) : (
-                      <Ionicons name="play-circle" size={28} color="#8b5cf6" />
-                    )}
-                  </TouchableOpacity>
-                  {assignments[selectedCharacter || ''] === voice.key && (
-                    <Ionicons name="checkmark-circle" size={24} color="#8b5cf6" />
-                  )}
-                </TouchableOpacity>
-              ))}
+              {voicesByGender.female.filter(v => isVoiceAvailable(v.key)).map(renderVoice)}
 
               {/* Male Voices */}
               <Text style={styles.genderHeader}>Male Voices</Text>
-              {voicesByGender.male.filter(v => isVoiceAvailable(v.key)).map((voice) => (
-                <TouchableOpacity
-                  key={voice.key}
-                  testID={`voice-option-${voice.key}`}
-                  style={[
-                    styles.voiceOption,
-                    assignments[selectedCharacter || ''] === voice.key && styles.voiceOptionSelected,
-                  ]}
-                  onPress={() => handleSelectVoice(voice.key)}
-                >
-                  <View style={styles.voiceInfo}>
-                    <Text style={styles.voiceName}>{voice.name}</Text>
-                    <Text style={styles.voiceDetails}>
-                      {voice.accent} • {voice.description}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.previewButton}
-                    onPress={() => handlePreviewVoice(voice)}
-                  >
-                    {previewingVoice === voice.key ? (
-                      <ActivityIndicator size="small" color="#8b5cf6" />
-                    ) : (
-                      <Ionicons name="play-circle" size={28} color="#8b5cf6" />
-                    )}
-                  </TouchableOpacity>
-                  {assignments[selectedCharacter || ''] === voice.key && (
-                    <Ionicons name="checkmark-circle" size={24} color="#8b5cf6" />
-                  )}
-                </TouchableOpacity>
-              ))}
+              {voicesByGender.male.filter(v => isVoiceAvailable(v.key)).map(renderVoice)}
+              <View style={{ height: 24 }} />
             </ScrollView>
           </View>
         </View>
@@ -485,139 +475,43 @@ export default function VoiceAssignment({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#fff',
-    flex: 1,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginBottom: 16,
-  },
-  characterList: {
-    gap: 10,
-  },
-  characterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0a0a0f',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#2a2a3e',
-  },
-  characterInfo: {
-    flex: 1,
-  },
-  characterName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  characterLines: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  voiceSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  selectedVoice: {
-    alignItems: 'flex-end',
-  },
-  selectedVoiceName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#8b5cf6',
-  },
-  selectedVoiceAccent: {
-    fontSize: 11,
-    color: '#6b7280',
-  },
-  selectVoiceText: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#1a1a2e',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  voiceList: {
-    maxHeight: 500,
-  },
-  genderHeader: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8b5cf6',
-    marginTop: 16,
-    marginBottom: 10,
-    paddingLeft: 4,
-  },
-  voiceOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0a0a0f',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#2a2a3e',
-  },
-  voiceOptionSelected: {
-    borderColor: '#8b5cf6',
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-  },
-  voiceInfo: {
-    flex: 1,
-  },
-  voiceName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  voiceDetails: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  previewButton: {
-    padding: 8,
-    marginRight: 8,
-  },
+  container: { backgroundColor: '#14122A', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: 'rgba(124,92,255,0.28)' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  headerIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(124,92,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 16, fontWeight: '800', color: '#F4F3FF' },
+  subtitle: { fontSize: 12, color: '#A19DC6', marginTop: 1 },
+  characterList: { gap: 10 },
+  characterRow: { backgroundColor: '#1C1938', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
+  charTop: { flexDirection: 'row', alignItems: 'center' },
+  avatar: { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(62,107,255,0.18)', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  avatarTx: { fontSize: 12, fontWeight: '800', color: '#8FAAFF' },
+  characterInfo: { flex: 1 },
+  characterName: { fontSize: 15, fontWeight: '800', color: '#F4F3FF' },
+  characterLines: { fontSize: 11.5, color: '#A19DC6', marginTop: 1 },
+  voiceSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, backgroundColor: '#0B0A1A', borderRadius: 11, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(124,92,255,0.3)' },
+  voiceSelectorEmpty: { borderStyle: 'dashed', borderColor: 'rgba(161,157,198,0.4)' },
+  selectedVoice: { flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1 },
+  selectedVoiceName: { fontSize: 14, fontWeight: '800', color: '#F4F3FF' },
+  selectedVoiceAccent: { fontSize: 12, color: '#A19DC6', flexShrink: 1 },
+  selectVoiceText: { fontSize: 13.5, fontWeight: '700', color: '#A993FF' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(5,4,12,0.78)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#14122A', borderTopLeftRadius: 26, borderTopRightRadius: 26, maxHeight: '82%', paddingHorizontal: 18, paddingTop: 10, borderWidth: 1, borderColor: 'rgba(124,92,255,0.25)' },
+  modalGrab: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.18)', marginBottom: 12 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center' },
+  modalEyebrow: { fontSize: 10.5, fontWeight: '800', letterSpacing: 1.6, color: '#6E6A95' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#F4F3FF', marginTop: 2 },
+  closeBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#1C1938', alignItems: 'center', justifyContent: 'center' },
+  modalHint: { fontSize: 12, color: '#A19DC6', marginTop: 8, marginBottom: 6 },
+  voiceList: { marginTop: 4 },
+  genderHeader: { fontSize: 10.5, fontWeight: '800', letterSpacing: 1.6, textTransform: 'uppercase', color: '#6E6A95', marginTop: 14, marginBottom: 8 },
+  voiceOption: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1938', borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  voiceOptionSelected: { borderColor: '#7C5CFF', backgroundColor: 'rgba(124,92,255,0.14)' },
+  voiceBadge: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  badgeF: { backgroundColor: 'rgba(98,224,255,0.12)' },
+  badgeM: { backgroundColor: 'rgba(62,107,255,0.16)' },
+  voiceInfo: { flex: 1 },
+  voiceName: { fontSize: 15, fontWeight: '700', color: '#F4F3FF' },
+  voiceDetails: { fontSize: 12, color: '#A19DC6', marginTop: 2 },
+  previewButton: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(124,92,255,0.14)', alignItems: 'center', justifyContent: 'center' },
+  previewButtonActive: { backgroundColor: 'rgba(124,92,255,0.3)' },
 });
