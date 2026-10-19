@@ -19,6 +19,9 @@ import { shouldShowOnboarding } from '../components/OnboardingTutorial';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { LinearGradient } from 'expo-linear-gradient';
+import { C, GRADIENT, TYPE, tint } from '../constants/cinematicTheme';
+import { IconButton, IconWell, Pill, ScreenGlow, SectionLabel } from '../components/cinematic';
 
 
 export default function HomeScreen() {
@@ -66,122 +69,113 @@ export default function HomeScreen() {
   const onRefresh = async () => { setRefreshing(true); await initialize(); setRefreshing(false); };
 
   if (checkingOnboarding) {
-    return <SafeAreaView style={st.bg}><View style={st.center}><ActivityIndicator size="large" color="#6366f1" /></View></SafeAreaView>;
+    return <SafeAreaView style={st.bg}><View style={st.center}><ActivityIndicator size="large" color={C.violet} /></View></SafeAreaView>;
   }
 
   const recent = scripts.length > 0 ? scripts[0] : null;
 
+  const recentMeta = recent
+    ? `${recent.characters?.length || 0} characters · ${recent.lines?.length || 0} lines`
+    : 'Select a script to begin';
+
   return (
     <SafeAreaView style={st.bg}>
+      <ScreenGlow />
       <ScrollView style={st.flex} contentContainerStyle={st.pad} showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}>
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.violet} />}>
 
         {/* Header */}
         <View style={st.hdr}>
           <TouchableOpacity style={st.logo} onPress={handleLogoTap} activeOpacity={0.8}>
-            <View style={st.logoIc}><Ionicons name="mic" size={18} color="#fff" /></View>
+            <LinearGradient colors={GRADIENT.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.logoIc}>
+              <Ionicons name="mic" size={17} color="#fff" />
+            </LinearGradient>
             <Text style={st.logoTx}>ScriptM8</Text>
           </TouchableOpacity>
           <View style={st.hdrR}>
+            {isPremium && (
+              <TouchableOpacity onPress={() => router.push('/premium')} data-testid="premium-active-badge">
+                <Pill label="Pro" icon="sparkles" />
+              </TouchableOpacity>
+            )}
             {streak?.current_streak > 0 && (
               <TouchableOpacity style={st.streakPill} onPress={() => router.push('/daily-drill')} data-testid="streak-pill">
-                <Ionicons name="flame" size={14} color="#f59e0b" />
+                <Ionicons name="flame" size={13} color={C.ember} />
                 <Text style={st.streakN}>{streak.current_streak}</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={st.hdrBtn} onPress={safeHandler(() => router.push('/stats'), 'Stats')} data-testid="header-stats-btn">
-              <Ionicons name="stats-chart" size={18} color="#9ca3af" />
-            </TouchableOpacity>
-            <TouchableOpacity style={st.hdrBtn} onPress={safeHandler(() => router.push('/profile'), 'Profile')} data-testid="header-profile-btn">
-              <Ionicons name="person-circle" size={20} color="#9ca3af" />
-            </TouchableOpacity>
+            <IconButton icon="stats-chart" onPress={safeHandler(() => router.push('/stats'), 'Stats')} testID="header-stats-btn" />
+            <IconButton icon="person-circle" onPress={safeHandler(() => router.push('/profile'), 'Profile')} testID="header-profile-btn" />
           </View>
         </View>
 
-        {/* Premium */}
-        {!isPremium ? (
-          <TouchableOpacity style={st.pro} onPress={() => router.push('/premium')} activeOpacity={0.85} data-testid="premium-banner">
-            <View style={st.proGlow} />
-            <View style={st.proRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={st.proTag}>PRO</Text>
-                <Text style={st.proH}>Unlock Full Studio</Text>
-                <Text style={st.proSub}>Unlimited scripts, AI voices, all tools</Text>
-              </View>
-              <View style={st.proArr}><Ionicons name="arrow-forward" size={16} color="#000" /></View>
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={st.proBadge} onPress={() => router.push('/premium')} data-testid="premium-active-badge">
-            <Ionicons name="star" size={12} color="#f59e0b" /><Text style={st.proBadgeTx}>Premium</Text>
-          </TouchableOpacity>
-        )}
-
         {/* ─── QUICK REHEARSE — hero ─── */}
+        <SectionLabel style={st.secGap}>{recent ? 'Continue rehearsing' : 'Get started'}</SectionLabel>
         <TouchableOpacity
           style={st.hero}
           onPress={() => recent ? router.push(`/script/${recent.id}?autoStart=true`) : router.push('/scripts')}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
           data-testid="quick-rehearse-btn"
         >
-          <View style={st.heroTop}>
-            <View style={st.heroIc}><Ionicons name="flash" size={26} color="#fff" /></View>
-            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.4)" />
-          </View>
-          <Text style={st.heroH}>Quick Rehearse</Text>
-          <Text style={st.heroSub} numberOfLines={1}>{recent ? recent.title : 'Select a script to begin'}</Text>
+          <LinearGradient colors={GRADIENT.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.heroGrad}>
+            <View style={st.heroOrb} />
+            <View style={st.heroTop}>
+              <Pill label="Quick Rehearse" icon="flash" color="#DCD6FF" />
+              <Ionicons name="chevron-forward" size={18} color="#BDB4FF" />
+            </View>
+            <Text style={st.heroH} numberOfLines={2}>{recent ? recent.title : 'Your next scene'}</Text>
+            <Text style={st.heroSub} numberOfLines={1}>{recentMeta}</Text>
+            <View style={st.heroBtn}>
+              <Ionicons name={recent ? 'play' : 'library'} size={16} color="#20155A" />
+              <Text style={st.heroBtnTx}>{recent ? 'Resume scene' : 'Choose a script'}</Text>
+            </View>
+          </LinearGradient>
         </TouchableOpacity>
 
         {/* ─── 6-TOOL GRID (3 cols × 2 rows) — Self Tape, Voice Studio,
                   New Script, My Scripts, Recall, Auditions ─── */}
-        {/*
-          NOTE (2026-02 reconciliation): Voice Studio + Auditions were
-          promoted OUT of the "More" section into the primary actor-tool
-          grid. Rationale: both are core acting workflows and were being
-          under-surfaced beneath the More header. The underlying routes
-          (`/voice-studio`, `/auditions`) are unchanged.
-
-          Earlier note (2026-02): "Acting Coach" and "Dialect Coach" tiles
-          were removed from the primary grid because those features are
-          now part of the "ScriptMate AI · Coming Soon" roadmap section
-          below. The underlying routes (`/acting-coach`, `/dialect-coach`)
-          still exist for deep-links and profile entries, but they are no
-          longer surfaced as primary CTAs.
-        */}
+        <SectionLabel style={st.secGap}>Studio tools</SectionLabel>
         <View style={st.grid3x2}>
-          <ToolCard icon="videocam"    color="#ef4444" label="Self Tape"     route="/selftape"      testId="selftape-btn" />
-          <ToolCard icon="mic-circle"  color="#6366f1" label="Voice Studio"  route="/voice-studio"  testId="voice-studio-btn" />
-          <ToolCard icon="add-circle"  color="#10b981" label="New Script"    route="/script-parser" testId="new-script-btn" />
-          <ToolCard icon="library"     color="#8b5cf6" label="My Scripts"    route="/scripts"       testId="my-scripts-btn" />
-          <ToolCard icon="bulb"        color="#f59e0b" label="Recall"        route="/recall"        testId="recall-btn" />
-          <ToolCard icon="calendar"    color="#0ea5e9" label="Auditions"     route="/auditions"     testId="auditions-btn" />
+          <ToolCard icon="videocam"    color={C.danger}     label="Self Tape"     route="/selftape"      testId="selftape-btn" />
+          <ToolCard icon="mic-circle"  color={C.violetSoft} label="Voice Studio"  route="/voice-studio"  testId="voice-studio-btn" />
+          <ToolCard icon="add-circle"  color={C.cyan}       label="New Script"    route="/script-parser" testId="new-script-btn" />
+          <ToolCard icon="library"     color={C.blueSoft}   label="My Scripts"    route="/scripts"       testId="my-scripts-btn" />
+          <ToolCard icon="bulb"        color={C.success}    label="Recall"        route="/recall"        testId="recall-btn" />
+          <ToolCard icon="calendar"    color="#C3B6FF"      label="Auditions"     route="/auditions"     testId="auditions-btn" />
         </View>
 
         {/* ─── DAILY DRILL ─── */}
         {!streak?.today_completed && (
           <TouchableOpacity style={st.drill} onPress={() => router.push('/daily-drill')} activeOpacity={0.85} data-testid="daily-drill-banner">
             <View style={st.drillL}>
-              <View style={st.drillIc}><Ionicons name="flame" size={18} color="#f59e0b" /></View>
+              <IconWell icon="flame" color={C.ember} size={36} />
               <View><Text style={st.drillH}>Daily Drill</Text><Text style={st.drillS}>Today's challenge</Text></View>
             </View>
-            <View style={st.drillXp}><Text style={st.drillXpTx}>+25 XP</Text></View>
+            <Pill label="+25 XP" style={{ alignSelf: 'center' }} />
+          </TouchableOpacity>
+        )}
+
+        {/* Premium */}
+        {!isPremium && (
+          <TouchableOpacity style={st.pro} onPress={() => router.push('/premium')} activeOpacity={0.85} data-testid="premium-banner">
+            <LinearGradient colors={GRADIENT.proBanner} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={st.proRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={st.proTag}>PRO</Text>
+                <Text style={st.proH}>Unlock Full Studio</Text>
+                <Text style={st.proSub}>Unlimited scripts, AI voices, all tools</Text>
+              </View>
+              <LinearGradient colors={GRADIENT.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.proArr}>
+                <Ionicons name="arrow-forward" size={17} color="#fff" />
+              </LinearGradient>
+            </LinearGradient>
           </TouchableOpacity>
         )}
 
         {/* ─── MORE TOOLS ─── */}
-        {/*
-          2026-02 reconciliation: Voice Studio + Auditions were promoted
-          into the primary grid above (they are core acting workflows).
-          The standalone "Upload Script" NavRow was also removed here
-          because script importing (PDF / DOCX / TXT) is already
-          available through the "New Script" tool tile above, which
-          routes to `/script-parser`. The `/upload` route +
-          `app/upload.tsx` are intentionally KEPT for deep-links and
-          programmatic navigation, so the underlying import/upload
-          functionality is unchanged. */}
+        {/* Upload stays reachable via New Script (/script-parser); /upload route is kept. */}
         <Text style={st.secLabel}>More</Text>
-        <NavRow icon="bar-chart"    color="#10b981" title="Dashboard"        sub="Progress & stats"         route="/dashboard"    testId="dashboard-row" />
-        <NavRow icon="help-circle"  color="#6b7280" title="Support"          route="/support"               testId="support-row" />
+        <NavRow icon="bar-chart"    color={C.success}  title="Dashboard"        sub="Progress & stats"         route="/dashboard"    testId="dashboard-row" />
+        <NavRow icon="help-circle"  color={C.muted}    title="Support"          route="/support"               testId="support-row" />
 
         <View style={{ height: 36 }} />
       </ScrollView>
@@ -189,16 +183,14 @@ export default function HomeScreen() {
   );
 }
 
-/* ── Tool Card (2x2 grid) ── */
+/* ── Tool Card (3x2 grid) ── */
 function ToolCard({ icon, color, label, route, testId }: {
   icon: keyof typeof Ionicons.glyphMap; color: string; label: string; route: string; testId: string;
 }) {
   return (
     <TouchableOpacity style={st.toolCard} onPress={() => router.push(route as any)} activeOpacity={0.85} data-testid={testId}>
-      <View style={[st.toolIc, { backgroundColor: color + '15' }]}>
-        <Ionicons name={icon} size={24} color={color} />
-      </View>
-      <Text style={st.toolLabel}>{label}</Text>
+      <IconWell icon={icon} color={color} size={36} />
+      <Text style={st.toolLabel} numberOfLines={2}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -209,92 +201,68 @@ function NavRow({ icon, color, title, sub, route, testId }: {
 }) {
   return (
     <TouchableOpacity style={st.navRow} onPress={() => router.push(route as any)} activeOpacity={0.8} data-testid={testId}>
-      <View style={[st.navIc, { backgroundColor: color + '15' }]}>
-        <Ionicons name={icon} size={18} color={color} />
-      </View>
+      <IconWell icon={icon} color={color} size={36} />
       <View style={st.navTx}>
         <Text style={st.navH}>{title}</Text>
         {sub ? <Text style={st.navSub}>{sub}</Text> : null}
       </View>
-      <Ionicons name="chevron-forward" size={14} color="#4b5563" />
+      <Ionicons name="chevron-forward" size={15} color={C.dim} />
     </TouchableOpacity>
   );
 }
 
 /* ── Styles ── */
-const CARD_BG = '#12121e';
-const BORDER = '#1c1c2e';
-
 const st = StyleSheet.create({
-  bg: { flex: 1, backgroundColor: '#08080e' },
+  bg: { flex: 1, backgroundColor: C.ink },
   flex: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   pad: { paddingHorizontal: 18, paddingBottom: 44 },
+  secGap: { marginBottom: 9 },
 
   // Header
-  hdr: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, paddingBottom: 18 },
+  hdr: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, paddingBottom: 20 },
   logo: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  logoIc: { width: 32, height: 32, borderRadius: 9, backgroundColor: '#6366f1', alignItems: 'center', justifyContent: 'center' },
-  logoTx: { fontSize: 24, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
-  hdrR: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  hdrBtn: { width: 34, height: 34, borderRadius: 9, backgroundColor: CARD_BG, alignItems: 'center', justifyContent: 'center' },
-  streakPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 12 },
-  streakN: { fontSize: 12, fontWeight: '700', color: '#f59e0b' },
-
-  // Premium
-  pro: { borderRadius: 14, overflow: 'hidden', marginBottom: 18, backgroundColor: '#f59e0b' },
-  proGlow: { position: 'absolute', top: -30, right: -30, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.12)' },
-  proRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
-  proTag: { fontSize: 10, fontWeight: '800', color: '#000', backgroundColor: 'rgba(0,0,0,0.1)', alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, marginBottom: 5, letterSpacing: 1 },
-  proH: { fontSize: 17, fontWeight: '800', color: '#000' },
-  proSub: { fontSize: 11, color: 'rgba(0,0,0,0.55)', marginTop: 2 },
-  proArr: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.08)', alignItems: 'center', justifyContent: 'center' },
-  proBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, marginBottom: 14 },
-  proBadgeTx: { fontSize: 11, fontWeight: '700', color: '#f59e0b' },
+  logoIc: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  logoTx: { ...TYPE.title, fontSize: 21 },
+  hdrR: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  streakPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: tint(C.ember, 0.12), paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  streakN: { fontSize: 12, fontWeight: '800', color: C.ember },
 
   // Hero — Quick Rehearse
-  hero: { backgroundColor: '#6366f1', borderRadius: 20, padding: 22, marginBottom: 14 },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  heroIc: { width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
-  heroH: { fontSize: 22, fontWeight: '800', color: '#fff' },
-  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
+  hero: { borderRadius: 22, overflow: 'hidden', marginBottom: 22, borderWidth: 1, borderColor: 'rgba(160,140,255,0.25)' },
+  heroGrad: { padding: 18 },
+  heroOrb: { position: 'absolute', right: -40, top: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(98,224,255,0.12)' },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  heroH: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.4 },
+  heroSub: { fontSize: 13, color: '#BFB8EE', marginTop: 4 },
+  heroBtn: { marginTop: 16, height: 44, borderRadius: 13, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  heroBtnTx: { fontSize: 14, fontWeight: '800', color: '#20155A' },
 
-  // 4-tool grid
-  // 2026-02 reconciliation: 3-cols × 2-rows grid for the 6 primary
-  // actor tools (Self Tape · Voice Studio / New Script · My Scripts /
-  // Recall · Auditions). ~31% width lets three tiles sit per row with
-  // the same 10px gap the old 2×2 grid used. `toolCard` retains
-  // `flexGrow: 1` so the last row still stretches full-width if a
-  // reshuffle drops a tile.
-  grid3x2: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
-  grid4: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
-  toolCard: { width: '31%', flexGrow: 1, backgroundColor: CARD_BG, borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: BORDER },
-  toolIc: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  toolLabel: { fontSize: 13, fontWeight: '700', color: '#fff', textAlign: 'center' },
-
-  // Dual row — Recall + My Scripts
-  dualRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  dualCard: { flex: 1, backgroundColor: CARD_BG, borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: BORDER },
-  dualIc: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  dualH: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  dualSub: { fontSize: 11, color: '#6b7280', marginTop: 2 },
+  // 3-cols × 2-rows grid for the 6 primary actor tools; flexGrow keeps the last row full-width.
+  grid3x2: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginBottom: 14 },
+  toolCard: { width: '31%', flexGrow: 1, minHeight: 92, backgroundColor: C.surface, borderRadius: 16, padding: 12, justifyContent: 'space-between', borderWidth: 1, borderColor: C.line },
+  toolLabel: { fontSize: 13, fontWeight: '700', color: C.text, marginTop: 10 },
 
   // Daily Drill
-  drill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: CARD_BG, borderRadius: 14, padding: 13, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(245,158,11,0.12)' },
-  drillL: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  drillIc: { width: 38, height: 38, borderRadius: 11, backgroundColor: 'rgba(245,158,11,0.1)', alignItems: 'center', justifyContent: 'center' },
-  drillH: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  drillS: { fontSize: 11, color: '#6b7280', marginTop: 1 },
-  drillXp: { backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
-  drillXpTx: { fontSize: 11, fontWeight: '700', color: '#f59e0b' },
+  drill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.surface, borderRadius: 16, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: C.line },
+  drillL: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  drillH: { fontSize: 14, fontWeight: '700', color: C.text },
+  drillS: { fontSize: 11.5, color: C.muted, marginTop: 1 },
+
+  // Premium banner
+  pro: { borderRadius: 16, overflow: 'hidden', marginBottom: 22, borderWidth: 1, borderColor: 'rgba(124,92,255,0.32)', backgroundColor: C.surface },
+  proRow: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  proTag: { fontSize: 10, fontWeight: '800', color: C.violetSoft, letterSpacing: 1.6, marginBottom: 3 },
+  proH: { fontSize: 15, fontWeight: '800', color: C.text },
+  proSub: { fontSize: 11.5, color: C.muted, marginTop: 2 },
+  proArr: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginLeft: 12 },
 
   // Section label
-  secLabel: { fontSize: 12, fontWeight: '700', color: '#4b5563', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 10, marginTop: 4 },
+  secLabel: { ...TYPE.label, marginBottom: 9, marginTop: 4 },
 
   // Nav rows
-  navRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD_BG, borderRadius: 12, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: BORDER },
-  navIc: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  navTx: { flex: 1, marginLeft: 10 },
-  navH: { fontSize: 14, fontWeight: '600', color: '#fff' },
-  navSub: { fontSize: 11, color: '#6b7280', marginTop: 1 },
+  navRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 14, padding: 11, marginBottom: 7, borderWidth: 1, borderColor: C.line },
+  navTx: { flex: 1, marginLeft: 11 },
+  navH: { fontSize: 14, fontWeight: '700', color: C.text },
+  navSub: { fontSize: 11.5, color: C.muted, marginTop: 1 },
 });
