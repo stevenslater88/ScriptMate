@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { C } from '../constants/cinematicTheme';
 
 /**
  * Paywall Screen - Redirects to the custom ScriptM8 premium screen.
@@ -17,8 +18,8 @@ export default function PaywallScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6366f1" />
+      <View style={styles.loadingContainer} testID="paywall-redirect-loading">
+        <ActivityIndicator size="large" color={C.violet} />
         <Text style={styles.loadingText}>Loading...</Text>
       </View>
     </SafeAreaView>
@@ -28,7 +29,7 @@ export default function PaywallScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: C.ink,
   },
   loadingContainer: {
     flex: 1,
@@ -37,7 +38,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   loadingText: {
-    color: '#9ca3af',
+    color: C.muted,
     fontSize: 16,
   },
 });

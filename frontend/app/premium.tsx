@@ -21,6 +21,9 @@ import { summarizeSubscriptionOptions } from '../services/trialOffer';
 import * as Localization from 'expo-localization';
 import { PurchasesPackage } from 'react-native-purchases';
 import { DebugLog } from '../services/debugLogService';
+import { LinearGradient } from 'expo-linear-gradient';
+import { C, GRADIENT, RADIUS, TYPE, tint } from '../constants/cinematicTheme';
+import { ScreenGlow } from '../components/cinematic';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PREMIUM FEATURES - Value-Driven Copy
@@ -370,21 +373,22 @@ export default function PremiumScreen() {
   if (isPremium) {
     return (
       <SafeAreaView style={styles.container}>
+        <ScreenGlow />
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color="#fff" />
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} testID="premium-back-btn" accessibilityLabel="Go back">
+            <Ionicons name="chevron-back" size={19} color="#CFCBF2" />
           </TouchableOpacity>
         </View>
         
-        <View style={styles.premiumActiveContainer}>
+        <View style={styles.premiumActiveContainer} testID="premium-active-state">
           <View style={styles.premiumActiveIcon}>
-            <Ionicons name="star" size={48} color="#f59e0b" />
+            <Ionicons name="star" size={44} color={C.violetSoft} />
           </View>
           <Text style={styles.premiumActiveTitle}>You're a Pro!</Text>
           <Text style={styles.premiumActiveSubtitle}>
             You have access to all ScriptM8 Pro features
           </Text>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => router.back()} testID="premium-active-back-btn">
             <Text style={styles.primaryButtonText}>Back to App</Text>
           </TouchableOpacity>
         </View>
@@ -396,13 +400,14 @@ export default function PremiumScreen() {
   if (isNative && rcLoading && !hasOfferings && !loadingTimedOut) {
     return (
       <SafeAreaView style={styles.container}>
+        <ScreenGlow />
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color="#fff" />
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} testID="premium-back-btn" accessibilityLabel="Go back">
+            <Ionicons name="chevron-back" size={19} color="#CFCBF2" />
           </TouchableOpacity>
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366f1" />
+        <View style={styles.loadingContainer} testID="premium-loading-state">
+          <ActivityIndicator size="large" color="#7C5CFF" />
           <Text style={styles.loadingText}>Loading subscription options...</Text>
         </View>
       </SafeAreaView>
@@ -413,14 +418,15 @@ export default function PremiumScreen() {
   if (isNative && !hasOfferings && (!rcLoading || loadingTimedOut)) {
     return (
       <SafeAreaView style={styles.container}>
+        <ScreenGlow />
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color="#fff" />
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} testID="premium-back-btn" accessibilityLabel="Go back">
+            <Ionicons name="chevron-back" size={19} color="#CFCBF2" />
           </TouchableOpacity>
         </View>
-        <View style={styles.errorContainer}>
+        <View style={styles.errorContainer} testID="premium-offerings-error-state">
           <View style={styles.errorIcon}>
-            <Ionicons name="sync-outline" size={48} color="#f59e0b" />
+            <Ionicons name="sync-outline" size={48} color="#FFC37A" />
           </View>
           <Text style={styles.errorTitle}>Premium is Still Syncing</Text>
           <Text style={styles.errorMessage}>
@@ -431,6 +437,7 @@ export default function PremiumScreen() {
             onPress={handleRetryLoadOfferings}
             disabled={loading}
             data-testid="retry-load-offerings-btn"
+            testID="retry-load-offerings-btn"
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
@@ -445,10 +452,11 @@ export default function PremiumScreen() {
             style={styles.secondaryButton} 
             onPress={handleRestore}
             disabled={loading}
+            testID="premium-error-restore-btn"
           >
             <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.backLink} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backLink} onPress={() => router.back()} testID="premium-error-go-back-btn">
             <Text style={styles.backLinkText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -458,34 +466,36 @@ export default function PremiumScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenGlow />
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color="#fff" />
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} testID="premium-back-btn" accessibilityLabel="Go back">
+            <Ionicons name="chevron-back" size={19} color="#CFCBF2" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.restoreButton} onPress={handleRestore}>
+          <TouchableOpacity style={styles.restoreButton} onPress={handleRestore} testID="premium-header-restore-btn">
             <Text style={styles.restoreText}>Restore</Text>
           </TouchableOpacity>
         </View>
         
         {/* Hero */}
         <View style={styles.hero}>
-          <View style={styles.heroIcon}>
-            <Ionicons name="star" size={32} color="#f59e0b" />
-          </View>
-          <Text style={styles.heroTitle}>ScriptM8 Pro</Text>
+          <LinearGradient colors={GRADIENT.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroIcon}>
+            <Ionicons name="star" size={30} color="#fff" />
+          </LinearGradient>
+          <Text style={styles.heroEyebrow}>Premium</Text>
+          <Text style={styles.heroTitle} testID="premium-hero-title">ScriptM8 Pro</Text>
           <Text style={styles.heroSubtitle}>
             Unlock Self Tape Studio + Pro Tools
           </Text>
         </View>
 
         {/* Features Checklist */}
-        <View style={styles.checklistCard}>
+        <View style={styles.checklistCard} testID="premium-feature-checklist">
           {FEATURE_CHECKLIST.map((feature, index) => (
             <View key={index} style={styles.checklistItem}>
               <View style={styles.checkIcon}>
-                <Ionicons name="checkmark" size={14} color="#10b981" />
+                <Ionicons name="checkmark" size={14} color="#34D399" />
               </View>
               <Text style={styles.checklistText}>{feature}</Text>
             </View>
@@ -499,6 +509,7 @@ export default function PremiumScreen() {
             style={[styles.planCard, selectedPlan === 'yearly' && styles.planCardSelected]}
             onPress={() => setSelectedPlan('yearly')}
             data-testid="yearly-plan-card"
+            testID="yearly-plan-card"
           >
             <View style={styles.planBadge}>
               <Text style={styles.planBadgeText}>BEST VALUE</Text>
@@ -510,7 +521,7 @@ export default function PremiumScreen() {
             </View>
             <View style={styles.planContent}>
               <Text style={styles.planName}>Yearly</Text>
-              <Text style={styles.planPrice}>{getPriceDisplay('yearly')}</Text>
+              <Text style={styles.planPrice} testID="yearly-plan-price">{getPriceDisplay('yearly')}</Text>
               <Text style={styles.planPeriod}>per year</Text>
             </View>
           </TouchableOpacity>
@@ -520,6 +531,7 @@ export default function PremiumScreen() {
             style={[styles.planCard, selectedPlan === 'monthly' && styles.planCardSelected]}
             onPress={() => setSelectedPlan('monthly')}
             data-testid="monthly-plan-card"
+            testID="monthly-plan-card"
           >
             <View style={styles.planRadio}>
               <View style={[styles.radioOuter, selectedPlan === 'monthly' && styles.radioOuterSelected]}>
@@ -528,7 +540,7 @@ export default function PremiumScreen() {
             </View>
             <View style={styles.planContent}>
               <Text style={styles.planName}>Monthly</Text>
-              <Text style={styles.planPrice}>{getPriceDisplay('monthly')}</Text>
+              <Text style={styles.planPrice} testID="monthly-plan-price">{getPriceDisplay('monthly')}</Text>
               <Text style={styles.planPeriod}>per month</Text>
             </View>
           </TouchableOpacity>
@@ -539,9 +551,10 @@ export default function PremiumScreen() {
               style={[styles.planCard, selectedPlan === 'lifetime' && styles.planCardSelected]}
               onPress={() => setSelectedPlan('lifetime')}
               data-testid="lifetime-plan-card"
+            testID="lifetime-plan-card"
             >
-              <View style={[styles.planBadge, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-                <Text style={[styles.planBadgeText, { color: '#8b5cf6' }]}>ONE-TIME</Text>
+              <View style={[styles.planBadge, styles.planBadgeAlt]}>
+                <Text style={[styles.planBadgeText, { color: C.violetSoft }]}>ONE-TIME</Text>
               </View>
               <View style={styles.planRadio}>
                 <View style={[styles.radioOuter, selectedPlan === 'lifetime' && styles.radioOuterSelected]}>
@@ -550,7 +563,7 @@ export default function PremiumScreen() {
               </View>
               <View style={styles.planContent}>
                 <Text style={styles.planName}>Lifetime</Text>
-                <Text style={styles.planPrice}>{getPriceDisplay('lifetime')}</Text>
+                <Text style={styles.planPrice} testID="lifetime-plan-price">{getPriceDisplay('lifetime')}</Text>
                 <Text style={styles.planPeriod}>one-time payment</Text>
               </View>
             </TouchableOpacity>
@@ -563,7 +576,9 @@ export default function PremiumScreen() {
           onPress={() => handlePurchase(selectedPlan)}
           disabled={loading}
           data-testid="upgrade-cta-button"
+          testID="upgrade-cta-button"
         >
+          <LinearGradient colors={GRADIENT.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
@@ -577,6 +592,7 @@ export default function PremiumScreen() {
           onPress={handleRestore}
           disabled={loading}
           data-testid="restore-purchases-btn"
+          testID="restore-purchases-btn"
         >
           <Text style={styles.restorePurchasesText}>Restore Purchases</Text>
         </TouchableOpacity>
@@ -587,6 +603,7 @@ export default function PremiumScreen() {
             style={styles.trialButton}
             onPress={handleStartTrial}
             disabled={loading}
+            testID="start-trial-btn"
           >
             <Text style={styles.trialButtonText}>Start 7-Day Free Trial</Text>
           </TouchableOpacity>
@@ -598,11 +615,11 @@ export default function PremiumScreen() {
         </Text>
         
         <View style={styles.footerLinks}>
-          <TouchableOpacity onPress={() => router.push('/terms')}>
+          <TouchableOpacity onPress={() => router.push('/terms')} testID="premium-terms-link">
             <Text style={styles.footerLink}>Terms</Text>
           </TouchableOpacity>
           <Text style={styles.footerDivider}>•</Text>
-          <TouchableOpacity onPress={() => router.push('/privacy')}>
+          <TouchableOpacity onPress={() => router.push('/privacy')} testID="premium-privacy-link">
             <Text style={styles.footerLink}>Privacy</Text>
           </TouchableOpacity>
         </View>
@@ -614,82 +631,84 @@ export default function PremiumScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0f' },
-  scrollView: { flex: 1, paddingHorizontal: 24 },
-  
+  container: { flex: 1, backgroundColor: C.ink },
+  scrollView: { flex: 1, paddingHorizontal: 20 },
+
   // Header
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, paddingBottom: 16, paddingHorizontal: 24 },
-  backButton: { padding: 8, marginLeft: -8 },
-  restoreButton: { padding: 8 },
-  restoreText: { fontSize: 14, color: '#6b7280', fontWeight: '500' },
-  
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, paddingBottom: 8, paddingHorizontal: 20 },
+  backButton: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, marginLeft: -20 },
+  restoreButton: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: RADIUS.pill, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, marginRight: -20 },
+  restoreText: { fontSize: 13, color: C.muted, fontWeight: '600' },
+
   // Loading State
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  loadingText: { fontSize: 16, color: '#9ca3af', marginTop: 16, textAlign: 'center' },
-  
+  loadingText: { fontSize: 15, color: C.muted, marginTop: 16, textAlign: 'center' },
+
   // Error State
   errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  errorIcon: { width: 96, height: 96, borderRadius: 28, backgroundColor: 'rgba(245, 158, 11, 0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  errorTitle: { fontSize: 24, fontWeight: '700', color: '#fff', marginBottom: 12, textAlign: 'center' },
-  errorMessage: { fontSize: 15, color: '#9ca3af', textAlign: 'center', marginBottom: 32, lineHeight: 22, paddingHorizontal: 16 },
-  retryButton: { flexDirection: 'row', backgroundColor: '#6366f1', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  retryButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  secondaryButton: { borderWidth: 1, borderColor: '#374151', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 24, marginBottom: 16 },
-  secondaryButtonText: { fontSize: 14, fontWeight: '500', color: '#9ca3af' },
+  errorIcon: { width: 88, height: 88, borderRadius: 26, backgroundColor: tint(C.warning, 0.12), borderWidth: 1, borderColor: tint(C.warning, 0.28), alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  errorTitle: { ...TYPE.title, fontSize: 22, marginBottom: 10, textAlign: 'center' },
+  errorMessage: { fontSize: 15, color: C.muted, textAlign: 'center', marginBottom: 28, lineHeight: 22, paddingHorizontal: 16 },
+  retryButton: { flexDirection: 'row', backgroundColor: C.violet, borderRadius: RADIUS.md, paddingVertical: 15, paddingHorizontal: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  retryButtonText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  secondaryButton: { borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, borderRadius: RADIUS.md, paddingVertical: 14, paddingHorizontal: 24, marginBottom: 14 },
+  secondaryButtonText: { fontSize: 14, fontWeight: '600', color: C.text },
   backLink: { padding: 12 },
-  backLinkText: { fontSize: 14, color: '#6b7280' },
-  
+  backLinkText: { fontSize: 14, color: C.muted, fontWeight: '600' },
+
   // Restore Purchases Button
-  restorePurchasesButton: { borderWidth: 1, borderColor: '#374151', borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginBottom: 12 },
-  restorePurchasesText: { fontSize: 15, fontWeight: '500', color: '#9ca3af' },
-  
+  restorePurchasesButton: { borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginBottom: 12 },
+  restorePurchasesText: { fontSize: 15, fontWeight: '600', color: C.text },
+
   // Hero
-  hero: { alignItems: 'center', paddingVertical: 24 },
-  heroIcon: { width: 72, height: 72, borderRadius: 20, backgroundColor: 'rgba(245, 158, 11, 0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  heroTitle: { fontSize: 28, fontWeight: '700', color: '#fff', letterSpacing: -0.5, marginBottom: 8 },
-  heroSubtitle: { fontSize: 16, color: '#9ca3af', textAlign: 'center' },
-  
+  hero: { alignItems: 'center', paddingTop: 16, paddingBottom: 24 },
+  heroIcon: { width: 68, height: 68, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+  heroEyebrow: { ...TYPE.label, color: C.violetSoft, marginBottom: 6 },
+  heroTitle: { ...TYPE.display, fontSize: 30, marginBottom: 8 },
+  heroSubtitle: { fontSize: 15, color: C.muted, textAlign: 'center' },
+
   // Checklist
-  checklistCard: { backgroundColor: '#111118', borderRadius: 16, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: '#1a1a2e' },
-  checklistItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  checkIcon: { width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 14 },
-  checklistText: { fontSize: 15, color: '#e5e7eb', flex: 1 },
-  
+  checklistCard: { backgroundColor: C.surface, borderRadius: RADIUS.lg, paddingHorizontal: 18, paddingVertical: 10, marginBottom: 24, borderWidth: 1, borderColor: C.line },
+  checklistItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9 },
+  checkIcon: { width: 22, height: 22, borderRadius: 11, backgroundColor: tint(C.success, 0.15), alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  checklistText: { fontSize: 14.5, color: C.text, flex: 1 },
+
   // Plans
-  plansContainer: { gap: 12, marginBottom: 24 },
-  planCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111118', borderRadius: 14, padding: 18, borderWidth: 2, borderColor: '#1a1a2e', position: 'relative' },
-  planCardSelected: { borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.06)' },
-  planBadge: { position: 'absolute', top: -10, right: 16, backgroundColor: 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  planBadgeText: { fontSize: 10, fontWeight: '700', color: '#f59e0b', letterSpacing: 0.5 },
+  plansContainer: { gap: 14, marginBottom: 24 },
+  planCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: RADIUS.lg, padding: 18, borderWidth: 2, borderColor: C.line, position: 'relative' },
+  planCardSelected: { borderColor: C.violet, backgroundColor: tint(C.violet, 0.1) },
+  planBadge: { position: 'absolute', top: -10, right: 16, backgroundColor: C.violet, paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.pill },
+  planBadgeAlt: { backgroundColor: tint(C.violet, 0.2), borderWidth: 1, borderColor: tint(C.violet, 0.4) },
+  planBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 1 },
   planRadio: { marginRight: 16 },
-  radioOuter: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#374151', alignItems: 'center', justifyContent: 'center' },
-  radioOuterSelected: { borderColor: '#6366f1' },
-  radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#6366f1' },
+  radioOuter: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#3A3666', alignItems: 'center', justifyContent: 'center' },
+  radioOuterSelected: { borderColor: C.violet },
+  radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.violet },
   planContent: { flex: 1 },
-  planName: { fontSize: 17, fontWeight: '600', color: '#fff', marginBottom: 2 },
-  planPrice: { fontSize: 22, fontWeight: '700', color: '#fff' },
-  planPeriod: { fontSize: 13, color: '#6b7280' },
-  savingsBadge: { backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  savingsText: { fontSize: 12, fontWeight: '600', color: '#10b981' },
-  
+  planName: { ...TYPE.label, color: C.muted, marginBottom: 4 },
+  planPrice: { fontSize: 24, fontWeight: '800', color: C.text, letterSpacing: -0.4 },
+  planPeriod: { fontSize: 13, color: C.dim, marginTop: 1 },
+  savingsBadge: { backgroundColor: tint(C.success, 0.15), paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  savingsText: { fontSize: 12, fontWeight: '600', color: C.success },
+
   // CTA
-  ctaButton: { backgroundColor: '#6366f1', borderRadius: 14, paddingVertical: 18, alignItems: 'center', marginBottom: 12 },
-  ctaButtonText: { fontSize: 17, fontWeight: '600', color: '#fff' },
-  trialButton: { borderWidth: 1, borderColor: '#374151', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
-  trialButtonText: { fontSize: 15, fontWeight: '600', color: '#9ca3af' },
-  
+  ctaButton: { backgroundColor: C.violet, borderRadius: RADIUS.md, paddingVertical: 18, alignItems: 'center', marginBottom: 12, overflow: 'hidden' },
+  ctaButtonText: { fontSize: 17, fontWeight: '800', color: '#fff' },
+  trialButton: { borderWidth: 1, borderColor: tint(C.violet, 0.45), backgroundColor: tint(C.violet, 0.1), borderRadius: RADIUS.md, paddingVertical: 15, alignItems: 'center', marginBottom: 20 },
+  trialButtonText: { fontSize: 15, fontWeight: '700', color: C.violetSoft },
+
   // Footer
-  footerText: { fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 12 },
+  footerText: { fontSize: 13, color: C.muted, textAlign: 'center', marginBottom: 12 },
   footerLinks: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 },
-  footerLink: { fontSize: 13, color: '#6b7280' },
-  footerDivider: { color: '#374151' },
+  footerLink: { fontSize: 13, color: C.blueSoft, fontWeight: '600' },
+  footerDivider: { color: C.dim },
   bottomSpacer: { height: 40 },
-  
+
   // Premium Active State
   premiumActiveContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  premiumActiveIcon: { width: 96, height: 96, borderRadius: 28, backgroundColor: 'rgba(245, 158, 11, 0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  premiumActiveTitle: { fontSize: 28, fontWeight: '700', color: '#fff', marginBottom: 8 },
-  premiumActiveSubtitle: { fontSize: 16, color: '#9ca3af', textAlign: 'center', marginBottom: 32 },
-  primaryButton: { backgroundColor: '#6366f1', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32 },
-  primaryButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  premiumActiveIcon: { width: 92, height: 92, borderRadius: 28, backgroundColor: tint(C.violet, 0.14), borderWidth: 1, borderColor: tint(C.violet, 0.35), alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  premiumActiveTitle: { ...TYPE.display, fontSize: 28, marginBottom: 8 },
+  premiumActiveSubtitle: { fontSize: 15, color: C.muted, textAlign: 'center', marginBottom: 32 },
+  primaryButton: { backgroundColor: C.violet, borderRadius: RADIUS.md, paddingVertical: 16, paddingHorizontal: 32 },
+  primaryButtonText: { fontSize: 16, fontWeight: '700', color: '#fff' },
 });
