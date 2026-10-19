@@ -18,6 +18,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, API_TIMEOUT, BUILD_ID } from '../services/apiConfig';
 import { getDiagnostics, BUILD_FINGERPRINT, copyChatGPTDiagnosticReport, copyLastErrorToClipboard } from '../services/diagnosticsService';
 import { DebugLog } from '../services/debugLogService';
+import { router } from 'expo-router';
+import { C, RADIUS, TYPE } from '../constants/cinematicTheme';
+import { IconButton, ScreenGlow } from '../components/cinematic';
+import { HelpCentre } from '../components/HelpCentre';
+import { BuildInfoPanel } from '../components/BuildInfoPanel';
 
 // AsyncStorage key to preserve unsent report if submission fails.
 const DRAFT_KEY = 'bug_report_draft_v1';
@@ -139,7 +144,7 @@ function formatBundleAsText(
 }
 
 export default function SupportScreen() {
-  const [activeTab, setActiveTab] = useState<'faq' | 'report'>('faq');
+  const [activeTab, setActiveTab] = useState<'faq' | 'build' | 'report'>('faq');
 
   // Bug report form state
   const [description, setDescription] = useState('');
@@ -176,22 +181,6 @@ export default function SupportScreen() {
   const clearDraft = async () => {
     try { await AsyncStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
   };
-
-  const renderFAQ = () => (
-    <ScrollView style={styles.content} testID="support-faq-scroll">
-      <Text style={styles.sectionTitle}>FAQ</Text>
-
-      <Text style={styles.question}>How do I save a script?</Text>
-      <Text style={styles.answer}>
-        Paste your script in the parser and press Save.
-      </Text>
-
-      <Text style={styles.question}>Where are my scripts stored?</Text>
-      <Text style={styles.answer}>
-        Scripts are stored locally on your device.
-      </Text>
-    </ScrollView>
-  );
 
   const handleCopyReport = async () => {
     try {
@@ -363,7 +352,7 @@ export default function SupportScreen() {
       <Text style={styles.fieldLabel}>What happened *</Text>
       <TextInput
         placeholder="Describe the issue..."
-        placeholderTextColor="#6b7280"
+        placeholderTextColor={C.dim}
         value={description}
         onChangeText={setDescription}
         multiline
@@ -374,7 +363,7 @@ export default function SupportScreen() {
       <Text style={styles.fieldLabel}>Steps to reproduce</Text>
       <TextInput
         placeholder="1. Open app&#10;2. Tap ..."
-        placeholderTextColor="#6b7280"
+        placeholderTextColor={C.dim}
         value={steps}
         onChangeText={setSteps}
         multiline
@@ -385,7 +374,7 @@ export default function SupportScreen() {
       <Text style={styles.fieldLabel}>Additional notes (optional)</Text>
       <TextInput
         placeholder="Anything else that could help..."
-        placeholderTextColor="#6b7280"
+        placeholderTextColor={C.dim}
         value={notes}
         onChangeText={setNotes}
         multiline
@@ -433,90 +422,62 @@ export default function SupportScreen() {
 
   return (
     <SafeAreaView style={styles.container} testID="support-screen">
+      <ScreenGlow />
+      <View style={styles.header}>
+        <IconButton icon="chevron-back" onPress={() => router.back()} testID="support-back-btn" />
+        <Text style={styles.headerTitle}>Help & Support</Text>
+        <View style={{ width: 40 }} />
+      </View>
       {/* Tabs */}
       <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'faq' && styles.tabActive]}
-          onPress={() => setActiveTab('faq')}
-          testID="support-tab-faq"
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'faq' && styles.tabTextActive,
-            ]}
+        {([
+          { key: 'faq' as const, label: 'Help Centre', testID: 'support-tab-faq' },
+          { key: 'build' as const, label: 'Build Info', testID: 'support-tab-build' },
+          { key: 'report' as const, label: 'Bug Report', testID: 'support-tab-report' },
+        ]).map((t) => (
+          <TouchableOpacity
+            key={t.key}
+            style={[styles.tab, activeTab === t.key && styles.tabActive]}
+            onPress={() => setActiveTab(t.key)}
+            testID={t.testID}
           >
-            FAQ
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'report' && styles.tabActive]}
-          onPress={() => setActiveTab('report')}
-          testID="support-tab-report"
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'report' && styles.tabTextActive,
-            ]}
-          >
-            Bug Report
-          </Text>
-        </TouchableOpacity>
+            <Text style={[styles.tabText, activeTab === t.key && styles.tabTextActive]}>{t.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* Content */}
-      {activeTab === 'faq' && renderFAQ()}
+      {activeTab === 'faq' && <HelpCentre />}
+      {activeTab === 'build' && <BuildInfoPanel />}
       {activeTab === 'report' && renderBugReport()}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0f' },
-
-  tabs: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderColor: '#1f2937',
-  },
-
-  tab: {
-    flex: 1,
-    padding: 15,
-    alignItems: 'center',
-  },
-
-  tabActive: {
-    borderBottomWidth: 2,
-    borderColor: '#6366f1',
-  },
-
-  tabText: {
-    color: '#9ca3af',
-    fontWeight: '500',
-  },
-
-  tabTextActive: {
-    color: '#6366f1',
-    fontWeight: '700',
-  },
+  container: { flex: 1, backgroundColor: C.ink },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 10, paddingBottom: 10 },
+  headerTitle: { ...TYPE.title, fontSize: 18 },
+  tabs: { flexDirection: 'row', marginHorizontal: 18, padding: 4, gap: 4, backgroundColor: C.surface, borderRadius: RADIUS.md, borderWidth: 1, borderColor: C.line },
+  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 11 },
+  tabActive: { backgroundColor: C.violet },
+  tabText: { color: C.muted, fontWeight: '600', fontSize: 13 },
+  tabTextActive: { color: '#fff', fontWeight: '700' },
 
   content: {
-    padding: 20,
+    padding: 18,
   },
 
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 8,
-    color: '#f9fafb',
+    color: C.text,
   },
 
   helper: {
     fontSize: 13,
-    color: '#9ca3af',
+    color: C.muted,
     marginBottom: 16,
     lineHeight: 18,
   },
@@ -524,16 +485,16 @@ const styles = StyleSheet.create({
   question: {
     fontWeight: '600',
     marginTop: 10,
-    color: '#e5e7eb',
+    color: C.text,
   },
 
   answer: {
-    color: '#9ca3af',
+    color: C.muted,
     marginBottom: 10,
   },
 
   fieldLabel: {
-    color: '#d1d5db',
+    color: '#D6D3F0',
     fontSize: 13,
     fontWeight: '600',
     marginTop: 12,
@@ -542,12 +503,12 @@ const styles = StyleSheet.create({
 
   input: {
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: C.line,
     padding: 10,
     marginBottom: 4,
-    borderRadius: 8,
-    backgroundColor: '#111827',
-    color: '#f9fafb',
+    borderRadius: RADIUS.md,
+    backgroundColor: C.surface,
+    color: C.text,
     textAlignVertical: 'top',
   },
 
@@ -559,7 +520,7 @@ const styles = StyleSheet.create({
 
   primaryButton: {
     flex: 1,
-    backgroundColor: '#6366f1',
+    backgroundColor: C.violet,
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -575,16 +536,16 @@ const styles = StyleSheet.create({
   secondaryButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: C.line,
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: C.surface,
   },
 
   secondaryButtonText: {
-    color: '#e5e7eb',
+    color: C.text,
     fontWeight: '600',
     fontSize: 15,
   },
@@ -608,7 +569,7 @@ const styles = StyleSheet.create({
   },
 
   privacyNote: {
-    color: '#6b7280',
+    color: C.dim,
     fontSize: 11,
     marginTop: 18,
     marginBottom: 40,
@@ -630,13 +591,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#0f172a',
+    borderColor: C.line,
+    backgroundColor: C.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   diagButtonText: {
-    color: '#e5e7eb',
+    color: C.text,
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
