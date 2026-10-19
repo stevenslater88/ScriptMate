@@ -2,7 +2,7 @@
   "expo": {
     "name": "ScriptM8",
     "slug": "scriptmate",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "scriptmate",
@@ -33,7 +33,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "app.emergent.scriptmate870106af3",
-      "versionCode": 1150,
+      "versionCode": 1158,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA"
