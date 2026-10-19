@@ -168,7 +168,7 @@ export default function TeleprompterScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.permissionView}>
-          <ActivityIndicator size="large" color="#6366f1" />
+          <ActivityIndicator size="large" color="#7C5CFF" />
           <Text style={styles.permissionTitle}>Loading script...</Text>
         </View>
       </View>
@@ -181,7 +181,7 @@ export default function TeleprompterScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.permissionView}>
-          <Ionicons name="document-text-outline" size={64} color="#ef4444" />
+          <Ionicons name="document-text-outline" size={64} color="#FF5C7A" />
           <Text style={styles.permissionTitle}>
             {scriptError || 'Unable to load script for teleprompter'}
           </Text>
@@ -564,7 +564,7 @@ export default function TeleprompterScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.permissionView}>
-          <ActivityIndicator size="large" color="#6366f1" />
+          <ActivityIndicator size="large" color="#7C5CFF" />
           <Text style={styles.permissionTitle}>Checking permissions...</Text>
         </View>
       </View>
@@ -577,7 +577,7 @@ export default function TeleprompterScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.permissionView}>
-          <Ionicons name="videocam-off" size={64} color="#6b7280" />
+          <Ionicons name="videocam-off" size={64} color="#A19DC6" />
           <Text style={styles.permissionTitle}>Camera Access Required</Text>
           <Text style={styles.permissionText}>
             Please grant camera and microphone access to use the teleprompter.
@@ -957,7 +957,7 @@ export default function TeleprompterScreen() {
               <Ionicons 
                 name={highlightMyLines ? 'checkbox' : 'square-outline'} 
                 size={24} 
-                color={highlightMyLines ? '#6366f1' : '#6b7280'} 
+                color={highlightMyLines ? '#7C5CFF' : '#A19DC6'} 
               />
             </TouchableOpacity>
 
@@ -974,7 +974,7 @@ export default function TeleprompterScreen() {
               <Ionicons
                 name={showFramingGuides ? 'checkbox' : 'square-outline'}
                 size={24}
-                color={showFramingGuides ? '#6366f1' : '#6b7280'}
+                color={showFramingGuides ? '#7C5CFF' : '#A19DC6'}
               />
             </TouchableOpacity>
             
@@ -991,7 +991,7 @@ export default function TeleprompterScreen() {
       {/* Processing Overlay */}
       {processingVideo && (
         <View style={styles.processingOverlay}>
-          <ActivityIndicator size="large" color="#6366f1" />
+          <ActivityIndicator size="large" color="#7C5CFF" />
           <Text style={styles.processingText}>Processing...</Text>
         </View>
       )}
@@ -1029,10 +1029,10 @@ export default function TeleprompterScreen() {
                 disabled={isSaving}
               >
                 {isSaving ? (
-                  <ActivityIndicator color="#6366f1" size="small" />
+                  <ActivityIndicator color="#7C5CFF" size="small" />
                 ) : (
                   <>
-                    <Ionicons name="bookmark" size={22} color="#6366f1" />
+                    <Ionicons name="bookmark" size={22} color="#7C5CFF" />
                     <Text style={styles.secondaryActionText}>Save</Text>
                   </>
                 )}
@@ -1042,7 +1042,7 @@ export default function TeleprompterScreen() {
                 style={styles.secondaryActionButton}
                 onPress={handleRetake}
               >
-                <Ionicons name="refresh" size={22} color="#6366f1" />
+                <Ionicons name="refresh" size={22} color="#7C5CFF" />
                 <Text style={styles.secondaryActionText}>Retake</Text>
               </TouchableOpacity>
             </View>
@@ -1104,7 +1104,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#ef4444',
+    backgroundColor: '#FF5C7A',
     marginRight: 8,
   },
   recordingTime: {
@@ -1167,7 +1167,7 @@ const styles = StyleSheet.create({
     right: '30%',
     top: '33.333%',
     height: 1,
-    backgroundColor: 'rgba(99, 102, 241, 0.7)',
+    backgroundColor: 'rgba(124, 92, 255, 0.7)',
   },
   
   // Teleprompter
@@ -1179,11 +1179,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   teleprompterWindow: {
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderRadius: 16,
+    backgroundColor: 'rgba(8, 7, 20, 0.84)',
+    borderRadius: 20,
     padding: 16,
     height: 200,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   gradientTop: {
     position: 'absolute',
@@ -1206,21 +1208,25 @@ const styles = StyleSheet.create({
   },
   characterLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#9ca3af',
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    color: '#62E0FF',
     textTransform: 'uppercase',
     marginBottom: 4,
   },
   myCharacterLabel: {
-    color: '#6366f1',
+    color: '#A993FF',
   },
   lineText: {
-    color: '#fff',
+    color: '#E9E7FA',
     lineHeight: 32,
   },
   myLineText: {
-    color: '#a5b4fc',
-    fontWeight: '600',
+    color: '#fff',
+    fontWeight: '700',
+    borderLeftWidth: 3,
+    borderLeftColor: '#7C5CFF',
+    paddingLeft: 10,
   },
   
   // Bottom Controls
@@ -1240,33 +1246,37 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   smallButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(8, 7, 20, 0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   playButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#6366f1',
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: '#7C5CFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   speedControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 20,
+    backgroundColor: 'rgba(8, 7, 20, 0.6)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   speedLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6366f1',
+    color: '#7C5CFF',
     width: 28,
   },
   speedSlider: {
@@ -1282,17 +1292,17 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 6,
-    backgroundColor: 'rgba(107, 114, 128, 0.25)',
+    backgroundColor: 'rgba(161, 157, 198, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   speedSegmentActive: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
   },
   speedSegmentText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#9ca3af',
+    color: '#C9C5EA',
   },
   speedSegmentTextActive: {
     color: '#fff',
@@ -1300,20 +1310,23 @@ const styles = StyleSheet.create({
   // Settings-modal opacity presets — segmented replacement for Slider.
   opacitySegments: {
     flexDirection: 'row',
-    gap: 6,
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 4,
   },
   opacitySegment: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: 'rgba(107, 114, 128, 0.2)',
+    backgroundColor: 'rgba(161, 157, 198, 0.2)',
   },
   opacitySegmentActive: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
   },
   opacitySegmentText: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: '#C9C5EA',
   },
   opacitySegmentTextActive: {
     color: '#fff',
@@ -1345,8 +1358,8 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   recordButtonRecording: {
-    backgroundColor: 'rgba(239, 68, 68, 0.3)',
-    borderColor: '#ef4444',
+    backgroundColor: 'rgba(255, 92, 122, 0.3)',
+    borderColor: '#FF5C7A',
   },
   recordButtonDisabled: {
     opacity: 0.45,
@@ -1361,7 +1374,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    backgroundColor: 'rgba(255, 92, 122, 0.9)',
   },
   cameraStatusErrorText: {
     flex: 1,
@@ -1382,7 +1395,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   cameraStatusPendingText: {
-    color: '#e5e7eb',
+    color: '#F4F3FF',
     fontSize: 13,
     fontWeight: '500',
   },
@@ -1390,13 +1403,13 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#ef4444',
+    backgroundColor: '#FF5C7A',
   },
   stopIcon: {
     width: 30,
     height: 30,
     borderRadius: 4,
-    backgroundColor: '#ef4444',
+    backgroundColor: '#FF5C7A',
   },
   
   // Settings Modal
@@ -1407,7 +1420,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   settingsPanel: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderRadius: 20,
     padding: 24,
     width: '85%',
@@ -1426,11 +1439,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2a3e',
+    borderBottomColor: '#2A2650',
   },
   settingLabel: {
     fontSize: 15,
-    color: '#e5e7eb',
+    color: '#F4F3FF',
   },
   fontButtons: {
     flexDirection: 'row',
@@ -1441,14 +1454,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: 'rgba(124, 92, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   fontButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#6366f1',
+    color: '#7C5CFF',
   },
   fontSizeValue: {
     fontSize: 16,
@@ -1469,21 +1482,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: 'rgba(107, 114, 128, 0.2)',
+    backgroundColor: 'rgba(161, 157, 198, 0.2)',
   },
   positionButtonActive: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
   },
   positionButtonText: {
     fontSize: 13,
-    color: '#9ca3af',
+    color: '#C9C5EA',
   },
   positionButtonTextActive: {
     color: '#fff',
     fontWeight: '600',
   },
   settingsDone: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -1515,7 +1528,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   actionSheet: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#14122A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
@@ -1537,7 +1550,7 @@ const styles = StyleSheet.create({
   },
   actionSheetSubtitle: {
     fontSize: 14,
-    color: '#9ca3af',
+    color: '#C9C5EA',
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 24,
@@ -1546,7 +1559,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     paddingVertical: 18,
     borderRadius: 14,
     gap: 10,
@@ -1566,7 +1579,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    backgroundColor: 'rgba(124, 92, 255, 0.15)',
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
@@ -1574,7 +1587,7 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#6366f1',
+    color: '#7C5CFF',
   },
   
   // Permission
@@ -1592,13 +1605,13 @@ const styles = StyleSheet.create({
   },
   permissionText: {
     fontSize: 15,
-    color: '#9ca3af',
+    color: '#C9C5EA',
     textAlign: 'center',
     marginTop: 12,
     lineHeight: 22,
   },
   permissionButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7C5CFF',
     paddingVertical: 14,
     paddingHorizontal: 32,
     borderRadius: 12,
@@ -1614,6 +1627,6 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 15,
-    color: '#6b7280',
+    color: '#A19DC6',
   },
 });
